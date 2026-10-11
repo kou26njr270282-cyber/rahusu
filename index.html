@@ -92,7 +92,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   <header>
     <div>
       <h1>勇者おことわり</h1>
-      <p class="sub">村人Aの ながい 3日間</p>
+      <p class="sub">村人Aの ながい 4日間</p>
     </div>
     <button class="small" id="snd">おと: ON</button>
   </header>
@@ -150,6 +150,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   const DOOR = { x: 5, y: 8 };
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   const REPAIR = 15;
+  const SKA = 10;
 
   const ITEMS = {
     gem:   { n: "かほう", v: 200 },
@@ -173,10 +174,21 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     B: { type: "bed",    name: "ベッド", cap: 0, act: 2.6 },
     T: { type: "table",  name: "テーブル", cap: 0, act: 0 },
   };
+  const H_HERO = { name: "ゆうしゃ", spr: "hero" };
   const WAVES = [
-    { prep: 12, speed: 2.4, act: 1.0,  heroes: [["ゆうしゃ", "hero"]], stock: ["gem", "medal", "gold"], tools: { banana: 2, decoy: 0, bell: 0, glue: 0 } },
-    { prep: 11, speed: 3.2, act: 0.85, heroes: [["ゆうしゃ", "hero"]], stock: ["gold", "medal"], tools: { banana: 2, decoy: 1, bell: 0, glue: 1 } },
-    { prep: 11, speed: 3.2, act: 0.85, heroes: [["ゆうしゃ", "hero"], ["まほうつかい", "mage"]], stock: ["gold", "gold"], tools: { banana: 2, decoy: 1, bell: 1, glue: 1 } },
+    { prep: 12, speed: 2.4, act: 1.0, heroes: [H_HERO], stock: ["gem", "medal", "gold"], tools: { banana: 2, decoy: 0, bell: 0, glue: 0 },
+      title: "ふつうの ゆうしゃ", desc: "", tip: "" },
+    { prep: 11, speed: 3.8, act: 0.7, heroes: [{ name: "ゆうしゃ", spr: "hero", noBed: true }], stock: ["gold", "medal"], tools: { banana: 2, decoy: 1, bell: 0, glue: 1 },
+      title: "せっかちな ゆうしゃ", desc: "あしが とても はやい！ しらべるのも はやい。でも ベッドでは ねない。",
+      tip: "きょうの ゆうしゃは はやい！ バナナで ころばせて じかんを かせごう" },
+    { prep: 11, speed: 3.0, act: 0.85, heroes: [{ name: "ゆうしゃ", spr: "hero", potLover: true }, { name: "まほうつかい", spr: "mage", safeOpener: true }],
+      stock: ["gold", "gold"], tools: { banana: 2, decoy: 1, bell: 1, glue: 1 },
+      title: "ツボずきの ゆうしゃ ＋ まほうつかい", desc: "ゆうしゃは ツボから ねらう。まほうつかいは <b>きんこを あける じゅもん</b> を つかう！",
+      tip: "まほうつかいは きんこを あけられる！ きょうは きんこも あんぜんじゃない" },
+    { prep: 12, speed: 3.0, act: 0.85, heroes: [H_HERO, { name: "せんし", spr: "warrior", potLover: true }, { name: "まほうつかい", spr: "mage", safeOpener: true }],
+      stock: ["medal", "gold"], tools: { banana: 3, decoy: 1, bell: 1, glue: 1 },
+      title: "ゆうしゃ パーティー（3人）", desc: "さいごの 日。ゆうしゃ・せんし・まほうつかいが ぜんいんで くる！",
+      tip: "さいごの 日！ どうぐを ぜんぶ つかって まもりきれ！" },
   ];
   const GREET = ["こんにちは！", "まおうって どこ？", "なにか いい もの ない？", "この むらの なまえは？", "レベル いくつ？", "ぼく ゆうしゃ！"];
   const ACT_LINES = {
@@ -249,6 +261,8 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
            [13, 10, "y"], [14, 10, "y"], [15, 10, "y"], [14, 11, "n"]],
     mage: [[1, 1, "y"], [0, 2, "y"], [1, 2, "y"], [2, 2, "y"], ...Array.from({ length: 12 }, (_, i) => [1, 3 + i, "n"])],
   };
+  HALF.warrior = HALF.hero.map((r) => r.replace(/r/g, ".").replace(/y/g, "W").replace(/b/g, "R"));
+  OVERLAY.warrior = OVERLAY.hero.map(([x, y, c]) => [x, y, c === "w" ? "W" : c]);
   const SPR = {};
   function buildSprite(rows) {
     const c = document.createElement("canvas");
@@ -332,7 +346,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       player: { x: 5, y: 5, fx: 5, fy: 5, tx: 5, ty: 5, t: 1, moving: false, face: "down", flip: false, carry: null, frozen: 0, say: "" },
       heroes: [], visited: new Set(), bedUsed: false,
       traps: new Set(), decoys: new Set(), floor: {}, tools: {}, unlocked: new Set(),
-      stolen: [], waveStolen: [], repairCost: 0, totalAdded: 0,
+      stolen: [], waveStolen: [], repairCost: 0, bonus: 0, ska: 0, totalAdded: 0,
       tut: 0, seenDone: false, seenBump: false,
       fx: [], parts: [], shake: 0, momT: 0,
       log: [],
@@ -372,22 +386,40 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     S.traps = new Set(); S.decoys = new Set();
     for (const t of TOOLS) S.tools[t.id] = (S.tools[t.id] || 0) + cfg.tools[t.id];
     restock(cfg.stock);
+    S.ska = 0;
+    const fresh = TOOLS.filter((t) => cfg.tools[t.id] && !S.unlocked.has(t.id));
+    fresh.forEach((t) => S.unlocked.add(t.id));
+    if (S.wave === 0) { beginPrep(fresh); return; }
+    S.phase = "morning";
+    const img = (n) => `<img src="${spriteURL(n, 3)}" alt="" width="48" height="48" style="image-rendering:pixelated">`;
+    ov.innerHTML = `<div class="win">
+      <h2>${S.wave + 1}日目の あさ</h2>
+      <p class="foe" style="color:var(--alarm)">きょうの ゆうしゃ：${cfg.title}</p>
+      <p>${cfg.heroes.map((h) => img(h.spr)).join(" ")}</p>
+      <p>${cfg.desc}</p>
+      ${fresh.length ? `<p style="color:var(--gold)">あたらしい どうぐ！</p>${fresh.map((t) => `<p>${img(t.id).replace(/48/g, "28")} <b style="font-weight:400;color:var(--gold)">${t.n}</b>：${t.info}</p>`).join("")}` : ""}
+      <p><button id="go">じゅんび かいし！</button></p>
+    </div>`;
+    ov.hidden = false; ov.parentElement.classList.add("cover");
+    $("go").onclick = () => beginPrep(fresh);
+    $("go").focus();
+  }
+  function beginPrep(fresh) {
+    const cfg = WAVES[S.wave];
+    if (S.phase !== "title" && S.phase !== "morning" && S.phase !== "result") return;
     S.phase = "prep"; S.timer = cfg.prep;
     ov.hidden = true; ov.parentElement.classList.remove("cover");
     msg(S.wave === 0
       ? "1日目の あさ。かあさん「💎かほうは みぎうえの タンスに しまったよ」"
       : `${S.wave + 1}日目の あさ。かあさんが かいものから かえってきた。`);
-    const fresh = TOOLS.filter((t) => cfg.tools[t.id] && !S.unlocked.has(t.id));
-    fresh.forEach((t) => S.unlocked.add(t.id));
-    if (fresh.length && S.wave > 0) msg(`あたらしい どうぐ：${fresh.map((t) => t.n).join("、")}！（${fresh.map((t) => t.info).join(" ／ ")}）`);
-    msg(S.wave === 2 ? "とおくから 足音が ふたつ きこえる…！ きょうは 2人だ！" : "とおくから 足音が きこえる…");
+    msg(cfg.heroes.length > 1 ? `とおくから 足音が ${cfg.heroes.length}つ きこえる…！` : "とおくから 足音が きこえる…");
     $("skip").hidden = false;
   }
   function startHeroes() {
     const cfg = WAVES[S.wave];
     S.phase = "hero"; $("skip").hidden = true;
-    S.heroes = cfg.heroes.map(([name, spr], i) => ({
-      name, spr, x: DOOR.x, y: DOOR.y, fx: DOOR.x, fy: DOOR.y, tx: DOOR.x, ty: DOOR.y, t: 1, moving: false, flip: false,
+    S.heroes = cfg.heroes.map((hd, i) => ({
+      ...hd, x: DOOR.x, y: DOOR.y, fx: DOOR.x, fy: DOOR.y, tx: DOOR.x, ty: DOOR.y, t: 1, moving: false, flip: false,
       state: "wait", delay: i * 1.6, path: [], target: null, actT: 0, actMax: 1, pause: 0, slip: 0, talkCd: 0,
       say: "", sayT: 0, bag: [], scold: 0, speed: cfg.speed, actMul: cfg.act,
     }));
@@ -396,6 +428,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     const broken = objects.filter((o) => o.broken);
     const repair = broken.length * REPAIR;
     S.repairCost += repair;
+    S.bonus += S.ska * SKA;
     broken.forEach((o) => (o.broken = false));
     S.phase = "result";
     const last = S.wave === WAVES.length - 1;
@@ -407,6 +440,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       ${S.waveStolen.length ? `<p>${icons}</p>` : ""}
       <div class="row"><span>とられた がく</span><span>${lost}G</span></div>
       <div class="row"><span>ツボの しゅうりだい（${broken.length}こ）</span><span>${repair}G</span></div>
+      <div class="row"><span>ムダあし ボーナス（スカ ${S.ska}かい）</span><span style="color:#7be07b">+${S.ska * SKA}G</span></div>
       <div class="row"><span>いえの ざいさん</span><span>${assets()}G</span></div>
       <p style="margin-top:10px"><button id="next">${last ? "けっかを みる" : "ねる（つぎの日へ）"}</button></p>
     </div>`;
@@ -430,7 +464,8 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       <p>まもる たからは 3しゅるい：${["gem", "medal", "gold"].map((k) => `<img src="${spriteURL(k, 2)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated">${ITEMS[k].n}`).join(" ")}</p>
       <ol class="rules">
         <li>ゆうしゃが くるまえに、入れものの なかみを かくそう</li>
-        <li><img src="${spriteURL("safe", 1)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated"> きんこ は ぜったい あけられない（2こまで）</li>
+        <li><img src="${spriteURL("safe", 1)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated"> きんこ は ゆうしゃには あけられない（2こまで）</li>
+        <li>ゆうしゃが からっぽの 入れものを しらべたら「スカ！」 ボーナス +${SKA}G</li>
         <li><img src="${spriteURL("banana", 2)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated"> バナナを ふむと ゆうしゃは ころんで、とった ものを おとす！（どうぐは 日ごとに ふえる）</li>
       </ol>
       <p>1日目は ガイドが 光って おしえてくれるよ。</p>
@@ -442,18 +477,25 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   function showEnd() {
     S.phase = "end";
     const kept = assets();
-    const score = kept - S.repairCost;
+    const score = kept + S.bonus - S.repairCost;
     const ratio = score / S.totalAdded;
-    const rank = ratio >= 0.8 ? "でんせつの むらびと" : ratio >= 0.55 ? "しっかりものの むらびと" : ratio >= 0.3 ? "ふつうの むらびと" : "ゆうしゃの おさいふ";
-    const gemSafe = objects.some((o) => o.items.includes("gem")) || S.player.carry === "gem" || Object.values(S.floor).some((l) => l.includes("gem"));
+    const rank = ratio >= 0.85 ? "でんせつの むらびと" : ratio >= 0.6 ? "しっかりものの むらびと" : ratio >= 0.35 ? "ふつうの むらびと" : "ゆうしゃの おさいふ";
+    const inHouse = (k) => objects.some((o) => o.items.includes(k)) || S.player.carry === k || Object.values(S.floor).some((l) => l.includes(k));
+    const gemSafe = inHouse("gem");
+    const medals = S.stolen.filter((k) => k === "medal").length;
+    const epi = gemSafe
+      ? "すうじつご、ゆうしゃは まおうを たおした。あなたの いえの ことは だれも しらない。それで いい。"
+      : "すうじつご、ゆうしゃは まおうを たおした。つかった けんは 「ある いえの かほうを うって かった」 らしい。";
     ov.innerHTML = `<div class="win">
-      <h2>3日間 おつかれさま</h2>
+      <h2>4日間 おつかれさま</h2>
       <div class="row"><span>のこった ざいさん</span><span>${kept}G</span></div>
-      <div class="row"><span>とられた ぜんぶ</span><span>${S.stolen.reduce((a, k) => a + ITEMS[k].v, 0)}G</span></div>
+      <div class="row"><span>ムダあし ボーナス</span><span style="color:#7be07b">+${S.bonus}G</span></div>
       <div class="row"><span>しゅうりだい</span><span>-${S.repairCost}G</span></div>
+      <div class="row"><span>とられた ぜんぶ</span><span>${S.stolen.reduce((a, k) => a + ITEMS[k].v, 0)}G</span></div>
       <div class="row"><span>スコア</span><span class="big">${score}G</span></div>
       <p style="margin-top:8px">しょうごう：<span class="big">${rank}</span></p>
       <p>${gemSafe ? "💎かほうは ぶじだった。かあさんも にっこり。" : "💎かほうは ゆうしゃの ふくろの なか…。"}</p>
+      <p style="color:var(--dim)">${epi}${medals ? `（あと メダルは ${medals}まい、どこかの おうさまに こうかんされた）` : ""}</p>
       <p><button id="again">もういちど</button></p>
     </div>`;
     ov.hidden = false; ov.parentElement.classList.add("cover");
@@ -482,7 +524,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       return {
         text: S.wave === 0
           ? "③ のこりの たからも かくそう！ <b>バナナ</b> は ゆうしゃが とおりそうな ゆかに おこう"
-          : S.wave === 2 ? "きょうは 2人！ どうぐを ぜんぶ つかって まもれ！" : "ゆうしゃが くるまえに かくそう！ どうぐも わすれずに",
+          : WAVES[S.wave].tip,
         target: null,
       };
     }
@@ -696,11 +738,13 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     }
     let best = null, bestD = Infinity, bestTile = null;
     for (const o of objects) {
-      if (o.type === "table" || S.visited.has(o) || (o.type === "bed" && S.bedUsed)) continue;
+      if (o.type === "table" || S.visited.has(o) || (o.type === "bed" && (S.bedUsed || h.noBed))) continue;
       for (const [dx, dy] of Object.values(DIRS)) {
         const ax = o.x + dx, ay = o.y + dy;
-        const dd = ax === h.x && ay === h.y ? 0 : dist.get(key(ax, ay));
-        if (dd !== undefined && dd < bestD) { bestD = dd; best = o; bestTile = [ax, ay]; }
+        const d0 = ax === h.x && ay === h.y ? 0 : dist.get(key(ax, ay));
+        if (d0 === undefined) continue;
+        const dd = d0 - (h.potLover && o.type === "pot" ? 8 : 0) - (h.safeOpener && o.type === "safe" ? 8 : 0);
+        if (dd < bestD) { bestD = dd; best = o; bestTile = [ax, ay]; }
       }
     }
     if (!best) {
@@ -711,9 +755,19 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     S.visited.add(best);
     if (best.type === "bed") S.bedUsed = true;
     h.target = best;
-    h.path = bestD === 0 ? [] : pathTo(prev, h.x, h.y, bestTile[0], bestTile[1]) || [];
+    h.path = (bestTile[0] === h.x && bestTile[1] === h.y) ? [] : pathTo(prev, h.x, h.y, bestTile[0], bestTile[1]) || [];
   }
   function loot(h, o) {
+    if (o.type === "safe" && h.safeOpener) {
+      heroSay(h, "ひらけ〜 ゴマ！"); SFX.bell();
+      if (o.items.length) {
+        const got = o.items.splice(0);
+        h.bag.push(...got); S.stolen.push(...got); S.waveStolen.push(...got);
+        got.forEach((g, i) => pop(`-${ITEMS[g].v}G`, o.x + 0.5, o.y - i * 0.4, "#ff6b6b"));
+        msg(`${h.name}は じゅもんで きんこを あけた！ ${got.map((k) => ITEMS[k].n).join("と ")}を てにいれた！`);
+      } else { ska(h, o); msg(`${h.name}は じゅもんで きんこを あけた！ …からっぽだった。`); }
+      return;
+    }
     if (o.type === "safe") { heroSay(h, "ちっ。"); SFX.safe(); msg(`${h.name}は きんこを しらべた。カギが かかっている！`); return; }
     if (o.type === "bed") { heroSay(h, "ふっかーつ！"); msg(`${h.name}は かってに ベッドで ねて、HPが ぜんかいふくした！`); return; }
     const verb = { pot: "ツボを もちあげて なげつけた！ パリーン！", drawer: "タンスを あけた！", barrel: "タルを のぞきこんだ！" }[o.type];
@@ -726,9 +780,16 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       heroSay(h, got.includes("stick") ? "ひのきのぼうだ！ さいきょう！" : got.includes("medal") ? "ちいさなメダル！ あつめてるんだ！" : "やったー！");
       msg(`${h.name}は ${verb} ${got.map((k) => ITEMS[k].n).join("と ")}を てにいれた！`);
     } else {
-      heroSay(h, "なにも ない…");
+      ska(h, o);
       msg(`${h.name}は ${verb} …なにも なかった。`);
     }
+  }
+  function ska(h, o) {
+    S.ska++;
+    heroSay(h, rand(["なにも ない…", "あれ？ からっぽ…", "おかしいな…", "スカだ…"]));
+    pop("スカ！", o.x + 0.5, o.y + 0.2, "#7be07b");
+    pop(`+${SKA}G`, o.x + 0.5, o.y + 0.7, "#7be07b");
+    tone(300, 200, 0.15, "triangle", 0.06); tone(200, 120, 0.2, "triangle", 0.06, 0.15);
   }
   function checkBump() {
     const p = S.player;
