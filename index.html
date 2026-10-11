@@ -183,7 +183,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .gal-nav { display: flex; flex-wrap: wrap; gap: 6px; }
 .gal-nav button { background: #16181c; border: 1px solid var(--line); padding: 5px 12px; cursor: pointer; font-size: .85rem; letter-spacing: .06em; }
 .gal-nav button:hover, .gal-nav button:focus-visible { border-color: var(--sign); color: var(--sign); outline: none; }
-.gal-badge { position: absolute; top: 16px; left: 16px; padding: 3px 12px; font-size: .9rem; letter-spacing: .2em; background: var(--danger); color: #fff; transition: background .3s; }
+.gal-badge { position: absolute; top: 58px; right: 16px; padding: 3px 12px; font-size: .9rem; letter-spacing: .2em; background: var(--danger); color: #fff; transition: background .3s; }
 .gal-badge.calm { background: var(--sign); color: var(--sign-ink); }
 .catalog li.on button { all: unset; cursor: pointer; display: block; }
 .catalog li.on:hover, .catalog li.on:focus-within { border-color: var(--sign); background: rgba(230,192,63,.06); }
@@ -194,6 +194,17 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .scare[data-kind="fall"] { background: #000; }
 .scare[data-kind="crush"] { background: radial-gradient(circle, rgba(60,50,40,.6), #000 70%); }
 .scare[data-kind="drown"] { background: radial-gradient(circle, rgba(10,60,70,.7), #000 75%); }
+.coach { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); background: rgba(9,10,12,.93); border: 1px solid var(--line); border-left: 4px solid var(--sign); padding: 12px 16px 12px; animation: promptIn .4s cubic-bezier(.2,1.2,.4,1); }
+.coach-head { display: flex; justify-content: space-between; align-items: baseline; }
+.coach-head b { font-weight: 400; color: var(--sign); letter-spacing: .2em; font-size: .9rem; }
+.coach-head small { color: var(--muted); font-size: .72rem; }
+.coach p { margin: 6px 0 0; font-size: .95rem; line-height: 1.75; white-space: pre-line; }
+.coach .coach-goal { color: var(--sign); font-size: .86rem; }
+.coach .coach-goal.done { color: #8fd18a; }
+.coach-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.coach-row button { background: #16181c; border: 1px solid var(--line); padding: 4px 12px; cursor: pointer; font-size: .82rem; }
+.coach-row button:hover, .coach-row button:focus-visible { border-color: var(--sign); color: var(--sign); outline: none; }
+@media (pointer: coarse), (max-width: 760px) { .coach { top: auto; bottom: 236px; } }
 .toast { position: absolute; top: 18px; left: 50%; transform: translate(-50%, -140%); background: rgba(8,9,11,.9); border: 1px solid rgba(230,192,63,.6); padding: 6px 18px 8px; text-align: center; pointer-events: none; transition: transform .5s cubic-bezier(.2,1.4,.4,1); }
 .toast.on { transform: translate(-50%, 0); }
 .toast small { display: block; font-size: .7rem; letter-spacing: .2em; color: var(--muted); }
@@ -246,6 +257,12 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
   <div class="floor-card" id="floor-card"><b id="fc-num">0 番</b><span id="fc-sub">異変は ありません</span></div>
   <div class="lid top"></div><div class="lid bot"></div>
   <div class="danger-vig" id="danger-vig"></div>
+  <div class="coach" id="coach" hidden>
+    <div class="coach-head"><b>遊び方</b><small id="coach-step"></small></div>
+    <p id="coach-text"></p>
+    <p class="coach-goal" id="coach-goal"></p>
+    <div class="coach-row"><button type="button" id="coach-next">次へ（Space）</button><button type="button" id="coach-skip">チュートリアルを終える</button></div>
+  </div>
   <div class="toast" id="toast" aria-live="polite"><small>異変図鑑に記録</small><b id="toast-name"></b></div>
   <div class="scare" id="scare"><canvas id="scare-face" width="64" height="64"></canvas></div>
   <div class="fade" id="fade"></div>
@@ -260,6 +277,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
         <nav class="menu" aria-label="タイトルメニュー">
           <button type="button" id="btn-continue" hidden>つづきから <span id="continue-info"></span></button>
           <button type="button" id="btn-start">はじめから</button>
+          <button type="button" id="btn-tutorial">遊び方（チュートリアル）</button>
           <button type="button" id="btn-diff" data-cycle="diff">難易度 <span id="diff-label">◀ ふつう ▶</span></button>
           <button type="button" id="btn-catalog">異変図鑑 <span id="cat-mini">0 / 50</span></button>
           <button type="button" data-cycle="quality">画質 <span class="quality-label">◀ レトロ ▶</span></button>
@@ -1218,7 +1236,7 @@ let rig = null, mists = [], drips = [], ripples = [], nextDripAt = 0;
 function makeLanternRig() {
   const g = new THREE.Group();
   const metal = new THREE.MeshStandardMaterial({ color: 0x15110e, roughness: 0.5, metalness: 0.7 });
-  const glow = new THREE.MeshBasicMaterial({ color: 0xb87838, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
+  const glow = new THREE.MeshBasicMaterial({ color: 0x6a3a12, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false });
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.07, 0.03, 12), metal); base.position.y = -0.09;
   const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.066, 0.05, 12), metal); cap.position.y = 0.09;
   const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.052, 0.15, 12, 1, true), glow);
@@ -1228,9 +1246,9 @@ function makeLanternRig() {
   const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex('flame'), color: 0xffb060, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
   flame.scale.set(0.045, 0.085, 1); flame.position.y = -0.02; g.add(flame);
   // 握っている手（手袋）
-  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), new THREE.MeshBasicMaterial({ color: 0x0c0a08 }));
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), new THREE.MeshBasicMaterial({ color: 0x000000 }));
   hand.scale.set(1.1, 0.8, 1.3); hand.position.set(0.01, 0.17, 0.01);
-  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.065, 0.3, 10), new THREE.MeshBasicMaterial({ color: 0x090807 }));
+  const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.065, 0.3, 10), new THREE.MeshBasicMaterial({ color: 0x000000 }));
   sleeve.position.set(0.08, 0.22, 0.17); sleeve.rotation.x = -1.1; sleeve.rotation.z = -0.35;
   g.add(hand, sleeve);
   g.traverse(o => { o.renderOrder = 10; });
@@ -1735,7 +1753,7 @@ function showFloorCard() {
 }
 let numTimer = null;
 function showNum() {
-  const el = $('hud-num'); el.textContent = S.count; el.style.opacity = 1;
+  const el = $('hud-num'); el.textContent = S.count; el.style.opacity = 1; el.classList.remove('hud-num-scramble');
   clearTimeout(numTimer);
   // 番号は崩れて、忘れられる
   numTimer = setTimeout(() => {
@@ -1753,7 +1771,7 @@ const facingDoor = () => !S.doorOpen && isDoorEdge(S.floor, S.px, S.py, S.dir);
 const facingCode = () => S.floor.decos.find(d => d.kind === 'code' && d.x === S.px && d.y === S.py && d.side === S.dir);
 function updatePrompt() {
   const p = $('prompt'), main = $('prompt-main'), sub = $('prompt-sub');
-  if (S.phase !== 'play' || S.anim) { p.hidden = true; return; }
+  if (S.phase !== 'play' || S.anim || S.tut) { p.hidden = true; return; }
   sub.hidden = true;
   if (S.confirm) {
     p.hidden = false; sub.hidden = false;
@@ -1799,6 +1817,7 @@ function setPhase(p) {
   S.phase = p;
   ['title', 'pause', 'end', 'catalog', 'keypad', 'loading', 'note', 'intro', 'ending', 'gallery'].forEach(k => { $('ov-' + k).hidden = p !== k; });
   $('game').dataset.phase = p;
+  if (!S.tut) $('coach').hidden = true; else $('coach').hidden = p !== 'play';
   if (p !== 'play' && p !== 'keypad') setMemo(false);
   if (p === 'pause') $('pause-info').textContent = D().label + '・歩いた階 ' + S.stats.floors;
   updatePrompt();
@@ -1812,6 +1831,87 @@ function toTitle() {
   setPhase('title');
   setTimeout(() => ($('btn-continue').hidden ? $('btn-start') : $('btn-continue')).focus({ preventScroll: true }), 30);
 }
+// =====================================================================
+// チュートリアル：実際に動かしながら覚える
+// =====================================================================
+const TUT = [
+  { text: 'ようこそ、忘却ダンジョンへ。\nまずは歩いてみよう。', goal: 'W / ↑（スマホは↑ボタン）で2歩進む', done: () => S.stepsFloor >= 2 },
+  { text: '向きを変えてみよう。\n横歩きは Q / E、その場で振り返るのは R。', goal: 'A D / ← →（スマホは↺↻）で向きを変える', done: () => S.tutTurns >= 1 },
+  { text: '左下の地図を見て。通った道は、数秒で消えていく。\n今の番号も、すぐに「?」になって忘れてしまう。', goal: '少し歩き回って、地図が消えるのを見る（6秒）', done: () => performance.now() - S.tutT0 > 6000 },
+  { text: '覚えていられるのは、メモ帳だけ。\n文字・地図ノート・スケッチの3つがあって、中身は消えない。', goal: 'Tab（または右上の「メモ」）で開いて、閉じる', done: () => S.tutMemo >= 2 },
+  { text: 'この迷宮は、階を進んでも同じ形をしている。\nでも、ときどき一か所だけ「ふだん」と違うことがある。それが異変。\n目の前の松明を見ていて。', goal: '「ふだん」と「異変」が交互に切り替わる', demo: true, next: true },
+  { text: '異変を見つけたら → スタート地点の「上り階段」で引き返す。\n何も変わっていなければ → 迷宮の奥の「下り階段」へ進む。\n階段の上で Space を押すと選べる。', goal: '正しければ番号が1つ進む。間違えると0番に戻り、迷宮も組み変わる。', next: true },
+  { text: '順路の途中には鉄扉がある。開けるには4桁の番号が要る。\n番号は脇道の真鍮の板に刻まれていて、階ごとに場所も番号も変わる。', goal: '板を見つけたら、すぐメモ帳に書いておこう', next: true },
+  { text: '奥から人影が走ってくる、闇や水が迫ってくる……そんな危険な異変もある。\nR で振り返って、Shift を押しながら走り、上り階段まで逃げ切れ。', goal: '捕まると0番に戻される。5回捕まると……', next: true },
+  { text: '準備はいい？　0番の階には異変がない。\nまずは道と景色をよく見て、メモに残しておこう。\n8番を抜ければ、外に出られる。', goal: '「次へ」で本番を始める', next: true }
+];
+function startTutorial(after) {
+  S.tut = { i: -1, after };
+  S.diff = diffSel || 'easy';
+  newRun('easy'); S.diff = 'easy';
+  setPhase('play'); canvas.focus({ preventScroll: true });
+  S.wakeT = performance.now(); const gm = $('game'); gm.classList.remove('blink'); void gm.offsetWidth; gm.classList.add('blink');
+  S.tutTurns = 0; S.tutMemo = 0;
+  $('coach').hidden = false;
+  tutGo(0);
+}
+function tutGo(i) {
+  const t = S.tut; if (!t) return;
+  t.i = i; t.doneAt = 0; S.tutT0 = performance.now();
+  const st = TUT[i];
+  $('coach-step').textContent = (i + 1) + ' / ' + TUT.length;
+  $('coach-text').textContent = st.text;
+  const g = $('coach-goal'); g.textContent = '▶ ' + st.goal; g.classList.remove('done');
+  $('coach-next').hidden = !st.next;
+  const c = $('coach'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
+  if (st.demo) tutDemo(true); else if (t.demoOn) tutDemo(false);
+}
+function tutDemo(on) {
+  const t = S.tut;
+  if (on) {
+    const f0 = S.floor, f1 = structuredClone(f0);
+    const torch = f1.decos.find(d => d.kind === 'torch' && d.lit); if (!torch) return;
+    torch.color = 'red';
+    t.demo = { f0, f1, view: faceView(f0, torch.x, torch.y, torch.side), anom: false, next: performance.now() + 2200 };
+    t.demoOn = true; tutDemoShow();
+  } else {
+    t.demoOn = false; S.floor = t.demo.f0; buildScene(S.floor); $('gal-badge').parentElement.hidden = true;
+    $('ov-gallery').hidden = true;
+  }
+}
+function tutDemoShow() {
+  const d = S.tut.demo, f = d.anom ? d.f1 : d.f0;
+  S.floor = f; buildScene(f);
+  S.px = d.view.x; S.py = d.view.y; S.dir = d.view.dir; S.yaw = ROT[d.view.dir]; S.anim = null;
+  const bd = $('gal-badge'); $('ov-gallery').hidden = false; document.querySelector('.gal-panel').hidden = true;
+  bd.textContent = d.anom ? '異変' : 'ふだん'; bd.classList.toggle('calm', !d.anom);
+  glitchFx(0.6, 350); sound.turn();
+}
+function tutTick(now) {
+  const t = S.tut; if (!t || S.phase !== 'play') return;
+  const st = TUT[t.i];
+  if (t.demoOn && now > t.demo.next) { t.demo.anom = !t.demo.anom; t.demo.next = now + 2400; tutDemoShow(); }
+  if (!st.next && !t.doneAt && st.done()) {
+    t.doneAt = now; const g = $('coach-goal'); g.textContent = '✓ できた！'; g.classList.add('done'); sound.beep(true);
+  }
+  if (t.doneAt && now - t.doneAt > 900) tutGo(t.i + 1);
+}
+function tutNext() {
+  const t = S.tut; if (!t) return;
+  if (t.i >= TUT.length - 1) { endTutorial(true); return; }
+  if (TUT[t.i].next) tutGo(t.i + 1);
+}
+function endTutorial(start) {
+  const t = S.tut; if (!t) return;
+  if (t.demoOn) tutDemo(false);
+  S.tut = null; $('coach').hidden = true; $('ov-gallery').hidden = true; document.querySelector('.gal-panel').hidden = false;
+  store.set('bd2.tutDone', '1');
+  if (start) { const d = diffSel || 'normal'; store.set('bd2.diff', d); newRun(d); playIntro(INTROS[0]); store.set('bd2.seenIntro', '1'); }
+  else toTitle();
+}
+$('coach-next').addEventListener('click', tutNext);
+$('coach-skip').addEventListener('click', () => endTutorial(true));
+$('btn-tutorial').addEventListener('click', () => { autoSound(); startTutorial(); });
 function glitchFx(amp, dur) { S.gl = { amp, t: performance.now(), dur }; }
 function beginPlay() {
   setPhase('play'); showFloorCard(); canvas.focus({ preventScroll: true });
@@ -1911,6 +2011,7 @@ function act(a, run) {
     sound.turn(); updateMeta(); updatePrompt(); return;
   }
   if (a === 'left' || a === 'right') {
+    S.tutTurns = (S.tutTurns || 0) + 1;
     S.dir = (S.dir + (a === 'left' ? 3 : 1)) % 4;
     S.anim = { type: 'turn', t0: now, dur: 230, yaw0: S.yaw, yaw1: S.yaw + (a === 'left' ? Math.PI / 2 : -Math.PI / 2) };
     sound.turn(); updateMeta(); updatePrompt(); return;
@@ -1928,6 +2029,7 @@ function act(a, run) {
     S.anim = { type: 'move', t0: now, dur: run ? 185 : 300, from, to };
     S.stepAlt = !S.stepAlt; sound.step(S.stepAlt); updatePrompt(); return;
   }
+  if (a === 'use' && S.tut) { if (TUT[S.tut.i].next) tutNext(); else say('チュートリアル中は、まず上の案内に従ってみよう。'); return; }
   if (a === 'use') {
     S.raiseT = now;
     if (S.confirm) { judge(S.confirm === 'up'); return; }
@@ -2074,7 +2176,7 @@ function moveFollower() {
 
 // 鉄扉の番号入力
 let kpVal = '';
-function openKeypad() { kpVal = ''; drawKp(); setPhase('keypad'); say('番号……なんだったっけ。'); setTimeout(() => $('kp-grid').querySelector('button').focus({ preventScroll: true }), 30); }
+function openKeypad() { if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') document.activeElement.blur(); kpVal = ''; drawKp(); setPhase('keypad'); say('番号……なんだったっけ。'); setTimeout(() => $('kp-grid').querySelector('button').focus({ preventScroll: true }), 30); }
 function drawKp(bad) { const d = $('kp-display'); d.textContent = (kpVal + '____').slice(0, 4); d.classList.remove('bad'); if (bad) { void d.offsetWidth; d.classList.add('bad'); } }
 function kpPress(k) {
   if (k === 'del') { kpVal = kpVal.slice(0, -1); drawKp(); sound.key(); return; }
@@ -2161,11 +2263,20 @@ canvas.addEventListener('pointerup', e => {
   if (Math.abs(dx) > Math.abs(dy)) act(dx < 0 ? 'right' : 'left'); else act(dy < 0 ? 'fwd' : 'back');
 });
 
-function pause() { if (S.phase !== 'play') return; S.elapsedBefore = elapsed(); setPhase('pause'); $('btn-resume').focus({ preventScroll: true }); }
-function resume() { S.runStart = performance.now(); setPhase('play'); canvas.focus({ preventScroll: true }); }
+function pause() { if (S.phase !== 'play') return; S.elapsedBefore = elapsed(); S.pauseAt = performance.now(); setPhase('pause'); $('btn-resume').focus({ preventScroll: true }); }
+function resume() {
+  const now = performance.now(), gap = S.pauseAt ? now - S.pauseAt : 0; S.pauseAt = 0;
+  // 止まっている間は、危険も記憶の薄れも進まない
+  if (gap > 0) {
+    const d = S.danger; if (d && d.on) ['t0', 'next', 'mt', 'nextRumble', 'nextBub'].forEach(k => { if (d[k]) d[k] += gap; });
+    for (let i = 0; i < S.mem.length; i++) if (S.mem[i]) S.mem[i] += gap;
+    if (S.nextBeat) S.nextBeat += gap;
+  }
+  S.runStart = now; setPhase('play'); canvas.focus({ preventScroll: true });
+}
 $('btn-pause').addEventListener('click', () => { if (S.phase === 'play') pause(); else if (S.phase === 'pause') resume(); });
 $('btn-resume').addEventListener('click', resume);
-$('btn-totitle').addEventListener('click', () => { saveRun(); toTitle(); });
+$('btn-totitle').addEventListener('click', () => { if (S.tut) { S.tut = null; store.del('bd2.save'); $('coach').hidden = true; $('ov-gallery').hidden = true; document.querySelector('.gal-panel').hidden = false; } else saveRun(); toTitle(); });
 let introTimer = null;
 function playIntro(text) {
   $('intro-text').textContent = text;
@@ -2177,6 +2288,7 @@ $('ov-intro').addEventListener('click', skipIntro);
 function autoSound() { if (!sound.on && store.get('bd2.sound') !== 'off') toggleSound(); }
 $('btn-start').addEventListener('click', () => {
   store.set('bd2.diff', diffSel); autoSound();
+  if (!store.get('bd2.tutDone')) { startTutorial(); return; }
   const seen = store.get('bd2.seenIntro'); store.set('bd2.seenIntro', '1');
   newRun(diffSel); playIntro(INTROS[seen ? 1 : 0]);
 });
@@ -2225,7 +2337,7 @@ armButton($('btn-clear-memo'), 'メモを全部消す', () => clearMemos());
 // メモ帳の開閉（開いている間も時間は進む）
 let memoOpen = false;
 function setMemo(open) {
-  if (open !== memoOpen) sound.noise(0.28, 'highpass', 2600, 0.7, 0.35, 0.2);
+  if (open !== memoOpen) { sound.noise(0.28, 'highpass', 2600, 0.7, 0.35, 0.2); S.tutMemo = (S.tutMemo || 0) + 1; }
   memoOpen = open;
   const nb = $('notebook');
   nb.classList.toggle('open', open);
@@ -2462,6 +2574,7 @@ function frame(now) {
   swingers.forEach((g, i) => { g.rotation.z = Math.sin(now / 1300 + i) * 0.06; g.rotation.x = Math.sin(now / 1700 + i) * 0.04; });
   wisps.forEach((g, i) => { g.position.y = 1.45 + Math.sin(now / 700 + i) * 0.12; g.children[2].intensity = 1.1 + Math.sin(now / 90) * 0.2; });
   updateDanger(now);
+  tutTick(now);
   if (S.phase === 'play') {
     S.mem[idx(S.px, S.py)] = now;
     if (!S.idleSaid && now - S.lastInput > 25000) { S.idleSaid = true; say(pick(IDLE_LINES)); }
