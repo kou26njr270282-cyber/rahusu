@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
 <style>
-/* Layout: one narrow column like an old handheld — status, guide, play field, message window, pad. */
+/* Layout: a single handheld screen — status bar, play field (with guide banner), two-line message window, pad. Fits one phone screen. */
 :root {
   --night: #0c0e1c;
   --window: #05060d;
@@ -20,24 +20,28 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { background: var(--night); color: var(--text); }
-body { font-family: var(--font); font-size: 16px; line-height: 1.6; }
-.wrap { max-width: 560px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 32px; display: flex; flex-direction: column; gap: 10px; }
-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-h1 { margin: 0; font-size: 1.7rem; font-weight: 400; letter-spacing: .08em; color: var(--gold); text-wrap: balance; }
-.sub { margin: 0; color: var(--dim); font-size: .85rem; }
+body { font-family: var(--font); font-size: 16px; line-height: 1.6; -webkit-tap-highlight-color: transparent; }
+.wrap { max-width: 560px; margin: 0 auto; padding-inline: 16px; padding-block: 10px 20px; display: flex; flex-direction: column; gap: 8px; }
 .win { background: var(--window); border: 3px solid var(--line); border-radius: 8px; padding: 8px 12px; }
-.hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 12px; font-variant-numeric: tabular-nums; }
-.hud div { min-width: 0; }
-.hud .k { display: block; font-size: .72rem; color: var(--dim); letter-spacing: .06em; }
-.hud .v { font-size: 1.05rem; white-space: nowrap; }
-.hud .alarm { color: var(--alarm); }
-.guide { border-color: var(--gold); color: var(--gold); min-height: 3.4em; line-height: 1.5; }
-.guide b { font-weight: 400; color: var(--text); }
+.bar { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; }
+.bar .top { display: flex; align-items: center; gap: 10px; font-variant-numeric: tabular-nums; min-width: 0; }
+.bar h1 { margin: 0; font-size: 1rem; font-weight: 400; color: var(--gold); letter-spacing: .06em; white-space: nowrap; }
+.bar .day { color: var(--text); white-space: nowrap; }
+.bar .ph { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; font-size: .9rem; }
+.bar .ph .k { color: var(--dim); font-size: .75rem; margin-right: 4px; }
+.bar .alarm { color: var(--alarm); }
+.bar .asset { color: var(--gold); white-space: nowrap; }
+.bar .carry { display: none; }
 .stage { position: relative; border: 3px solid var(--line); border-radius: 8px; overflow: hidden; background: #000; }
 canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.guide { position: absolute; left: 0; right: 0; top: 0; padding: 4px 10px; background: rgba(5, 6, 13, .78); color: var(--gold); font-size: .82rem; line-height: 1.4; pointer-events: none; border-bottom: 2px solid rgba(255, 216, 74, .6); }
+.guide b { font-weight: 400; color: var(--text); }
+.guide:empty { display: none; }
+#skip { position: absolute; right: 8px; bottom: 8px; border-color: var(--gold); color: var(--gold); background: rgba(5, 6, 13, .85); }
 .overlay { position: absolute; inset: 0; display: flex; align-items: safe center; overflow-y: auto; justify-content: center; padding: 10px; background: rgba(5, 6, 13, .82); }
 .stage.cover canvas { visibility: hidden; height: 0; }
 .stage.cover .overlay { position: static; }
+.stage.cover .guide, .stage.cover #skip { display: none; }
 .overlay .win { max-width: 440px; width: 100%; margin-block: auto; }
 .overlay h2 { margin: 0 0 6px; font-size: 1.2rem; font-weight: 400; color: var(--gold); }
 .overlay p { margin: 0 0 8px; }
@@ -53,72 +57,63 @@ canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; 
 .diary { margin-top: 10px; padding: 10px 12px; background: #f3e6c4; color: #3a2a1a; border-radius: 4px; transform: rotate(-.6deg); box-shadow: 3px 3px 0 rgba(0,0,0,.35); font-size: .88rem; line-height: 1.55; }
 .diary .dt { color: #8a4a22; font-size: .8rem; margin-bottom: 4px; border-bottom: 1px dashed #b89a68; }
 .diary p { margin: 0; }
-.msg { min-height: 6.6em; }
+.msg { min-height: 3.6em; padding: 4px 10px; font-size: .88rem; line-height: 1.45; }
 .msg p { margin: 0; }
 .msg p:not(:last-child) { color: var(--dim); }
 .msg p:last-child::before { content: "▶ "; color: var(--gold); }
 button { font-family: var(--font); font-size: 1rem; color: var(--text); background: var(--window); border: 2px solid var(--line); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
 button:hover { color: var(--gold); border-color: var(--gold); }
 button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
-.small { font-size: .8rem; padding: 4px 10px; }
-.controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; touch-action: none; user-select: none; -webkit-user-select: none; }
-.dpad button { padding: 0; font-size: 1.2rem; }
+.small { font-size: .78rem; padding: 2px 8px; }
+.controls { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.dpad { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); gap: 3px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.dpad button { padding: 0; font-size: 1.1rem; }
 .dpad .u { grid-area: 1 / 2; } .dpad .l { grid-area: 2 / 1; } .dpad .r { grid-area: 2 / 3; } .dpad .d { grid-area: 3 / 2; }
-.side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
-.btns { display: flex; gap: 10px; align-items: flex-end; }
-.abtn { width: 84px; height: 84px; border-radius: 50%; font-size: .95rem; white-space: nowrap; touch-action: none; user-select: none; -webkit-user-select: none; }
-.treasure { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .85rem; padding-block: 6px; }
-.treasure .t { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-.treasure img { width: 20px; height: 20px; image-rendering: pixelated; }
+.abtn { width: 80px; height: 80px; border-radius: 50%; font-size: .9rem; white-space: nowrap; touch-action: none; user-select: none; -webkit-user-select: none; border-width: 3px; }
+.abtn:active, .tool:active, .dpad button:active { background: #23264a; }
+.treasure { display: flex; flex-wrap: wrap; gap: 0 10px; font-size: .75rem; min-height: 22px; }
+.treasure .t { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+.treasure img { width: 18px; height: 18px; image-rendering: pixelated; }
 .treasure .safe { color: #7be07b; }
 .treasure .lost { color: var(--alarm); }
-.treasure .lost img { opacity: .55; }
+.treasure .lost img { opacity: .5; }
 .treasure .hand { color: var(--gold); }
 .treasure .k { color: var(--dim); }
-.tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.tool { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: .75rem; line-height: 1.2; border-color: var(--gold); touch-action: manipulation; user-select: none; -webkit-user-select: none; min-width: 0; }
-.tool img { width: 28px; height: 28px; image-rendering: pixelated; }
-.tool span { color: var(--gold); font-size: .85rem; }
-.tool:disabled { opacity: .35; cursor: default; }
+.tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; justify-self: center; width: 100%; max-width: 180px; }
+.tool { position: relative; display: flex; flex-direction: column; align-items: center; padding: 3px 2px 2px; font-size: .62rem; line-height: 1.15; border-color: var(--gold); touch-action: manipulation; user-select: none; -webkit-user-select: none; min-width: 0; }
+.tool img { width: 26px; height: 26px; image-rendering: pixelated; }
+.tool span { position: absolute; top: 1px; right: 4px; color: var(--gold); font-size: .75rem; }
+.tool:disabled { opacity: .3; cursor: default; }
 .tool b { font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.bbtn { width: 64px; height: 64px; border-radius: 50%; font-size: .8rem; line-height: 1.2; padding: 0; border-color: var(--gold); color: var(--gold); touch-action: none; user-select: none; -webkit-user-select: none; }
-.keys { color: var(--dim); font-size: .78rem; text-align: right; margin: 0; }
+.keys { color: var(--dim); font-size: .75rem; text-align: center; margin: 0; }
+@media (hover: none) { .keys { display: none; } }
 @media (max-width: 420px) {
-  .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dpad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); }
   .cast { grid-template-columns: minmax(0, 1fr); }
+  .bar h1 { display: none; }
 }
 </style>
 
 <div class="wrap">
-  <header>
-    <div>
+  <div class="win bar">
+    <div class="top">
       <h1>勇者おことわり</h1>
-      <p class="sub">村人Aの ながい 4日間</p>
+      <span class="day" id="hDay">1日目</span>
+      <span class="ph"><span class="k" id="hPhaseK"></span><span id="hPhase">-</span></span>
+      <span class="asset" id="hAsset">0G</span>
+      <span class="carry" id="hCarry"></span>
+      <button class="small" id="snd">おと ON</button>
     </div>
-    <button class="small" id="snd">おと: ON</button>
-  </header>
-
-  <div class="win hud">
-    <div><span class="k">ひにち</span><span class="v" id="hDay">1日目</span></div>
-    <div><span class="k" id="hPhaseK">じょうきょう</span><span class="v" id="hPhase">-</span></div>
-    <div><span class="k">てもち</span><span class="v" id="hCarry">なし</span></div>
-    <div><span class="k">いえの ざいさん</span><span class="v" id="hAsset">0G</span></div>
+    <div class="treasure" id="treasure" aria-label="たからもの の ばしょ"></div>
   </div>
-
-  <div class="win guide" id="guide">…</div>
-
-  <div class="win treasure" id="treasure" aria-label="たからもの の ばしょ"></div>
 
   <div class="stage">
     <canvas id="cv" aria-label="村人Aの家"></canvas>
+    <div class="guide" id="guide"></div>
+    <button class="small" id="skip" hidden>じゅんび OK ▶</button>
     <div class="overlay" id="ov"></div>
   </div>
 
   <div class="win msg" id="msg" aria-live="polite"></div>
-
-  <div class="tools" id="tools" aria-label="どうぐ"></div>
 
   <div class="controls">
     <div class="dpad" id="dpad">
@@ -127,12 +122,10 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       <button class="r" data-dir="right" aria-label="みぎ">▶</button>
       <button class="d" data-dir="down" aria-label="した">▼</button>
     </div>
-    <div class="side">
-      <button class="small" id="skip" hidden>じゅんび OK！</button>
-      <button class="abtn" id="abtn">しらべる</button>
-      <p class="keys">矢印/WASD いどう<br>スペース/Z しらべる ・ 1〜4 どうぐ</p>
-    </div>
+    <div class="tools" id="tools" aria-label="どうぐ"></div>
+    <button class="abtn" id="abtn">しらべる</button>
   </div>
+  <p class="keys">矢印/WASD いどう ・ スペース/Z しらべる・しまう ・ 1〜4 どうぐ</p>
 </div>
 
 <script>
@@ -164,10 +157,10 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     stick: { n: "ひのきのぼう", v: 1 },
   };
   const TOOLS = [
-    { id: "banana", n: "バナナ", key: "1", info: "ゆかに おく。ふんだ ゆうしゃは ころんで、とった ものを おとす" },
-    { id: "decoy", n: "キラキラいし", key: "2", info: "ゆかに おく。ゆうしゃは まっさきに ひろいに いく（ただの いし）" },
-    { id: "bell", n: "かあさんベル", key: "3", info: "かあさんが ゆうしゃを しかって しばらく うごけなくする" },
-    { id: "glue", n: "せっちゃくざい", key: "4", info: "となりの われた ツボを なおす" },
+    { id: "banana", n: "バナナ", s: "バナナ", key: "1", info: "ゆかに おく。ふんだ ゆうしゃは ころんで、とった ものを おとす" },
+    { id: "decoy", n: "キラキラいし", s: "いし", key: "2", info: "ゆかに おく。ゆうしゃは まっさきに ひろいに いく（ただの いし）" },
+    { id: "bell", n: "かあさんベル", s: "ベル", key: "3", info: "かあさんが ゆうしゃを しかって しばらく うごけなくする" },
+    { id: "glue", n: "せっちゃくざい", s: "ボンド", key: "4", info: "となりの われた ツボを なおす" },
   ];
   const KINDS = {
     P: { type: "pot",    name: "ツボ",   cap: 1, act: 0.8 },
@@ -274,6 +267,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   HALF.warrior = HALF.hero.map((r) => r.replace(/r/g, ".").replace(/y/g, "W").replace(/b/g, "R"));
   OVERLAY.warrior = OVERLAY.hero.map(([x, y, c]) => [x, y, c === "w" ? "W" : c]);
   const SPR = {};
+  const CHAR_BACK = { villager: "h", hero: "y", warrior: "W", mage: "m" };
   function buildSprite(rows) {
     const c = document.createElement("canvas");
     c.width = rows[0].length; c.height = rows.length;
@@ -285,6 +279,18 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     const rows = half.map((r) => (r = r.padEnd(8, ".").slice(0, 8), [...(r + [...r].reverse().join(""))]));
     (OVERLAY[name] || []).forEach(([x, y, ch]) => (rows[y][x] = ch));
     SPR[name] = buildSprite(rows.map((r) => r.join("")));
+    const backCol = CHAR_BACK[name];
+    if (!backCol) continue;
+    const back = rows.map((r, y) => r.map((c, x) => {
+      if (y < 4 || y > (name === "mage" ? 9 : 6)) return c;
+      if (c === "s" || (name === "mage" && c === "e")) return backCol;
+      if (y === 5 && (x === 5 || x === 10)) return backCol;
+      return c;
+    }));
+    const step = (rs, right) => rs.map((r, y) => (y === 15 ? r.map((c, x) => ((right ? x >= 8 : x < 8) ? "." : c)) : r));
+    const put = (n, rs) => (SPR[n] = buildSprite(rs.map((r) => r.join(""))));
+    put(name + "_w1", step(rows, false)); put(name + "_w2", step(rows, true));
+    put(name + "_b", back); put(name + "_b_w1", step(back, false)); put(name + "_b_w2", step(back, true));
   }
   for (const [name, rows] of Object.entries(FULL)) SPR[name] = buildSprite(rows);
   const SPRURL = {};
@@ -328,8 +334,37 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     steal: () => { tone(420, 140, 0.3, "sawtooth", 0.06); },
     drop: () => { tone(500, 700, 0.06); tone(700, 1000, 0.08, "square", 0.05, 0.07); },
     bell: () => { [1320, 1320, 1320].forEach((f, i) => tone(f, f * 0.98, 0.18, "triangle", 0.08, i * 0.12)); },
+    alert: () => { tone(880, 880, 0.08, "square", 0.07); tone(1320, 1320, 0.12, "square", 0.07, 0.09); },
+    tick: () => { tone(660, 660, 0.08, "square", 0.06); },
     ok: () => { [523, 659, 784].forEach((f, i) => tone(f, f, 0.1, "square", 0.05, i * 0.09)); },
   };
+
+  // ================= music =================
+  const SONGS = {
+    calm: { bpm: 116,
+      mel: [72, null, 76, null, 79, null, 76, null, 77, null, 76, null, 74, null, null, null, 71, null, 74, null, 77, null, 74, null, 76, null, 74, null, 72, null, null, null],
+      bass: [48, null, 55, null, 48, null, 55, null, 53, null, 60, null, 53, null, 60, null, 55, null, 62, null, 55, null, 62, null, 48, null, 55, null, 48, null, 55, null] },
+    tense: { bpm: 168,
+      mel: [69, 72, 76, 72, 69, 72, 76, 77, 76, 74, 72, 71, 72, null, 69, null, 69, 72, 76, 72, 69, 72, 76, 79, 77, 76, 74, 72, 71, null, 68, null],
+      bass: [45, 45, 57, 45, 45, 45, 57, 45, 41, 41, 53, 41, 40, 40, 52, 40] },
+  };
+  const bgm = { song: null, next: 0, step: 0 };
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  function bgmTick() {
+    if (!actx || !soundOn) { bgm.song = null; return; }
+    const want = S.phase === "prep" ? "calm" : S.phase === "hero" ? "tense" : null;
+    if (want !== bgm.song) { bgm.song = want; bgm.step = 0; bgm.next = actx.currentTime + 0.08; }
+    if (!want) return;
+    if (bgm.next < actx.currentTime - 0.1) bgm.next = actx.currentTime + 0.05;
+    const sg = SONGS[want], dur = 60 / sg.bpm / 2;
+    while (bgm.next < actx.currentTime + 0.25) {
+      const d = bgm.next - actx.currentTime;
+      const m = sg.mel[bgm.step % sg.mel.length], b = sg.bass[bgm.step % sg.bass.length];
+      if (m != null) tone(hz(m), hz(m), dur * 0.85, "square", 0.022, d);
+      if (b != null) tone(hz(b), hz(b), dur * 0.9, "triangle", 0.05, d);
+      bgm.next += dur; bgm.step++;
+    }
+  }
 
   // ================= state =================
   const cv = document.getElementById("cv");
@@ -359,7 +394,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       stolen: [], waveStolen: [], repairCost: 0, bonus: 0, ska: 0, lv: {},
       d: { pots: 0, stolen: [], slips: 0, decoy: 0, scold: 0, talks: 0, bed: 0, safeFail: 0 }, totalAdded: 0,
       tut: 0, seenDone: false, seenBump: false,
-      fx: [], parts: [], shake: 0, momT: 0,
+      fx: [], parts: [], shake: 0, momT: 0, banner: null, flash: 0, lastCount: 0, outroT: 0,
       log: [],
     };
     renderLog();
@@ -369,11 +404,44 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   // ================= messages =================
   function msg(text) {
     S.log.push(text);
-    if (S.log.length > 3) S.log.shift();
+    if (S.log.length > 2) S.log.shift();
     renderLog();
   }
   function renderLog() {
     $("msg").innerHTML = S.log.map((l) => `<p>${l}</p>`).join("") || "<p>…</p>";
+  }
+  function banner(text, sub = "", color = "#ffd84a", dur = 1.9) { S.banner = { text, sub, color, dur, t: 0 }; }
+  function drawBanner(dt) {
+    const b = S.banner;
+    if (b) {
+      b.t += dt;
+      if (b.t > b.dur) S.banner = null;
+      else {
+        const a = Math.min(1, b.t / 0.15, (b.dur - b.t) / 0.3);
+        const sc = 1 + Math.max(0, 0.25 - b.t) * 1.6;
+        const cy = cv.height / 2;
+        ctx.globalAlpha = a;
+        ctx.fillStyle = "rgba(5,6,13,.82)"; ctx.fillRect(0, cy - 46, cv.width, b.sub ? 92 : 72);
+        ctx.fillStyle = b.color; ctx.fillRect(0, cy - 46, cv.width, 3); ctx.fillRect(0, cy + (b.sub ? 43 : 23), cv.width, 3);
+        ctx.save(); ctx.translate(cv.width / 2, cy - 10); ctx.scale(sc, sc);
+        ctx.font = `40px "DotGothic16", monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineWidth = 6; ctx.strokeStyle = "#05060d"; ctx.strokeText(b.text, 0, 0);
+        ctx.fillStyle = b.color; ctx.fillText(b.text, 0, 0);
+        ctx.restore();
+        if (b.sub) { ctx.font = `17px "DotGothic16", monospace`; ctx.fillStyle = "#f2f2f2"; ctx.textAlign = "center"; ctx.fillText(b.sub, cv.width / 2, cy + 26); }
+        ctx.globalAlpha = 1;
+      }
+    }
+    const tutWait = S.wave === 0 && S.tut < 2;
+    if (S.phase === "prep" && !tutWait && S.timer <= 3 && S.timer > 0 && !S.banner) {
+      const n = Math.ceil(S.timer), f = n - S.timer;
+      ctx.globalAlpha = 0.85 * (1 - f * 0.6);
+      ctx.font = `${90 + f * 40}px "DotGothic16", monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 8; ctx.strokeStyle = "#05060d"; ctx.strokeText(n, cv.width / 2, cv.height / 2);
+      ctx.fillStyle = "#ff6b6b"; ctx.fillText(n, cv.width / 2, cv.height / 2);
+      ctx.globalAlpha = 1;
+    }
+    if (S.flash > 0) { S.flash -= dt; ctx.fillStyle = `rgba(255,60,60,${S.flash})`; ctx.fillRect(0, 0, cv.width, cv.height); }
   }
   function pop(text, x, y, color = "#ffd84a") { S.fx.push({ text, x, y, t: 0, color }); }
   function shards(x, y) {
@@ -419,7 +487,8 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   function beginPrep(fresh) {
     const cfg = WAVES[S.wave];
     if (S.phase !== "title" && S.phase !== "morning" && S.phase !== "result") return;
-    S.phase = "prep"; S.timer = cfg.prep;
+    S.phase = "prep"; S.timer = cfg.prep; S.lastCount = 0;
+    banner(`${S.wave + 1}日目`, S.wave === 0 ? "ゆうしゃが くるまえに たからを かくせ！" : cfg.title);
     ov.hidden = true; ov.parentElement.classList.remove("cover");
     msg(S.wave === 0
       ? "1日目の あさ。かあさん「💎かほうは みぎうえの タンスに しまったよ」"
@@ -430,10 +499,12 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   function startHeroes() {
     const cfg = WAVES[S.wave];
     S.phase = "hero"; $("skip").hidden = true;
+    banner("ゆうしゃが きた！", cfg.heroes.length > 1 ? `${cfg.heroes.length}人で きた！ みつかるな！` : "たからを もって うろうろ すると ねらわれるぞ", "#ff6b6b", 1.7);
+    S.flash = 0.35; S.shake = 0.25;
     S.heroes = cfg.heroes.map((hd, i) => ({
       ...hd, lv: S.lv[hd.name] || 1 + S.wave, x: DOOR.x, y: DOOR.y, fx: DOOR.x, fy: DOOR.y, tx: DOOR.x, ty: DOOR.y, t: 1, moving: false, flip: false,
       state: "wait", delay: i * 1.6, path: [], target: null, actT: 0, actMax: 1, pause: 0, slip: 0, talkCd: 0,
-      say: "", sayT: 0, bag: [], scold: 0, speed: cfg.speed * Math.pow(1.03, (S.lv[hd.name] || 1) - 1), actMul: cfg.act,
+      say: "", sayT: 0, bag: [], scold: 0, chase: 0, chaseCd: 2, exclaim: 0, look: "down", speed: cfg.speed * Math.pow(1.03, (S.lv[hd.name] || 1) - 1), actMul: cfg.act,
     }));
   }
   function endWave() {
@@ -564,7 +635,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       if (S.visited.size && !S.seenDone) S.seenDone = S.clock;
       if (S.seenDone && S.clock - S.seenDone < 7)
         return { text: "④ <b>『済』</b> が ついた 入れものは きょうは もう しらべられない。あとから そこに かくせ！", target: null, done: true };
-      return { text: S.tools.bell > 0 && S.heroes.some((h) => h.state === "act") ? "ピンチの ときは <b>かあさんベル</b>！ ゆうしゃが しかられて とまるよ" : "ゆうしゃに ぶつかると はなしかけられて、もっている ものを とられる！ よけろ！", target: null };
+      return { text: S.tools.bell > 0 && S.heroes.some((h) => h.state === "act") ? "ピンチの ときは <b>かあさんベル</b>！ ゆうしゃが しかられて とまるよ" : "たからを もって ゆうしゃに ちかづくと「！」で おいかけてくる！ にげろ！", target: null };
     }
     return null;
   }
@@ -598,6 +669,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   }
   function beginMove(m, nx, ny) {
     if (nx !== m.x) m.flip = nx < m.x;
+    m.look = ny < m.y ? "up" : "down";
     m.fx = m.x; m.fy = m.y; m.tx = nx; m.ty = ny; m.t = 0; m.moving = true;
   }
   const rx = (m) => m.moving ? m.fx + (m.tx - m.fx) * m.t : m.x;
@@ -623,6 +695,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     if (!d) return;
     p.face = d;
     const [dx, dy] = DIRS[d];
+    p.look = d === "up" ? "up" : "down";
     if (dx) p.flip = dx < 0;
     if (walkable(p.x + dx, p.y + dy)) beginMove(p, p.x + dx, p.y + dy);
   }
@@ -736,7 +809,8 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       if (h.delay <= 0) { h.state = "walk"; SFX.door(); heroSay(h, "おじゃましまーす！"); msg(`ガチャ！ ${h.name}が かってに はいってきた！`); }
       return;
     }
-    h.talkCd -= dt;
+    h.talkCd -= dt; h.chaseCd -= dt; h.exclaim -= dt;
+    if (h.chase > 0) h.chase -= dt;
     if (h.sayT > 0) { h.sayT -= dt; if (h.sayT <= 0) h.say = ""; }
     if (h.slip > 0) { h.slip -= dt; return; }
     if (h.scold > 0) { h.scold -= dt; return; }
@@ -744,6 +818,25 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     const st = stepMover(h, dt, h.speed);
     if (st === "moving") return;
     if (st === "arrived" && heroArrive(h)) return;
+
+    const p = S.player;
+    if (h.chase > 0) {
+      if (!p.carry || h.state === "leave") { h.chase = 0; h.path = []; }
+      else {
+        const [px, py] = playerTile();
+        const path = pathTo(bfs(h.x, h.y).prev, h.x, h.y, px, py);
+        if (path && path.length) { beginMove(h, path[0][0], path[0][1]); return; }
+      }
+    }
+    if (h.state === "walk" && h.chaseCd <= 0 && p.carry && p.frozen <= 0 && Math.hypot(h.x - rx(p), h.y - ry(p)) <= 3.2) {
+      h.chase = 3.2; h.chaseCd = 7; h.exclaim = 0.9;
+      heroSay(h, rand(["あっ！ それ ちょうだい！", "まって〜！ それ なに？", "いい もの もってる！"]), 1.6);
+      SFX.alert();
+      msg(`${h.name}に みつかった！ おいかけてくる！ にげろ！`);
+      if (h.target) { S.visited.delete(h.target); if (h.target.type === "bed") S.bedUsed = false; h.target = null; }
+      h.path = [];
+      return;
+    }
 
     if (h.state === "act") {
       h.actT -= dt;
@@ -758,7 +851,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     }
     if (h.target) {
       h.state = "act"; h.actMax = h.actT = h.target.act * h.actMul;
-      h.flip = h.target.x < h.x;
+      h.flip = h.target.x < h.x; h.look = h.target.y < h.y ? "up" : "down";
       heroSay(h, rand(ACT_LINES[h.target.type]), h.actMax);
       return;
     }
@@ -1120,7 +1213,12 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       ctx.fillStyle = "#ffd84a"; ctx.font = `14px "DotGothic16", monospace`; ctx.textAlign = "center";
       for (let i = 0; i < 3; i++) { const a = S.clock * 5 + i * 2.1; ctx.fillText("★", cx + T / 2 + Math.cos(a) * 16, cy + 8 + Math.sin(a) * 6); }
     } else {
-      spr(h.spr, cx, cy + bob + (h.scold > 0 ? 6 : 0), T, h.flip);
+      spr(charSprite(h.spr, h), cx, cy + bob + (h.scold > 0 ? 6 : 0), T, h.flip);
+      if (h.exclaim > 0) {
+        ctx.font = `bold 28px "DotGothic16", monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.lineWidth = 5; ctx.strokeStyle = "#05060d"; ctx.strokeText("！", cx + T / 2, cy - 30);
+        ctx.fillStyle = "#ff6b6b"; ctx.fillText("！", cx + T / 2, cy - 30);
+      }
       if (h.scold > 0) { ctx.fillStyle = "#8ab4ff"; ctx.fillRect(cx + T - 10, cy + 6 + (S.clock * 20) % 10, 3, 6); }
     }
     label(`${h.name} Lv${h.lv}`, cx + T / 2, cy + T + 2, "#ff6b6b");
@@ -1131,13 +1229,17 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     }
     if (h.say) bubble(h.say, cx + T / 2, cy - 20, "#ff6b6b");
   }
+  function charSprite(base, m) {
+    const step = m.moving ? (Math.floor(S.clock * 9) % 2 ? "_w1" : "_w2") : "";
+    return base + (m.look === "up" ? "_b" : "") + step;
+  }
   function drawPlayer() {
     const p = S.player;
     const cx = rx(p) * T, cy = ry(p) * T;
     const bob = p.moving ? Math.abs(Math.sin(S.clock * 16)) * -3 : 0;
     const shake = p.frozen > 0 ? Math.sin(S.clock * 40) * 1.5 : 0;
     shadow(cx + T / 2, cy + T - 4);
-    spr("villager", cx + shake, cy + bob, T, p.flip);
+    spr(charSprite("villager", p), cx + shake, cy + bob, T, p.flip);
     label("あなた", cx + T / 2, cy + T + 2, "#ffd84a");
     if (p.carry) spr(p.carry, cx + 12, cy - 18 + bob, 24);
     if (p.say) bubble(p.say, cx + T / 2, cy - 30);
@@ -1172,6 +1274,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     drawPlayer();
     drawLight();
     drawFx(dt);
+    drawBanner(dt);
     if (S.momT > 0) {
       S.momT -= dt;
       bubble("かあさん「くつ ぬぎなさい！！」", cv.width / 2, 30, "#ffd84a");
@@ -1186,13 +1289,13 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     const ph = $("hPhase");
     const tutWait = S.phase === "prep" && S.wave === 0 && S.tut < 2;
     ph.classList.toggle("alarm", S.phase === "hero" || (S.phase === "prep" && S.timer < 4 && !tutWait));
-    if (S.phase === "prep") { $("hPhaseK").textContent = "ゆうしゃ とうちゃくまで"; ph.textContent = tutWait ? "まってくれてる" : `${Math.ceil(S.timer)}びょう`; }
-    else if (S.phase === "hero") { $("hPhaseK").textContent = "じょうきょう"; ph.textContent = "しんにゅう中！"; }
-    else { $("hPhaseK").textContent = "じょうきょう"; ph.textContent = S.phase === "result" ? "よる" : "-"; }
+    if (S.phase === "prep") { $("hPhaseK").textContent = "ゆうしゃまで"; ph.textContent = tutWait ? "まってる" : `${Math.ceil(S.timer)}びょう`; }
+    else if (S.phase === "hero") { $("hPhaseK").textContent = ""; ph.textContent = "しんにゅう中！"; }
+    else { $("hPhaseK").textContent = ""; ph.textContent = S.phase === "result" ? "よる" : ""; }
     const c = S.player.carry;
     $("hCarry").textContent = c ? `${ITEMS[c].n.length > 6 ? "💎かほう" : ITEMS[c].n}` : "なし";
     $("hAsset").textContent = `${assets()}G`;
-    const text = g ? g.text : S.phase === "title" ? "「はじめる」を おしてね" : "ゆっくり やすもう";
+    const text = g ? g.text : "";
     if (text !== lastGuide) { $("guide").innerHTML = text; lastGuide = text; }
     renderTreasure();
     TOOLS.forEach((t) => {
@@ -1210,7 +1313,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     for (const list of Object.values(S.floor)) g.hand.push(...list);
     const icons = (list) => list.sort((a, b) => ITEMS[b].v - ITEMS[a].v).map((k) => `<img src="${SPRURL[k]}" alt="${ITEMS[k].n}">`).join("");
     const parts = [
-      ["safe", "きんこ（あんぜん）"], ["house", "いえの 入れもの"], ["hand", "てもち・ゆか"], ["lost", "とられた"],
+      ["safe", "きんこ"], ["house", "いえ"], ["hand", "てもち"], ["lost", "とられた"],
     ].filter(([k]) => g[k].length).map(([k, label]) => `<span class="t ${k === "house" ? "" : k}">${label}${icons(g[k])}</span>`);
     const html = parts.length ? parts.join("") : `<span class="k">たから：まだ なし</span>`;
     if (html !== lastTreasure) { $("treasure").innerHTML = html; lastTreasure = html; }
@@ -1223,15 +1326,28 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     S.clock += dt;
     if (objects) for (const o of objects) if (o.sayT > 0) o.sayT -= dt;
     const g = guide();
+    bgmTick();
     if (S.phase === "prep") {
-      if (!(S.wave === 0 && S.tut < 2)) S.timer -= dt;
+      if (!(S.wave === 0 && S.tut < 2)) {
+        S.timer -= dt;
+        const c = Math.ceil(S.timer);
+        if (c <= 3 && c > 0 && c !== S.lastCount) { S.lastCount = c; SFX.tick(); }
+      }
       updatePlayer(dt);
       if (S.timer <= 0) startHeroes();
     } else if (S.phase === "hero") {
       updatePlayer(dt);
       S.heroes.forEach((h) => updateHero(h, dt));
       checkBump();
-      if (S.heroes.every((h) => h.state === "gone")) endWave();
+      if (S.heroes.every((h) => h.state === "gone")) {
+        S.phase = "outro"; S.outroT = 1.8;
+        const lost = S.waveStolen.length;
+        banner(lost ? "なんとか しのいだ…" : "パーフェクト！", lost ? `${lost}こ とられた` : "なにも とられなかった！", lost ? "#f2f2f2" : "#7be07b", 1.8);
+        if (!lost) SFX.ok();
+      }
+    } else if (S.phase === "outro") {
+      S.outroT -= dt;
+      if (S.outroT <= 0) endWave();
     }
     draw(dt, g); hud(g);
     requestAnimationFrame(frame);
@@ -1255,10 +1371,10 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => b.addEventListener(ev, () => release(d)));
   });
   $("abtn").addEventListener("pointerdown", (e) => { e.preventDefault(); action(); });
-  $("tools").innerHTML = TOOLS.map((t) => `<button class="tool" id="tool-${t.id}" title="${t.info}"><img src="${spriteURL(t.id, 4)}" alt=""><b>${t.n}</b><span>×0</span></button>`).join("");
+  $("tools").innerHTML = TOOLS.map((t) => `<button class="tool" id="tool-${t.id}" title="${t.info}"><img src="${spriteURL(t.id, 4)}" alt=""><b>${t.s}</b><span>×0</span></button>`).join("");
   TOOLS.forEach((t) => $("tool-" + t.id).addEventListener("pointerdown", (e) => { e.preventDefault(); useTool(t.id); }));
   $("skip").addEventListener("click", () => { if (S.phase === "prep") { S.tut = Math.max(S.tut, 2); S.timer = 0; } });
-  $("snd").addEventListener("click", () => { soundOn = !soundOn; $("snd").textContent = `おと: ${soundOn ? "ON" : "OFF"}`; if (soundOn) initAudio(); });
+  $("snd").addEventListener("click", () => { soundOn = !soundOn; $("snd").textContent = `おと ${soundOn ? "ON" : "OFF"}`; if (soundOn) initAudio(); });
 
   buildHouse();
   newGame();
