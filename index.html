@@ -6,128 +6,132 @@
 <title>忘却ダンジョン</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Klee+One:wght@400;600&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Klee+One:wght@400;600&display=swap">
 <style>
-/* Layout: 地下の案内表示を軸にした暗い単一テーマ。左に視界と計器、右に紙のメモ帳。 */
+/* Layout: 全画面のゲーム。3Dの視界を背景に、HUDは四隅、メモは右から引き出す紙のノート。
+   書体はドット文字に統一し、紙のノートの中だけ手書き。黄色は「出口」の案内表示にだけ使う。 */
 :root {
-  --bg: #0a0b0d;
-  --panel: #121418;
-  --panel-2: #1a1d22;
-  --line: #2a2e35;
-  --fg: #d9d5c9;
-  --muted: #858a92;
+  --bg: #050506;
+  --panel: rgba(9, 10, 12, 0.94);
+  --line: #2b2f36;
+  --line-strong: #4a4f58;
+  --fg: #ddd8cb;
+  --muted: #8b8f96;
   --sign: #e6c03f;
   --sign-ink: #15130b;
-  --paper: #e8e0c8;
-  --paper-line: #c8bd9e;
-  --paper-ink: #2a2923;
-  --danger: #c9473a;
-  --display: "DotGothic16", "Hiragino Kaku Gothic ProN", "Yu Gothic", monospace;
-  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  --paper: #e6ddc4;
+  --paper-line: #c6ba99;
+  --paper-ink: #29271f;
+  --danger: #d0503f;
+  --pixel: "DotGothic16", "Hiragino Kaku Gothic ProN", "Yu Gothic", "MS Gothic", monospace;
   --hand: "Klee One", "Hiragino Mincho ProN", "Yu Mincho", serif;
   color-scheme: dark;
 }
 [hidden] { display: none !important; }
 *, *::before, *::after { box-sizing: border-box; }
-html, body { min-height: 100%; }
-body {
-  margin: 0; background: var(--bg); color: var(--fg);
-  font-family: var(--body); font-size: 14px; line-height: 1.6;
-  padding-inline: 16px; padding-block: 14px 24px;
-}
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--pixel); font-size: 15px; line-height: 1.6; overflow: hidden; }
 button { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--sign); outline-offset: 2px; }
+kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-radius: 2px; padding: 0 4px; opacity: .7; }
 
-.top { max-width: 1240px; margin: 0 auto 12px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
-.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.brand h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 1.8rem; letter-spacing: .1em; }
-.brand small { color: var(--muted); font-size: .78rem; letter-spacing: .14em; }
-.hud { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.exit-sign { display: inline-flex; align-items: center; gap: 10px; background: var(--sign); color: var(--sign-ink); font-family: var(--display); font-size: 1.05rem; padding: 3px 12px; border-radius: 3px; letter-spacing: .06em; }
-.exit-sign b { font-weight: 400; font-size: 1.45rem; line-height: 1.1; min-width: 1.2ch; text-align: center; font-variant-numeric: tabular-nums; transition: opacity 1.2s; }
-.ghost { background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 6px 12px; cursor: pointer; font-size: .82rem; letter-spacing: .05em; }
-.ghost:hover { border-color: var(--muted); }
+.game { position: relative; height: 100%; min-height: 420px; overflow: hidden; background: #000; user-select: none; -webkit-user-select: none; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
 
-.app { max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
-@media (max-width: 900px) { .app { grid-template-columns: minmax(0, 1fr); } }
-.stage { display: grid; gap: 10px; min-width: 0; }
+/* HUD */
+.hud { position: absolute; inset: 0; pointer-events: none; transition: opacity .6s; }
+.game:not([data-phase="play"]):not([data-phase="stairs"]):not([data-phase="keypad"]) .hud { opacity: 0; }
+.hud > * { pointer-events: auto; }
+.hud-tl { position: absolute; top: 16px; left: 16px; display: grid; gap: 10px; justify-items: start; }
+.exit-sign { display: inline-flex; align-items: center; gap: 10px; background: var(--sign); color: var(--sign-ink); padding: 2px 12px 3px; border-radius: 2px; font-size: 1.05rem; letter-spacing: .08em; box-shadow: 0 2px 0 rgba(0,0,0,.5); }
+.exit-sign b { font-weight: 400; font-size: 1.4rem; min-width: 1.2ch; text-align: center; font-variant-numeric: tabular-nums; transition: opacity 1.2s; }
+.hud-tr { position: absolute; top: 16px; right: 16px; display: flex; gap: 6px; }
+.hbtn { background: rgba(8,9,11,.7); border: 1px solid var(--line); border-radius: 2px; padding: 4px 10px; cursor: pointer; font-size: .82rem; letter-spacing: .06em; }
+.hbtn:hover { border-color: var(--line-strong); }
+.hud-bl { position: absolute; left: 16px; bottom: 16px; display: grid; gap: 6px; }
+#minimap { width: 132px; height: 132px; display: block; background: rgba(4,5,6,.78); border: 1px solid var(--line); image-rendering: pixelated; }
+.meta { display: flex; gap: 12px; font-size: .72rem; color: var(--muted); letter-spacing: .06em; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; }
+.subtitle { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); width: min(62ch, calc(100% - 340px)); margin: 0; text-align: center; font-size: 1.02rem; letter-spacing: .06em; text-shadow: 0 0 6px #000, 0 2px 2px #000; transition: opacity .8s; pointer-events: none; }
+.subtitle.dim { opacity: 0; }
+.prompt { position: absolute; left: 50%; bottom: 78px; transform: translateX(-50%); display: flex; gap: 6px; }
+.prompt button { background: rgba(8,9,11,.82); border: 1px solid var(--sign); color: var(--sign); border-radius: 2px; padding: 4px 14px; cursor: pointer; font-size: .92rem; letter-spacing: .06em; white-space: nowrap; }
+.prompt button.sub { border-color: var(--line-strong); color: var(--fg); }
 
-.view { position: relative; border: 1px solid var(--line); background: #000; overflow: hidden; }
-#view { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; max-width: 100%; touch-action: none; }
-.grain { position: absolute; inset: 0; pointer-events: none; opacity: .08; mix-blend-mode: screen; background-size: 160px 160px; animation: grain .5s steps(4) infinite; }
-@keyframes grain { 0% { background-position: 0 0; } 25% { background-position: -40px 30px; } 50% { background-position: 50px -20px; } 75% { background-position: -20px -50px; } 100% { background-position: 0 0; } }
-.vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,.6) 100%); }
-.fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .7s ease; }
-.fade.on { opacity: 1; }
-.floor-card { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; color: var(--sign); font-family: var(--display); opacity: 0; text-shadow: 0 2px 12px rgba(0,0,0,.8); }
-.floor-card b { font-weight: 400; font-size: clamp(2.6rem, 9vw, 4.6rem); line-height: 1; letter-spacing: .1em; }
-.floor-card span { font-size: clamp(.9rem, 2.4vw, 1.1rem); letter-spacing: .2em; margin-top: 10px; }
+.touch { position: absolute; right: 16px; bottom: 16px; display: none; grid-template-columns: repeat(3, 54px); grid-auto-rows: 54px; gap: 6px; }
+.touch button { background: rgba(10,11,13,.55); border: 1px solid rgba(255,255,255,.14); border-radius: 4px; font-size: 1.3rem; touch-action: manipulation; }
+.touch button:active { background: rgba(230,192,63,.25); }
+.touch .use { grid-column: 1 / -1; font-size: .95rem; letter-spacing: .3em; color: var(--sign); }
+@media (pointer: coarse), (max-width: 760px) {
+  .touch { display: grid; }
+  .hud-bl { bottom: auto; top: 64px; }
+  #minimap { width: 96px; height: 96px; }
+  .subtitle { width: calc(100% - 32px); bottom: 210px; font-size: .95rem; }
+  .prompt { bottom: 250px; }
+  .hud-tr kbd { display: none; }
+}
+
+.floor-card { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; color: var(--sign); opacity: 0; text-shadow: 0 2px 16px #000; }
+.floor-card b { font-weight: 400; font-size: clamp(2.8rem, 9vw, 5rem); line-height: 1; letter-spacing: .12em; }
+.floor-card span { font-size: clamp(.9rem, 2.4vw, 1.1rem); letter-spacing: .3em; margin-top: 12px; }
 .floor-card.show { animation: card 3.4s ease forwards; }
 @keyframes card { 0% { opacity: 0; } 12% { opacity: 1; } 60% { opacity: 1; } 100% { opacity: 0; } }
+.fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity .7s ease; }
+.fade.on { opacity: 1; }
 
-.prompt { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; max-width: calc(100% - 24px); }
-.prompt button { background: var(--sign); color: var(--sign-ink); border: 0; border-radius: 3px; font-family: var(--display); font-size: .98rem; padding: 6px 14px; cursor: pointer; white-space: nowrap; }
-.prompt button.sub { background: rgba(10,11,13,.85); color: var(--fg); border: 1px solid var(--line); }
+/* 画面（タイトル・一時停止など）は同じ黒い板で統一 */
+.screen { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px 16px; overflow: auto; background: rgba(3,3,4,.62); }
+.screen.dark { background: rgba(3,3,4,.86); }
+.panel { background: var(--panel); border: 1px solid var(--line); padding: 22px 24px; width: 100%; max-width: 520px; }
+.panel h2 { margin: 0 0 14px; font-weight: 400; font-size: 1.25rem; letter-spacing: .14em; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.panel h2 small { font-size: .72rem; color: var(--sign); letter-spacing: .1em; }
+.panel p { margin: 0 0 12px; font-size: .9rem; color: var(--muted); }
+.menu { display: grid; gap: 2px; }
+.menu button { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; background: transparent; border: 0; border-left: 2px solid transparent; padding: 7px 12px; cursor: pointer; font-size: 1.05rem; letter-spacing: .1em; color: var(--fg); }
+.menu button span { font-size: .85rem; color: var(--muted); letter-spacing: .06em; }
+.menu button:focus { outline: none; border-left-color: var(--sign); background: rgba(230,192,63,.08); color: var(--sign); }
+.menu button:focus span { color: var(--fg); }
+.menu .warn { color: var(--danger); }
+.keys { margin-top: 16px; font-size: .74rem; color: var(--muted); line-height: 1.8; letter-spacing: .04em; }
 
-.overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(6,7,9,.84); padding: 14px; overflow: auto; }
-.notice { background: var(--sign); color: var(--sign-ink); width: 100%; max-width: 560px; padding: 18px 22px 20px; border-radius: 4px; }
-.notice h2 { margin: 0 0 10px; font-family: var(--display); font-weight: 400; font-size: 1.3rem; letter-spacing: .12em; border-bottom: 2px solid var(--sign-ink); padding-bottom: 6px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.notice h2 small { font-size: .72rem; letter-spacing: .1em; }
-.notice ol { margin: 0; padding-left: 1.3em; display: grid; gap: 2px; font-size: .9rem; }
-.notice p { margin: 8px 0 0; font-size: .86rem; }
-.notice .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
-.btn-ink { background: var(--sign-ink); color: var(--sign); border: 0; border-radius: 3px; padding: 8px 18px; font-family: var(--display); font-size: 1rem; letter-spacing: .1em; cursor: pointer; }
-.btn-ink.alt { background: transparent; color: var(--sign-ink); border: 1.5px solid var(--sign-ink); }
-.notice :focus-visible { outline-color: var(--sign-ink); outline-offset: 3px; }
-.diff { display: flex; border: 1.5px solid var(--sign-ink); border-radius: 3px; overflow: hidden; margin-top: 12px; flex-wrap: wrap; }
-.diff label { flex: 1 1 0; min-width: 120px; padding: 6px 10px; cursor: pointer; font-size: .8rem; line-height: 1.35; position: relative; }
-.diff label + label { border-left: 1.5px solid var(--sign-ink); }
-.diff input { position: absolute; opacity: 0; pointer-events: none; }
-.diff label:has(input:checked) { background: var(--sign-ink); color: var(--sign); }
-.diff label:has(input:focus-visible) { outline: 2px solid var(--sign-ink); outline-offset: -4px; }
-.diff b { display: block; font-family: var(--display); font-weight: 400; font-size: 1rem; letter-spacing: .08em; }
-.check { display: inline-flex; gap: 6px; align-items: center; font-size: .82rem; cursor: pointer; }
-.keys { font-size: .76rem; opacity: .8; margin-top: 10px; }
-.stats { display: grid; grid-template-columns: auto 1fr; gap: 2px 16px; margin: 4px 0 8px; font-variant-numeric: tabular-nums; font-size: .9rem; }
-.stats dt { opacity: .75; }
+.title-wrap { width: 100%; max-width: 980px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 28px 40px; align-items: center; }
+@media (max-width: 820px) { .title-wrap { grid-template-columns: minmax(0, 1fr); } }
+.title-wrap h1 { margin: 0; font-weight: 400; font-size: clamp(2.6rem, 7vw, 4.4rem); line-height: 1.05; letter-spacing: .12em; text-shadow: 0 0 24px rgba(0,0,0,.9); }
+.title-wrap .tag { margin: 10px 0 26px; color: var(--muted); letter-spacing: .3em; font-size: .9rem; }
+.notice { background: var(--sign); color: var(--sign-ink); padding: 16px 20px 18px; border-radius: 2px; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.notice h3 { margin: 0 0 8px; font-weight: 400; font-size: 1.1rem; letter-spacing: .2em; border-bottom: 2px solid var(--sign-ink); padding-bottom: 4px; }
+.notice ol { margin: 0; padding-left: 1.4em; display: grid; gap: 3px; font-size: .86rem; line-height: 1.55; }
+
+.stats { display: grid; grid-template-columns: auto 1fr; gap: 4px 18px; margin: 0 0 14px; font-variant-numeric: tabular-nums; }
+.stats dt { color: var(--muted); }
 .stats dd { margin: 0; }
-.catalog { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; max-height: 46vh; overflow: auto; }
-.catalog li { border: 1px solid rgba(21,19,11,.45); padding: 4px 8px; border-radius: 2px; font-size: .76rem; line-height: 1.35; }
-.catalog li b { display: block; font-family: var(--display); font-weight: 400; font-size: .9rem; }
-.catalog li.on { background: var(--sign-ink); color: var(--sign); border-color: var(--sign-ink); }
+.catalog { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px; max-height: min(52vh, 460px); overflow: auto; }
+.catalog li { border: 1px solid var(--line); padding: 6px 10px; font-size: .78rem; line-height: 1.45; color: var(--muted); }
+.catalog li b { display: block; font-weight: 400; font-size: .92rem; color: var(--fg); }
+.catalog li.on { border-color: rgba(230,192,63,.5); }
+.catalog li.on b { color: var(--sign); }
+.panel.wide { max-width: 760px; }
 
-.keypad { background: #1b1d21; border: 1px solid #3a3e46; border-radius: 4px; padding: 16px; width: 260px; max-width: 100%; display: grid; gap: 10px; color: var(--fg); }
-.keypad h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 1rem; letter-spacing: .12em; color: var(--muted); }
-.kp-display { font-family: var(--display); font-size: 2rem; letter-spacing: .4em; text-align: center; background: #070809; color: var(--sign); padding: 4px 0 4px .4em; border: 1px solid #333; font-variant-numeric: tabular-nums; }
+.kp-display { font-size: 2.2rem; letter-spacing: .5em; text-align: center; background: #000; color: var(--sign); padding: 4px 0 4px .5em; border: 1px solid var(--line); margin-bottom: 12px; font-variant-numeric: tabular-nums; }
 .kp-display.bad { color: var(--danger); animation: shake .3s; }
 @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
 .kp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.kp-grid button { background: #2a2d33; border: 1px solid #3c4048; border-radius: 3px; padding: 8px 0; font-family: var(--display); font-size: 1.2rem; cursor: pointer; }
-.kp-grid button:active { background: #353941; }
+.kp-grid button { background: #16181c; border: 1px solid var(--line); padding: 10px 0; font-size: 1.2rem; cursor: pointer; }
+.kp-grid button:hover, .kp-grid button:focus-visible { border-color: var(--sign); outline: none; }
 .kp-grid .ok { color: var(--sign); }
-.kp-note { margin: 0; font-size: .76rem; color: var(--muted); }
 
-.console { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; background: var(--panel); border: 1px solid var(--line); padding: 12px; }
-@media (max-width: 600px) { .console { grid-template-columns: auto minmax(0, 1fr); } .pad { grid-column: 1 / -1; justify-self: center; } }
-#minimap { width: 128px; height: 128px; display: block; background: #07080a; border: 1px solid var(--line); }
-.log { min-width: 0; display: grid; gap: 6px; }
-.monologue { margin: 0; font-family: var(--hand); font-size: 1.04rem; line-height: 1.55; min-height: 3.1em; }
-.meta { margin: 0; color: var(--muted); font-size: .76rem; letter-spacing: .06em; display: flex; flex-wrap: wrap; gap: 2px 14px; font-variant-numeric: tabular-nums; }
-.pad { display: grid; grid-template-columns: repeat(3, 46px); grid-auto-rows: 42px; gap: 4px; }
-.pad button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; cursor: pointer; font-family: var(--display); font-size: 1.1rem; touch-action: manipulation; }
-.pad button:active { background: #262a31; }
-.pad .use { grid-column: 1 / -1; font-size: .9rem; color: var(--sign); letter-spacing: .2em; }
-
-.memo { background: var(--paper); color: var(--paper-ink); border-radius: 2px; padding: 14px 14px 16px; display: grid; gap: 10px; min-width: 0; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
-.memo-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.memo-head h2 { margin: 0; font-family: var(--hand); font-weight: 600; font-size: 1.15rem; letter-spacing: .1em; }
-.memo-head p { margin: 0; font-size: .72rem; opacity: .7; }
+/* 紙のノート */
+.notebook { position: absolute; top: 0; right: 0; bottom: 0; width: min(420px, 100%); background: var(--paper); color: var(--paper-ink); font-family: var(--hand); padding: 18px 18px 20px; display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 10px; transform: translateX(104%); transition: transform .35s cubic-bezier(.2,.8,.2,1); box-shadow: -18px 0 40px rgba(0,0,0,.55); }
+.notebook.open { transform: none; }
+.notebook :focus-visible { outline-color: var(--paper-ink); }
+.nb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.nb-head h2 { margin: 0; font-weight: 600; font-size: 1.2rem; letter-spacing: .12em; }
+.nb-head p { margin: 0; font-size: .74rem; opacity: .7; }
+.nb-close { background: none; border: 1px solid var(--paper-line); color: var(--paper-ink); font-family: var(--pixel); font-size: .78rem; padding: 2px 8px; cursor: pointer; }
 .tabs { display: flex; border-bottom: 1px solid var(--paper-line); }
-.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 4px 12px 5px; cursor: pointer; font-family: var(--hand); font-size: .95rem; color: var(--paper-ink); opacity: .55; }
+.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 3px 12px 5px; cursor: pointer; font-family: var(--hand); font-size: .95rem; color: var(--paper-ink); opacity: .55; }
 .tabs button[aria-selected="true"] { opacity: 1; border-bottom-color: var(--paper-ink); }
-.memo :focus-visible { outline-color: var(--paper-ink); }
-.pane { display: grid; gap: 8px; }
-#memo-text { width: 100%; min-height: 320px; resize: vertical; border: 0; padding: 4px 6px; font-family: var(--hand); font-size: 1rem; line-height: 28px; color: var(--paper-ink); background-color: transparent; background-image: linear-gradient(to bottom, transparent 27px, var(--paper-line) 27px, var(--paper-line) 28px); background-size: 100% 28px; background-attachment: local; }
+.pane { display: grid; gap: 8px; align-content: start; min-height: 0; overflow: auto; }
+#memo-text { width: 100%; min-height: 50vh; resize: vertical; border: 0; padding: 4px 6px; font-family: var(--hand); font-size: 1rem; line-height: 28px; color: var(--paper-ink); background-color: transparent; background-image: linear-gradient(to bottom, transparent 27px, var(--paper-line) 27px, var(--paper-line) 28px); background-size: 100% 28px; background-attachment: local; }
 .chips, .tools { display: flex; flex-wrap: wrap; gap: 4px; }
 .tools { justify-content: space-between; }
 .tools div { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -139,134 +143,129 @@ button { font: inherit; color: inherit; }
 #sketch { background-image: linear-gradient(var(--paper-line) 1px, transparent 1px), linear-gradient(90deg, var(--paper-line) 1px, transparent 1px); background-size: 10% 10%; }
 .hint { margin: 0; font-size: .74rem; opacity: .75; }
 
-@media (prefers-reduced-motion: reduce) { .grain { animation: none; } .floor-card.show { animation-duration: .01s; opacity: 1; } .exit-sign b, .fade { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .floor-card.show { animation-duration: .01s; opacity: 1; } .exit-sign b, .fade, .notebook, .hud, .subtitle { transition: none; } }
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <h1>忘却ダンジョン</h1>
-    <small>地図は消える。あなたも忘れる。</small>
-  </div>
-  <div class="hud">
-    <span class="exit-sign" aria-label="現在の番号"><span>出口</span><b id="hud-num">?</b><span>→</span></span>
-    <button class="ghost" id="btn-sound" type="button" aria-pressed="false">音 切</button>
-    <button class="ghost" id="btn-pause" type="button">一時停止</button>
-  </div>
-</header>
+<div class="game" id="game" data-phase="loading">
+  <canvas id="view" tabindex="0" aria-label="一人称の視界"></canvas>
 
-<main class="app">
-  <section class="stage" aria-label="迷宮">
-    <div class="view" id="viewwrap">
-      <canvas id="view" tabindex="0" aria-label="一人称の視界"></canvas>
-      <div class="vignette"></div>
-      <div class="grain" id="grain"></div>
-      <div class="floor-card" id="floor-card"><b id="fc-num">0 番</b><span id="fc-sub">異変は ありません</span></div>
-      <div class="prompt" id="prompt" hidden><button type="button" id="prompt-main"></button><button type="button" class="sub" id="prompt-sub" hidden>やめる</button></div>
-      <div class="fade" id="fade"></div>
-
-      <div class="overlay" id="ov-loading"><p style="font-family:var(--display);letter-spacing:.2em;color:var(--muted)">石を積んでいます……</p></div>
-
-      <div class="overlay" id="ov-title" hidden>
-        <div class="notice">
-          <h2>ご案内 <small>忘却ダンジョン</small></h2>
-          <ol>
-            <li>異変を見逃さないでください。</li>
-            <li>異変を見つけたら、引き返してください。（スタート地点の上り階段）</li>
-            <li>異変が見つからなければ、先へ進んでください。（迷宮の奥の下り階段）</li>
-            <li>途中の鉄扉には番号が要ります。番号は迷宮のどこかに刻まれています。</li>
-            <li>通った道は時間とともに地図から消えます。あなたも忘れます。</li>
-            <li>メモだけを信じてください。8番出口から外へ。</li>
-          </ol>
-          <div class="diff" role="radiogroup" aria-label="難易度">
-            <label><input type="radio" name="diff" value="easy" id="d-easy"><b>かんたん</b>5×5・ゆっくり忘れる</label>
-            <label><input type="radio" name="diff" value="normal" id="d-normal" checked><b>ふつう</b>7×7・標準</label>
-            <label><input type="radio" name="diff" value="hard" id="d-hard"><b>むずかしい</b>9×9・方角も忘れる</label>
-          </div>
-          <div class="row">
-            <button class="btn-ink" id="btn-continue" type="button" hidden>つづきから</button>
-            <button class="btn-ink" id="btn-start" type="button">はじめから</button>
-            <button class="btn-ink alt" id="btn-catalog" type="button">異変図鑑</button>
-          </div>
-          <div class="row" style="margin-top:8px">
-            <label class="check"><input type="checkbox" id="chk-clear"> はじめる前にメモを全部消す</label>
-          </div>
-          <p class="keys">W A S D／矢印：移動・向き　Q E：横歩き　Space／Enter：調べる・階段　Esc：一時停止<br>スマートフォンは画面下のボタンか、視界をスワイプ。0番の階に異変はありません。</p>
-        </div>
-      </div>
-
-      <div class="overlay" id="ov-catalog" hidden>
-        <div class="notice">
-          <h2>異変図鑑 <small id="cat-count">0 / 27</small></h2>
-          <p style="margin:0">見抜いた異変だけが記録されます。見抜けなかったものは、まだ名前もわかりません。</p>
-          <ul class="catalog" id="cat-list"></ul>
-          <div class="row"><button class="btn-ink" id="btn-cat-back" type="button">戻る</button></div>
-        </div>
-      </div>
-
-      <div class="overlay" id="ov-pause" hidden>
-        <div class="notice">
-          <h2>一時停止</h2>
-          <p style="margin:0">進み具合は階段を使うたびに保存されています。</p>
-          <div class="row">
-            <button class="btn-ink" id="btn-resume" type="button">再開する</button>
-            <button class="btn-ink alt" id="btn-totitle" type="button">タイトルへ</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="overlay" id="ov-keypad" hidden>
-        <div class="keypad" role="dialog" aria-label="鉄扉の番号入力">
-          <h3>鉄扉　番号を入力</h3>
-          <div class="kp-display" id="kp-display">____</div>
-          <div class="kp-grid" id="kp-grid">
-            <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
-            <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button>
-            <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button>
-            <button type="button" data-k="del">消す</button><button type="button" data-k="0">0</button><button type="button" data-k="ok" class="ok">決定</button>
-          </div>
-          <p class="kp-note">数字キーでも入力できます。Esc で閉じる。</p>
-        </div>
-      </div>
-
-      <div class="overlay" id="ov-end" hidden>
-        <div class="notice">
-          <h2>8番出口 <small id="end-diff"></small></h2>
-          <p style="margin:0 0 6px">外の空気だ。あなたは最後まで、忘れなかった。</p>
-          <dl class="stats">
-            <dt>かかった時間</dt><dd id="end-time">—</dd>
-            <dt>歩いた階</dt><dd id="end-floors">—</dd>
-            <dt>やり直し</dt><dd id="end-resets">—</dd>
-            <dt>これまでの最速</dt><dd id="end-best">—</dd>
-          </dl>
-          <div style="font-size:.85rem">今回見抜いた異変 <b id="end-found">0</b>　図鑑 <b id="end-cat">0</b> / 27</div>
-          <div class="row"><button class="btn-ink" id="btn-again" type="button">タイトルへ</button></div>
-        </div>
-      </div>
+  <div class="hud" id="hud">
+    <div class="hud-tl">
+      <span class="exit-sign" aria-label="現在の番号"><span>出口</span><b id="hud-num">?</b><span>→</span></span>
     </div>
-
-    <div class="console">
+    <div class="hud-tr">
+      <button class="hbtn" id="btn-memo" type="button" aria-expanded="false" aria-controls="notebook">メモ <kbd>Tab</kbd></button>
+      <button class="hbtn" id="btn-pause" type="button">一時停止 <kbd>Esc</kbd></button>
+    </div>
+    <div class="hud-bl">
       <canvas id="minimap" width="160" height="160" aria-label="消えていく地図"></canvas>
-      <div class="log">
-        <p class="monologue" id="monologue" aria-live="polite">……ここは、どこだろう。</p>
-        <p class="meta"><span id="facing">向き 北</span><span id="memtime">記憶 約15秒</span><span id="floorinfo">歩いた階 0</span><span id="steps">歩数 0</span></p>
+      <div class="meta"><span id="facing">向き 北</span><span id="memtime">記憶 約16秒</span></div>
+    </div>
+    <p class="subtitle" id="monologue" aria-live="polite"></p>
+    <div class="prompt" id="prompt" hidden><button type="button" id="prompt-main"></button><button type="button" class="sub" id="prompt-sub" hidden>やめる</button></div>
+    <div class="touch" role="group" aria-label="移動">
+      <button type="button" data-act="left" aria-label="左を向く">↺</button>
+      <button type="button" data-act="fwd" aria-label="前へ">↑</button>
+      <button type="button" data-act="right" aria-label="右を向く">↻</button>
+      <button type="button" data-act="sleft" aria-label="左へ横歩き">⇠</button>
+      <button type="button" data-act="back" aria-label="後ろへ">↓</button>
+      <button type="button" data-act="sright" aria-label="右へ横歩き">⇢</button>
+      <button type="button" class="use" data-act="use">調べる</button>
+    </div>
+  </div>
+
+  <div class="floor-card" id="floor-card"><b id="fc-num">0 番</b><span id="fc-sub">異変は ありません</span></div>
+  <div class="fade" id="fade"></div>
+
+  <div class="screen dark" id="ov-loading"><p style="letter-spacing:.3em;color:var(--muted)">石を積んでいます……</p></div>
+
+  <div class="screen" id="ov-title" hidden>
+    <div class="title-wrap">
+      <div>
+        <h1>忘却<br>ダンジョン</h1>
+        <p class="tag">地図は消える。あなたも忘れる。</p>
+        <nav class="menu" aria-label="タイトルメニュー">
+          <button type="button" id="btn-continue" hidden>つづきから <span id="continue-info"></span></button>
+          <button type="button" id="btn-start">はじめから</button>
+          <button type="button" id="btn-diff" data-cycle="diff">難易度 <span id="diff-label">◀ ふつう ▶</span></button>
+          <button type="button" id="btn-catalog">異変図鑑 <span id="cat-mini">0 / 27</span></button>
+          <button type="button" data-cycle="quality">画質 <span class="quality-label">◀ レトロ ▶</span></button>
+          <button type="button" data-toggle="sound">音 <span class="sound-label">切</span></button>
+        </nav>
+        <p class="keys">W A S D・矢印：移動と向き　Q E：横歩き　Space：調べる・階段<br>Tab：メモを開く　Esc：一時停止　スマートフォンは画面のボタンかスワイプ</p>
       </div>
-      <div class="pad" role="group" aria-label="移動">
-        <button type="button" data-act="left" aria-label="左を向く">↺</button>
-        <button type="button" data-act="fwd" aria-label="前へ">↑</button>
-        <button type="button" data-act="right" aria-label="右を向く">↻</button>
-        <button type="button" data-act="sleft" aria-label="左へ横歩き">⇠</button>
-        <button type="button" data-act="back" aria-label="後ろへ">↓</button>
-        <button type="button" data-act="sright" aria-label="右へ横歩き">⇢</button>
-        <button type="button" class="use" data-act="use">調べる</button>
+      <div class="notice">
+        <h3>ご案内</h3>
+        <ol>
+          <li>異変を見逃さないでください。</li>
+          <li>異変を見つけたら、引き返してください。<br>（スタート地点の上り階段）</li>
+          <li>異変が見つからなければ、先へ進んでください。<br>（迷宮の奥の下り階段）</li>
+          <li>途中の鉄扉には番号が要ります。番号は迷宮のどこかに刻まれています。</li>
+          <li>通った道は、時間とともに地図から消えます。あなたも忘れます。</li>
+          <li>メモだけを信じてください。</li>
+          <li>8番出口から、外へ出てください。</li>
+        </ol>
       </div>
     </div>
-  </section>
+  </div>
 
-  <aside class="memo" aria-label="メモ帳">
-    <div class="memo-head">
-      <h2>メモ帳</h2>
-      <p>このメモだけは消えません</p>
+  <div class="screen dark" id="ov-catalog" hidden>
+    <div class="panel wide">
+      <h2>異変図鑑 <small id="cat-count">0 / 27</small></h2>
+      <p>見抜いた異変だけが記録されます。見抜けなかったものは、名前もわかりません。</p>
+      <ul class="catalog" id="cat-list"></ul>
+      <nav class="menu"><button type="button" id="btn-cat-back">戻る</button></nav>
+    </div>
+  </div>
+
+  <div class="screen" id="ov-pause" hidden>
+    <div class="panel">
+      <h2>一時停止 <small id="pause-info"></small></h2>
+      <p>進み具合は階段を使うたびに保存されています。</p>
+      <nav class="menu" aria-label="一時停止メニュー">
+        <button type="button" id="btn-resume">再開する</button>
+        <button type="button" data-cycle="quality">画質 <span class="quality-label">◀ レトロ ▶</span></button>
+        <button type="button" data-toggle="sound">音 <span class="sound-label">切</span></button>
+        <button type="button" id="btn-clear-memo">メモを全部消す</button>
+        <button type="button" id="btn-totitle">タイトルへ戻る</button>
+      </nav>
+    </div>
+  </div>
+
+  <div class="screen" id="ov-keypad" hidden>
+    <div class="panel" style="max-width:300px" role="dialog" aria-label="鉄扉の番号入力">
+      <h2>鉄扉 <small>番号を入力</small></h2>
+      <div class="kp-display" id="kp-display">____</div>
+      <div class="kp-grid" id="kp-grid">
+        <button type="button" data-k="1">1</button><button type="button" data-k="2">2</button><button type="button" data-k="3">3</button>
+        <button type="button" data-k="4">4</button><button type="button" data-k="5">5</button><button type="button" data-k="6">6</button>
+        <button type="button" data-k="7">7</button><button type="button" data-k="8">8</button><button type="button" data-k="9">9</button>
+        <button type="button" data-k="del">消す</button><button type="button" data-k="0">0</button><button type="button" data-k="ok" class="ok">決定</button>
+      </div>
+      <p style="margin:12px 0 0;font-size:.76rem">数字キーでも入力できます。Esc で閉じる。</p>
+    </div>
+  </div>
+
+  <div class="screen dark" id="ov-end" hidden>
+    <div class="panel">
+      <h2>8番出口 <small id="end-diff"></small></h2>
+      <p>外の空気だ。あなたは最後まで、忘れなかった。</p>
+      <dl class="stats">
+        <dt>かかった時間</dt><dd id="end-time">—</dd>
+        <dt>歩いた階</dt><dd id="end-floors">—</dd>
+        <dt>やり直し</dt><dd id="end-resets">—</dd>
+        <dt>これまでの最速</dt><dd id="end-best">—</dd>
+        <dt>見抜いた異変</dt><dd><span id="end-found">0</span>（図鑑 <span id="end-cat">0</span> / 27）</dd>
+      </dl>
+      <nav class="menu"><button type="button" id="btn-again">タイトルへ</button></nav>
+    </div>
+  </div>
+
+  <aside class="notebook" id="notebook" aria-label="メモ帳" inert>
+    <div class="nb-head">
+      <div><h2>メモ帳</h2><p>このメモだけは消えません。開いている間も、時間は進みます。</p></div>
+      <button type="button" class="nb-close" id="nb-close">閉じる Tab</button>
     </div>
     <div class="tabs" role="tablist">
       <button type="button" role="tab" id="tab-text" aria-selected="true" aria-controls="pane-text">文字</button>
@@ -299,7 +298,7 @@ button { font: inherit; color: inherit; }
         </div>
         <button type="button" id="map-clear">全部消す</button>
       </div>
-      <p class="hint">「壁」のときはマスの辺をタップで壁を描く・消す。ほかの記号はマスをタップで置く・外す。</p>
+      <p class="hint">「壁」を選んでいるときはマスの辺をタップで壁を描く・消す。ほかの記号はマスをタップで置く・外す。</p>
     </div>
     <div class="pane" id="pane-sketch" role="tabpanel" hidden>
       <canvas id="sketch" width="600" height="600" aria-label="スケッチ"></canvas>
@@ -312,7 +311,7 @@ button { font: inherit; color: inherit; }
       </div>
     </div>
   </aside>
-</main>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -786,6 +785,7 @@ function posterTex(text) {
 function paintingTex(v) {
   return once('paint' + v, () => {
     const W = 256, H = 320, c = cnv(W, H), x = c.getContext('2d');
+    if ('filter' in x) x.filter = 'blur(1.2px)';
     const bg = x.createRadialGradient(W / 2, H * 0.4, 10, W / 2, H / 2, H * 0.7);
     bg.addColorStop(0, '#3e3a2a'); bg.addColorStop(1, '#141410'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
     if (v !== 'gone') {
@@ -812,6 +812,10 @@ function paintingTex(v) {
         x.strokeStyle = '#4b2a20'; x.lineWidth = 3; x.beginPath(); x.moveTo(W / 2 - 14, ey + 40); x.lineTo(W / 2 + 14, ey + 40); x.stroke();
       }
     }
+    if ('filter' in x) x.filter = 'none';
+    // 筆のかすれと、黄ばんだニス
+    for (let k = 0; k < 900; k++) { x.fillStyle = `rgba(${rand(2) ? '20,14,8' : '210,190,150'},${0.04 + Math.random() * 0.05})`; x.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 10, 1 + Math.random() * 2); }
+    x.globalCompositeOperation = 'multiply'; x.fillStyle = '#8a7046'; x.fillRect(0, 0, W, H); x.globalCompositeOperation = 'source-over';
     x.strokeStyle = 'rgba(0,0,0,0.25)'; x.lineWidth = 1;
     for (let k = 0; k < 40; k++) { x.beginPath(); let px = Math.random() * W, py = Math.random() * H; x.moveTo(px, py); for (let s = 0; s < 3; s++) { px += (Math.random() - 0.5) * 30; py += (Math.random() - 0.5) * 30; x.lineTo(px, py); } x.stroke(); }
     const vg = x.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.7); vg.addColorStop(0, 'rgba(60,45,10,0)'); vg.addColorStop(1, 'rgba(40,30,5,0.5)');
@@ -924,11 +928,9 @@ const M = {}, G = {};
 let torches = [], figures = [], ironDoor = null;
 
 function init3D() {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
   renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMapping = THREE.NoToneMapping;
   ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x030304);
@@ -948,10 +950,10 @@ function init3D() {
   M.black = new THREE.MeshBasicMaterial({ color: 0x010101 });
   M.iron = new THREE.MeshStandardMaterial({ color: 0x2a2826, roughness: 0.5, metalness: 0.7 });
   M.wood = new THREE.MeshStandardMaterial({ color: 0x3d2a1a, roughness: 0.9 });
-  M.frame = new THREE.MeshStandardMaterial({ color: 0x5a3c18, roughness: 0.55, metalness: 0.25 });
+  M.frame = new THREE.MeshStandardMaterial({ color: 0x140c06, roughness: 0.75 });
   M.vase = new THREE.MeshStandardMaterial({ color: 0x5e3420, roughness: 0.85 });
   M.figure = new THREE.MeshStandardMaterial({ color: 0x040405, roughness: 1 });
-  M.figEye = new THREE.MeshBasicMaterial({ color: 0xf0ead8 });
+  M.figEye = new THREE.MeshBasicMaterial({ color: 0xc8c2b4, fog: false });
   M.doll = new THREE.MeshStandardMaterial({ color: 0xcfc5b2, roughness: 0.8 });
   M.dollDress = new THREE.MeshStandardMaterial({ color: 0x6b1f22, roughness: 0.9 });
   M.dollEye = new THREE.MeshBasicMaterial({ color: 0x050505 });
@@ -972,13 +974,68 @@ function init3D() {
   G.foot = new THREE.PlaneGeometry(0.2, 0.4);
   G.puddle = new THREE.CircleGeometry(0.55, 28);
 
-  const rs = () => {
-    const r = canvas.getBoundingClientRect(); if (!r.width) return;
-    renderer.setSize(r.width, r.width * 10 / 16, false);
-    camera.aspect = 16 / 10; camera.updateProjectionMatrix();
-  };
-  rs();
-  if (window.ResizeObserver) new ResizeObserver(rs).observe(canvas); else window.addEventListener('resize', rs);
+  setupPost();
+  resize3D();
+  if (window.ResizeObserver) new ResizeObserver(resize3D).observe($('game')); else window.addEventListener('resize', resize3D);
+}
+
+// 後処理：低解像度で描いてから、トーンマップ・色収差・ディザ・粒子・周辺減光を一枚の絵として仕上げる
+let rt = null, postScene, postCam, postMat, quality = store.get('bd2.quality') === 'clear' ? 'clear' : 'retro';
+const POST_FRAG = `
+uniform sampler2D tDiffuse; uniform vec2 lowRes; uniform float time; uniform float linearIn; uniform float retro; uniform float exposure; uniform float hurt;
+varying vec2 vUv;
+vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
+vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
+float bayer2(vec2 a) { a = floor(a); return fract(dot(a, vec2(0.5, a.y * 0.75))); }
+float bayer4(vec2 a) { return bayer2(0.5 * a) * 0.25 + bayer2(a); }
+void main() {
+  vec2 uv = vUv, d = uv - 0.5;
+  float ca = (0.0025 + 0.004 * retro + hurt * 0.01) * dot(d, d) * 4.0;
+  vec3 c = vec3(texture2D(tDiffuse, uv - d * ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv + d * ca).b);
+  if (linearIn > 0.5) c = toSRGB(aces(c * exposure));
+  vec2 px = floor(uv * lowRes);
+  float n = fract(sin(dot(px + floor(time * 18.0) * vec2(17.0, 31.0), vec2(12.9898, 78.233))) * 43758.5453);
+  c += (n - 0.5) * (0.025 + 0.02 * retro);
+  float vig = smoothstep(0.92, 0.28, length(d * vec2(1.2, 1.0)));
+  c *= mix(0.3, 1.0, vig);
+  c = mix(c, vec3(dot(c, vec3(0.3, 0.59, 0.11))) * vec3(1.05, 0.98, 0.9), 0.18);
+  if (retro > 0.5) { float lv = 30.0; c = floor(c * lv + 0.5 + (bayer4(px) - 0.5)) / lv; }
+  gl_FragColor = vec4(c, 1.0);
+}`;
+function setupPost() {
+  postMat = new THREE.ShaderMaterial({
+    uniforms: { tDiffuse: { value: null }, lowRes: { value: new THREE.Vector2(1, 1) }, time: { value: 0 }, linearIn: { value: 1 }, retro: { value: 1 }, exposure: { value: 0.92 }, hurt: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: POST_FRAG, depthTest: false, depthWrite: false
+  });
+  postScene = new THREE.Scene(); postCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), postMat); q.frustumCulled = false; postScene.add(q);
+}
+function makeTarget(w, h) {
+  if (rt) rt.dispose();
+  const gl2 = renderer.capabilities.isWebGL2, filt = quality === 'retro' ? THREE.NearestFilter : THREE.LinearFilter;
+  rt = new THREE.WebGLRenderTarget(w, h, { minFilter: filt, magFilter: filt, type: gl2 ? THREE.HalfFloatType : THREE.UnsignedByteType, depthBuffer: true });
+  if (!gl2) rt.texture.encoding = THREE.sRGBEncoding;
+  postMat.uniforms.tDiffuse.value = rt.texture;
+  postMat.uniforms.linearIn.value = gl2 ? 1 : 0;
+  postMat.uniforms.retro.value = quality === 'retro' ? 1 : 0;
+}
+function resize3D() {
+  const r = $('game').getBoundingClientRect(); if (!r.width || !r.height) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(dpr); renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height;
+  camera.fov = camera.aspect < 0.9 ? 82 : 70;
+  camera.updateProjectionMatrix();
+  const h = quality === 'retro' ? clamp(Math.round(r.height / 2.4), 220, 380) : Math.round(r.height * Math.min(dpr, 1.5));
+  const w = Math.round(h * r.width / r.height);
+  if (!rt || rt.width !== w || rt.height !== h || rt.__q !== quality) { makeTarget(w, h); rt.__q = quality; }
+  postMat.uniforms.lowRes.value.set(w, h);
+}
+function setQuality(q) {
+  quality = q; store.set('bd2.quality', q);
+  document.querySelectorAll('.quality-label').forEach(el => { el.textContent = '◀ ' + (q === 'retro' ? 'レトロ' : 'くっきり') + ' ▶'; });
+  if (renderer) { rt && (rt.__q = null); resize3D(); }
 }
 
 const W2 = v => v * 2 + 1;
@@ -993,13 +1050,23 @@ const decalMat = tex => once('dm' + tex.uuid, () => new THREE.MeshStandardMateri
 
 function makeFigure() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(once('g-body', () => new THREE.CylinderGeometry(0.17, 0.26, 1.3, 14)), M.figure); body.position.y = 0.65;
-  const sh = new THREE.Mesh(once('g-sh', () => new THREE.SphereGeometry(0.22, 14, 10)), M.figure); sh.scale.set(1.15, 0.45, 0.8); sh.position.y = 1.28;
-  const head = new THREE.Mesh(once('g-head', () => new THREE.SphereGeometry(0.15, 16, 12)), M.figure); head.position.y = 1.5; head.scale.set(1, 1.15, 1);
-  const eg = once('g-eye', () => new THREE.SphereGeometry(0.014, 8, 6));
-  const e1 = new THREE.Mesh(eg, M.figEye); e1.position.set(-0.05, 1.53, 0.135);
-  const e2 = new THREE.Mesh(eg, M.figEye); e2.position.set(0.05, 1.53, 0.135);
-  g.add(body, sh, head, e1, e2);
+  // 裾の広がった外套、なで肩、垂れた腕、少し前に傾いた頭
+  const coat = new THREE.Mesh(once('g-coat', () => new THREE.LatheGeometry([[0, 0], [0.3, 0], [0.27, 0.25], [0.21, 0.7], [0.19, 1.05], [0.23, 1.3], [0.2, 1.38], [0.09, 1.45], [0.06, 1.47], [0, 1.47]].map(([a, b]) => new THREE.Vector2(a, b)), 18)), M.figure);
+  coat.scale.z = 0.7;
+  const armG = once('g-arm', () => new THREE.CylinderGeometry(0.045, 0.06, 0.82, 8));
+  const a1 = new THREE.Mesh(armG, M.figure); a1.position.set(-0.25, 0.95, 0); a1.rotation.z = -0.08;
+  const a2 = new THREE.Mesh(armG, M.figure); a2.position.set(0.25, 0.95, 0); a2.rotation.z = 0.08;
+  const handG = once('g-hand', () => new THREE.SphereGeometry(0.05, 8, 6));
+  const h1 = new THREE.Mesh(handG, M.figure); h1.position.set(-0.28, 0.52, 0); h1.scale.y = 1.6;
+  const h2 = new THREE.Mesh(handG, M.figure); h2.position.set(0.28, 0.52, 0); h2.scale.y = 1.6;
+  const headG = new THREE.Group(); headG.position.set(0, 1.6, 0.02); headG.rotation.x = 0.18;
+  const head = new THREE.Mesh(once('g-head', () => new THREE.SphereGeometry(0.13, 16, 12)), M.figure); head.scale.set(0.9, 1.15, 1);
+  const eg = once('g-eye', () => new THREE.SphereGeometry(0.011, 8, 6));
+  const e1 = new THREE.Mesh(eg, M.figEye); e1.position.set(-0.04, 0.01, 0.12);
+  const e2 = new THREE.Mesh(eg, M.figEye); e2.position.set(0.04, 0.01, 0.12);
+  headG.add(head, e1, e2);
+  g.add(coat, a1, a2, h1, h2, headG);
+  g.userData.head = headG;
   return g;
 }
 function makeDoll() {
@@ -1160,7 +1227,11 @@ const blocked = (x, y, d) => hasWall(S.floor, x, y, d) || (!S.doorOpen && isDoor
 const START_LINES = ['……ここは、どこだっけ。', '階段を降りてきた、気がする。', '同じ場所に見える。本当に同じだろうか。', 'さっきまで何を考えていたんだろう。', '湿った石の匂いがする。', '何かを書き留めていた気がする。'];
 const FORGOT_LINES = ['……ここ、来たことがある気がする。', 'この角、見覚えがあるような、ないような。', '思い出せない。たしか、通ったはずだ。', '足跡は残らない。記憶も残らない。'];
 const IDLE_LINES = ['……何をしに来たんだっけ。', '立ち止まると、忘れていく気がする。', 'メモを見返そう。'];
-const say = t => { $('monologue').textContent = t; };
+let sayTimer = null;
+const say = t => {
+  const el = $('monologue'); el.textContent = t; el.classList.remove('dim');
+  clearTimeout(sayTimer); sayTimer = setTimeout(() => el.classList.add('dim'), 5500);
+};
 
 function buildFloor() {
   N = S.base.N;
@@ -1199,8 +1270,6 @@ function showNum() {
 function updateMeta() {
   $('facing').textContent = D().noCompass ? '向き ？' : '向き ' + DIRN[S.dir];
   $('memtime').textContent = '記憶 約' + Math.round(fadeMs() / 1000) + '秒';
-  $('floorinfo').textContent = '歩いた階 ' + S.stats.floors;
-  $('steps').textContent = '歩数 ' + S.stepsFloor;
 }
 const objHere = kind => S.floor.objs.find(o => o.x === S.px && o.y === S.py && o.kind === kind);
 const facingDoor = () => !S.doorOpen && isDoorEdge(S.floor, S.px, S.py, S.dir);
@@ -1249,11 +1318,17 @@ function addCatalog(id) { const c = catalog(); c.add(id); store.set('bd2.catalog
 function setPhase(p) {
   S.phase = p;
   ['title', 'pause', 'end', 'catalog', 'keypad', 'loading'].forEach(k => { $('ov-' + k).hidden = p !== k; });
+  $('game').dataset.phase = p;
+  if (p !== 'play' && p !== 'keypad') setMemo(false);
+  if (p === 'pause') $('pause-info').textContent = D().label + '・歩いた階 ' + S.stats.floors;
   updatePrompt();
 }
 function toTitle() {
-  $('btn-continue').hidden = !store.get('bd2.save');
-  const r = document.querySelector(`input[name="diff"][value="${store.get('bd2.diff') || 'normal'}"]`); if (r) r.checked = true;
+  const sv = store.json('bd2.save', null);
+  $('btn-continue').hidden = !sv;
+  if (sv && DIFFS[sv.diff]) $('continue-info').textContent = DIFFS[sv.diff].label + '・' + (sv.count || 0) + '番';
+  $('cat-mini').textContent = catalog().size + ' / ' + ANOMS.length;
+  setDiffSel(store.get('bd2.diff'));
   setPhase('title');
   setTimeout(() => ($('btn-continue').hidden ? $('btn-start') : $('btn-continue')).focus({ preventScroll: true }), 30);
 }
@@ -1392,7 +1467,17 @@ $('kp-grid').addEventListener('click', e => { const b = e.target.closest('button
 
 document.addEventListener('keydown', e => {
   const el = document.activeElement, t = el && el.tagName;
-  if (t === 'TEXTAREA' || (t === 'INPUT' && el.type !== 'radio' && el.type !== 'checkbox')) { if (e.key === 'Escape') el.blur(); return; }
+  if (e.key === 'Tab' && (S.phase === 'play' || S.phase === 'stairs')) { e.preventDefault(); setMemo(!memoOpen); return; }
+  if (t === 'TEXTAREA') { if (e.key === 'Escape') { e.preventDefault(); el.blur(); } return; }
+  if (e.key === 'Escape' && memoOpen) { e.preventDefault(); setMemo(false); return; }
+  // メニューは上下キーで移動、左右キーで値を切り替え
+  const scr = ['title', 'pause', 'end', 'catalog'].includes(S.phase) ? $('ov-' + S.phase) : null;
+  if (scr && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'w' || e.key === 's')) {
+    const items = [...scr.querySelectorAll('.menu button')].filter(b => !b.hidden);
+    const i = items.indexOf(el), n = (e.key === 'ArrowUp' || e.key === 'w') ? -1 : 1;
+    (items[(i + n + items.length) % items.length] || items[0]).focus(); e.preventDefault(); return;
+  }
+  if (scr && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && el && el.dataset && el.dataset.cycle) { cycle(el.dataset.cycle, e.key === 'ArrowLeft' ? -1 : 1); e.preventDefault(); return; }
   if (S.phase === 'keypad') {
     if (/^[0-9]$/.test(e.key)) { kpPress(e.key); e.preventDefault(); }
     else if (e.key === 'Backspace') { kpPress('del'); e.preventDefault(); }
@@ -1413,7 +1498,7 @@ document.addEventListener('keydown', e => {
   if (t === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
   e.preventDefault(); act(a);
 });
-document.querySelectorAll('.pad button[data-act]').forEach(b => b.addEventListener('click', () => act(b.dataset.act)));
+document.querySelectorAll('.touch button[data-act]').forEach(b => b.addEventListener('click', () => act(b.dataset.act)));
 $('prompt-main').addEventListener('click', () => act('use'));
 $('prompt-sub').addEventListener('click', () => act('cancel'));
 let sw = null;
@@ -1430,10 +1515,8 @@ $('btn-pause').addEventListener('click', () => { if (S.phase === 'play') pause()
 $('btn-resume').addEventListener('click', resume);
 $('btn-totitle').addEventListener('click', () => { saveRun(); toTitle(); });
 $('btn-start').addEventListener('click', () => {
-  const diff = (document.querySelector('input[name="diff"]:checked') || {}).value || 'normal';
-  store.set('bd2.diff', diff);
-  if ($('chk-clear').checked) clearMemos();
-  newRun(diff); beginPlay();
+  store.set('bd2.diff', diffSel);
+  newRun(diffSel); beginPlay();
 });
 $('btn-continue').addEventListener('click', () => { if (loadRun()) beginPlay(); else toTitle(); });
 $('btn-again').addEventListener('click', toTitle);
@@ -1450,10 +1533,35 @@ $('btn-catalog').addEventListener('click', () => {
   setPhase('catalog'); $('btn-cat-back').focus({ preventScroll: true });
 });
 $('btn-cat-back').addEventListener('click', toTitle);
-$('btn-sound').addEventListener('click', () => {
+function toggleSound() {
   const on = !sound.on; sound.setOn(on); if (on && S.floor) sound.setRed(!!S.floor.redLight);
-  $('btn-sound').textContent = on ? '音 入' : '音 切'; $('btn-sound').setAttribute('aria-pressed', String(on));
-});
+  document.querySelectorAll('.sound-label').forEach(el => { el.textContent = on ? '入' : '切'; });
+}
+let diffSel = 'normal';
+const DIFF_KEYS = ['easy', 'normal', 'hard'];
+const DIFF_NOTE = { easy: '5×5', normal: '7×7', hard: '9×9・方角も忘れる' };
+function setDiffSel(k) { diffSel = DIFFS[k] ? k : 'normal'; $('diff-label').textContent = '◀ ' + DIFFS[diffSel].label + '（' + DIFF_NOTE[diffSel] + '）▶'; }
+function cycle(kind, dir) {
+  if (kind === 'diff') setDiffSel(DIFF_KEYS[(DIFF_KEYS.indexOf(diffSel) + dir + 3) % 3]);
+  if (kind === 'quality') setQuality(quality === 'retro' ? 'clear' : 'retro');
+}
+document.querySelectorAll('.menu button').forEach(b => b.addEventListener('mouseenter', () => b.focus({ preventScroll: true })));
+document.querySelectorAll('[data-cycle]').forEach(b => b.addEventListener('click', () => cycle(b.dataset.cycle, 1)));
+document.querySelectorAll('[data-toggle="sound"]').forEach(b => b.addEventListener('click', toggleSound));
+armButton($('btn-clear-memo'), 'メモを全部消す', () => clearMemos());
+
+// メモ帳の開閉（開いている間も時間は進む）
+let memoOpen = false;
+function setMemo(open) {
+  memoOpen = open;
+  const nb = $('notebook');
+  nb.classList.toggle('open', open);
+  if (open) nb.removeAttribute('inert'); else { nb.setAttribute('inert', ''); if (nb.contains(document.activeElement)) canvas.focus({ preventScroll: true }); }
+  $('btn-memo').setAttribute('aria-expanded', String(open));
+  if (open && !$('pane-map').hidden) mapNote.draw();
+}
+$('btn-memo').addEventListener('click', () => setMemo(!memoOpen));
+$('nb-close').addEventListener('click', () => setMemo(false));
 document.addEventListener('visibilitychange', () => { if (document.hidden && S.phase === 'play') pause(); });
 
 // =====================================================================
@@ -1533,7 +1641,7 @@ function frame(now) {
   camera.position.set(cx, 1.28 + cy, cz);
   camera.rotation.set(pitch, yaw, 0);
   lantern.position.set(cx + Math.sin(now / 700) * 0.04, 1.2 + cy, cz);
-  lantern.intensity = 1.0 + Math.sin(now / 310) * 0.04;
+  lantern.intensity = 0.88 + Math.sin(now / 310) * 0.04;
 
   let nearest = 99;
   torches.forEach(t => {
@@ -1542,14 +1650,22 @@ function frame(now) {
     t.flame.scale.set(0.2 + n * 0.015, 0.36 + n * 0.05, 1);
     nearest = Math.min(nearest, Math.hypot(W2(t.x) - cx, W2(t.y) - cz));
   });
-  figures.forEach(f => { if (f.mesh.visible) f.mesh.lookAt(camera.position.x, 0, camera.position.z); });
+  figures.forEach(f => {
+    if (!f.mesh.visible) return;
+    f.mesh.lookAt(camera.position.x, 0, camera.position.z);
+    f.mesh.scale.y = 1 + Math.sin(now / 900 + f.mesh.id) * 0.006;
+    if (f.mesh.userData.head) f.mesh.userData.head.rotation.z = Math.sin(now / 2300 + f.mesh.id) * 0.06;
+  });
   if (ironDoor) { ironDoor.open += (ironDoor.target - ironDoor.open) * Math.min(1, dt * 1.6); ironDoor.slab.position.y = 1.125 + ironDoor.open * 2.15; }
   if (S.phase === 'play') {
     S.mem[idx(S.px, S.py)] = now;
     if (!S.idleSaid && now - S.lastInput > 25000) { S.idleSaid = true; say(pick(IDLE_LINES)); }
     sound.tick(now, nearest);
   }
-  renderer.render(scene, camera);
+  postMat.uniforms.time.value = now / 1000;
+  postMat.uniforms.hurt.value = Math.max(0, 1 - (now - S.bumpT) / 300) * 0.6;
+  renderer.setRenderTarget(rt); renderer.render(scene, camera);
+  renderer.setRenderTarget(null); renderer.render(postScene, postCam);
   renderMap(now);
 }
 
@@ -1644,12 +1760,6 @@ const sketch = (() => {
   return { clear };
 })();
 
-// フィルムの粒子
-(() => {
-  const c = cnv(160, 160), x = c.getContext('2d'), im = x.createImageData(160, 160);
-  for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
-  x.putImageData(im, 0, 0); $('grain').style.backgroundImage = `url(${c.toDataURL()})`;
-})();
 
 // =====================================================================
 // 起動
@@ -1664,6 +1774,7 @@ async function boot() {
   } catch (e) {}
   try { init3D(); } catch (e) { $('ov-loading').querySelector('p').textContent = 'この端末では 3D 表示を開始できませんでした。'; return; }
   drawSign(0);
+  setQuality(quality);
   const tab = store.get('bd2.tab'); if (TABS.includes(tab)) setTab(tab); else mapNote.draw();
   // タイトルの背後に迷宮を映す
   const sd = store.get('bd2.diff');
