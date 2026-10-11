@@ -156,6 +156,14 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 @keyframes scareFace { 0% { transform: scale(.25); } 25% { transform: scale(1.2); } 100% { transform: scale(1.45); } }
 @keyframes scareShake { 0% { translate: -7px 5px; } 50% { translate: 7px -4px; } 100% { translate: -3px 0; } }
 .danger-vig { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(90,0,0,.55) 100%); transition: opacity .3s; }
+.ending { display: grid; gap: 14px; max-width: 42ch; text-align: center; }
+.ending p { margin: 0; opacity: 0; animation: introIn 1.4s ease forwards; font-size: 1.05rem; line-height: 2; letter-spacing: .12em; }
+.ending.bad p { color: #d8aca3; }
+.ending .skip { position: fixed; right: 20px; bottom: 16px; font-size: .72rem; color: var(--muted); opacity: .7; animation: none; }
+.scare[data-kind="fall"] canvas, .scare[data-kind="crush"] canvas, .scare[data-kind="drown"] canvas { display: none; }
+.scare[data-kind="fall"] { background: #000; }
+.scare[data-kind="crush"] { background: radial-gradient(circle, rgba(60,50,40,.6), #000 70%); }
+.scare[data-kind="drown"] { background: radial-gradient(circle, rgba(10,60,70,.7), #000 75%); }
 .fade.white { background: #efe9dc; transition: opacity 2.4s ease; }
 @media (prefers-reduced-motion: reduce) { .scare.on canvas { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .floor-card.show { animation-duration: .01s; opacity: 1; } .exit-sign b, .fade, .notebook, .hud, .subtitle { transition: none; } }
@@ -207,7 +215,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
           <button type="button" id="btn-continue" hidden>つづきから <span id="continue-info"></span></button>
           <button type="button" id="btn-start">はじめから</button>
           <button type="button" id="btn-diff" data-cycle="diff">難易度 <span id="diff-label">◀ ふつう ▶</span></button>
-          <button type="button" id="btn-catalog">異変図鑑 <span id="cat-mini">0 / 34</span></button>
+          <button type="button" id="btn-catalog">異変図鑑 <span id="cat-mini">0 / 50</span></button>
           <button type="button" data-cycle="quality">画質 <span class="quality-label">◀ レトロ ▶</span></button>
           <button type="button" data-toggle="sound">音 <span class="sound-label">切</span></button>
         </nav>
@@ -230,10 +238,11 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 
   <div class="screen dark" id="ov-catalog" hidden>
     <div class="panel wide">
-      <h2>異変図鑑 <small id="cat-count">0 / 34</small></h2>
+      <h2>異変図鑑 <small id="cat-count">0 / 50</small></h2>
       <p>見抜いた異変だけが記録されます。見抜けなかったものは、名前もわかりません。</p>
       <ul class="catalog" id="cat-list"></ul>
-      <p id="records" style="margin:0 0 12px"></p>
+      <p id="records" style="margin:0 0 6px"></p>
+      <p id="endings-list" style="margin:0 0 12px"></p>
       <nav class="menu"><button type="button" id="btn-cat-back">戻る</button></nav>
     </div>
   </div>
@@ -268,20 +277,22 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 
   <div class="screen dark" id="ov-end" hidden>
     <div class="panel">
-      <h2>8番出口 <small id="end-diff"></small></h2>
-      <p>外の空気だ。あなたは最後まで、忘れなかった。</p>
+      <h2><span id="end-title">8番出口</span> <small id="end-diff"></small></h2>
+      <p id="end-text">外の空気だ。あなたは最後まで、忘れなかった。</p>
       <dl class="stats">
         <dt>かかった時間</dt><dd id="end-time">—</dd>
         <dt>歩いた階</dt><dd id="end-floors">—</dd>
         <dt>やり直し</dt><dd id="end-resets">—</dd>
         <dt>捕まった</dt><dd id="end-caught">—</dd>
         <dt>これまでの最速</dt><dd id="end-best">—</dd>
-        <dt>見抜いた異変</dt><dd><span id="end-found">0</span>（図鑑 <span id="end-cat">0</span> / <span class="anom-total">34</span>）</dd>
+        <dt>エンディング</dt><dd id="end-ecount">—</dd>
+        <dt>見抜いた異変</dt><dd><span id="end-found">0</span>（図鑑 <span id="end-cat">0</span> / <span class="anom-total">50</span>）</dd>
       </dl>
       <nav class="menu"><button type="button" id="btn-again">タイトルへ</button></nav>
     </div>
   </div>
 
+  <div class="screen dark" id="ov-ending" hidden><div class="ending" id="ending-lines"></div></div>
   <div class="screen dark" id="ov-intro" hidden><p class="intro" id="intro-text"></p></div>
   <div class="screen" id="ov-note" hidden>
     <div class="note-paper" role="dialog" aria-label="紙切れ"><p id="note-text"></p><p class="note-close">Space・クリックで閉じる</p></div>
@@ -415,6 +426,15 @@ const NOTES = [
   '自分の名前を書いておく。\n＿＿＿＿＿＿＿＿。\n……書けなかった。',
   'メモの字が、自分の字に見えない。\nそれでも、これしか信じられない。',
   'あと少しのはずだ。\n出口の看板の数字を\n声に出して読め。'
+];
+const NOTE_ALT = 'うしろを\nみないで\nうしろを\nみないで\nうしろを';
+const ENDINGS = [
+  { id: 'note', name: '紙切れの主', good: true, sum: '紙切れを書いていたのが誰だったのか、あなたは知った。', lines: ['最後の紙切れを、拾い上げる。', '見慣れた字だった。', '……自分の字だ。', 'ここを歩いたのは、初めてではなかった。何度も、何度も。', '今度こそ、最後まで覚えていられた。', 'ポケットの紙束を、階段の下にそっと置いていく。', '次の自分のために。'] },
+  { id: 'perfect', name: '完全な記憶', good: true, sum: '一度も間違えず、一度も捕まらなかった。', lines: ['一度も間違えなかった。', '一度も、捕まらなかった。', 'すべての角を、すべての炎を、覚えている。', '忘却の迷宮は、あなたを手放した。', '外の光の中で、あなたは自分の名前を思い出した。'] },
+  { id: 'blank', name: '白紙のメモ', good: true, sum: 'メモを一度も使わずに、出口へたどり着いた。', lines: ['メモ帳は、真っ白なままだった。', '何も書かずに、ここまで来た。', '迷宮は、あなたの記憶を奪えなかった。', '……それとも、奪うものが', '最初から何もなかったのか。'] },
+  { id: 'exit', name: '8番出口', good: true, sum: '外の空気だ。あなたは最後まで、忘れなかった。', lines: ['階段の先に、四角い光があった。', '外の空気は冷たくて、少し甘い。', '振り返ると、そこにはもう何もなかった。', '……何から逃げていたのか、もう思い出せない。'] },
+  { id: 'lost', name: '迷宮の一部', good: false, sum: '五度捕まり、あなたは迷宮から出られなくなった。', lines: ['また、捕まった。', 'もう何度目かも、わからない。', '気がつくと、通路の真ん中に立っていた。', '誰かが角を曲がってくる。', '……あなたは、その人をじっと見つめている。', 'あなたは、異変のひとつになった。'] },
+  { id: 'return', name: '引き返し続けた者', good: false, sum: '何もない階で、五度続けて引き返した。', lines: ['何度も、何度も、引き返した。', '上り階段の先には、いつも同じ階段があった。', '引き返すことに、理由はいらなくなった。', '……あなたは、まだ階段を上り続けている。'] }
 ];
 const INTROS = [
   '目を覚ますと、\n石の階段の下にいた。\n\nここに来る前のことを、\n何も思い出せない。',
@@ -673,13 +693,45 @@ const ANOMS = [
     const L = f.path.length; if (L < 8) return false; f.danger = { type: 'chaser', trig: clamp(Math.round(L * 0.42), 2, L - 5) }; return true; } },
   { id: 'darkness', name: '迫る闇', desc: '松明がひとつずつ消えていく。闇に呑まれる前に、引き返せ。', fn: f => {
     const L = f.path.length; if (L < 6) return false; f.danger = { type: 'dark', trig: clamp(Math.round(L * 0.4), 2, L - 3) }; return true; } },
+  { id: 'rope', name: '吊るされた縄', desc: '天井から、輪になった縄が下がっている。', fn: f => {
+    const cells = pathCells(f, 1, -1); if (!cells.length) return false; const c = pick(cells); f.objs.push({ kind: 'rope', x: c.x, y: c.y }); return true; } },
+  { id: 'ceiling_eyes', name: '天井の目', desc: '見上げると、天井に目がいくつも開いている。', fn: f => {
+    const cells = f.path.slice(1, -1); if (!cells.length) return false; const c = pick(cells); f.objs.push({ kind: 'ceye', x: c.x, y: c.y }); return true; } },
+  { id: 'blue_torches', name: '青い迷宮', desc: 'すべての松明が、青い炎で燃えている。', fn: f => {
+    const t = f.decos.filter(d => d.kind === 'torch' && d.lit); if (t.length < 2) return false; t.forEach(d => { d.color = 'blue'; }); return true; } },
+  { id: 'extra_painting', name: 'もう一枚の肖像画', desc: '見知らぬ人の肖像画が、もう一枚掛かっている。', fn: f => onFace(f, 'painting', { variant: 'other' }) },
+  { id: 'poster_many', name: '増えた貼り紙', desc: '同じ貼り紙が、あちこちに貼られている。', fn: f => {
+    const p = f.decos.find(d => d.kind === 'poster'); if (!p) return false;
+    const ff = shuffle(freeFaces(f)).slice(0, 2); if (ff.length < 2) return false;
+    ff.forEach(c => f.decos.push({ kind: 'poster', x: c.x, y: c.y, side: c.side, text: p.text, alt: p.alt })); return true; } },
+  { id: 'torch_upside', name: '逆さの松明', desc: '松明が逆さまに掛かり、炎が下へ燃えている。', fn: f => {
+    const t = f.decos.filter(d => d.kind === 'torch' && d.lit); if (!t.length) return false; pick(t).upside = true; return true; } },
+  { id: 'red_wall', name: '赤い壁', desc: 'ひと面だけ、壁が赤く染まっている。', fn: f => {
+    const ff = freeFaces(f); if (!ff.length) return false; const c = pick(ff); f.redWall = faceKey(c.x, c.y, c.side); return true; } },
+  { id: 'giant_vase', name: '大きな壺', desc: '壺が、ひとまわり大きい。', fn: f => {
+    const v = f.objs.filter(o => o.kind === 'vase'); if (!v.length) return false; pick(v).scale = 1.65; return true; } },
+  { id: 'far_light', name: '奥の灯り', desc: '松明のない場所に、青白い灯りが浮かんでいる。', fn: f => {
+    const cells = pathCells(f, 2, -1); if (!cells.length) return false; const c = pick(cells); f.objs.push({ kind: 'wisp', x: c.x, y: c.y }); return true; } },
+  { id: 'blood_trail', name: '床の血の跡', desc: '何かを引きずったような、赤い跡が続いている。', fn: f => {
+    const L = f.path.length; if (L < 5) return false; const i = 1 + rand(L - 3);
+    [i, i + 1].forEach(j => { const a = f.path[j], b = f.path[j + 1] || f.path[j - 1]; f.objs.push({ kind: 'blood', x: a.x, y: a.y, dir: dirBetween(a, b) }); }); return true; } },
+  { id: 'note_rewritten', name: '書き換えられた紙切れ', desc: '紙切れの文字が、赤い字で書き換えられている。', fn: f => {
+    if (!f.objs.some(o => o.kind === 'note')) return false; f.noteAlt = true; return true; } },
+  { id: 'floor_hole', name: '床の穴', desc: '通路の床が抜けて、暗い穴が開いている。落ちれば戻される。', fn: f => {
+    const L = f.path.length, cands = f.path.slice(2, L - 1).filter(p => !objsAt(f, p.x, p.y).length && !(f.door.x === p.x && f.door.y === p.y));
+    if (!cands.length) return false; const c = pick(cands); f.hole = { x: c.x, y: c.y }; return true; } },
+  { id: 'ceiling_fall', name: '迫る天井', desc: '地鳴りとともに、天井が下りてくる。押し潰される前に、引き返せ。', fn: f => {
+    const L = f.path.length; if (L < 6) return false; f.danger = { type: 'ceiling', trig: clamp(Math.round(L * 0.4), 2, L - 3) }; return true; } },
+  { id: 'water_rise', name: '満ちる水', desc: '床から黒い水が湧き、少しずつ満ちてくる。溺れる前に、引き返せ。', fn: f => {
+    const L = f.path.length; if (L < 6) return false; f.danger = { type: 'water', trig: clamp(Math.round(L * 0.4), 2, L - 3) }; return true; } },
   { id: 'steps_extra', name: '増えた段', desc: '上り階段の段が、ひとつ多い。', fn: f => {
     const u = f.objs.find(o => o.kind === 'up'); if (!u) return false; u.steps = 5; return true; } }
 ];
 
 // 異変の見つけやすさ。番号が進むほど、見つけにくい異変が選ばれやすくなる
 const TIER = {
-  statue: 1, follower: 1, chaser: 1, darkness: 1, eye: 1, writing: 1, hands: 1, red_light: 1, wall_block: 1, door: 1, crack: 1,
+  statue: 1, follower: 1, chaser: 1, darkness: 1, rope: 1, ceiling_eyes: 1, blue_torches: 1, floor_hole: 1, ceiling_fall: 1, water_rise: 1,
+  extra_painting: 2, poster_many: 2, torch_upside: 2, red_wall: 2, giant_vase: 2, far_light: 2, blood_trail: 2, note_rewritten: 3, eye: 1, writing: 1, hands: 1, red_light: 1, wall_block: 1, door: 1, crack: 1,
   torch_color: 2, torch_unlit: 2, poster_upside: 2, painting_face: 2, vase_missing: 2, vase_broken: 2, doll: 2, footprints: 2,
   puddle: 2, exit_moved: 2, mirror: 2, low_ceiling: 2, door_open: 2, note_missing: 2,
   torch_extra: 3, poster_text: 3, painting_moved: 3, vase_moved: 3, wall_open: 3, sign_number: 3,
@@ -891,15 +943,16 @@ function paintingTex(v) {
     const W = 256, H = 320, c = cnv(W, H), x = c.getContext('2d');
     if ('filter' in x) x.filter = 'blur(1.2px)';
     const bg = x.createRadialGradient(W / 2, H * 0.4, 10, W / 2, H / 2, H * 0.7);
-    bg.addColorStop(0, '#3e3a2a'); bg.addColorStop(1, '#141410'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    const other = v === 'other';
+    bg.addColorStop(0, other ? '#2c3440' : '#3e3a2a'); bg.addColorStop(1, '#141410'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
     if (v !== 'gone') {
       x.fillStyle = '#1b1a1f'; x.beginPath(); x.ellipse(W / 2, H + 20, 110, 120, 0, 0, Math.PI * 2); x.fill();
       x.fillStyle = '#8f765c'; x.fillRect(W / 2 - 18, H * 0.5, 36, 50);
       const fg = x.createRadialGradient(W / 2 - 14, H * 0.36, 6, W / 2, H * 0.4, 70);
       fg.addColorStop(0, '#c8ab88'); fg.addColorStop(1, '#7a5f45'); x.fillStyle = fg;
       x.beginPath(); x.ellipse(W / 2, H * 0.4, 50, 66, 0, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#1a140f'; x.beginPath(); x.ellipse(W / 2, H * 0.29, 56, 40, 0, Math.PI, Math.PI * 2); x.fill();
-      x.fillRect(W / 2 - 56, H * 0.29, 12, 70); x.fillRect(W / 2 + 44, H * 0.29, 12, 70);
+      x.fillStyle = other ? '#77706a' : '#1a140f'; x.beginPath(); x.ellipse(W / 2, H * 0.29, 56, 40, 0, Math.PI, Math.PI * 2); x.fill();
+      x.fillRect(W / 2 - 56, H * 0.29, 12, other ? 150 : 70); x.fillRect(W / 2 + 44, H * 0.29, 12, other ? 150 : 70);
       const ey = H * 0.4;
       if (v === 'eyes') {
         x.shadowColor = '#ff2010'; x.shadowBlur = 14; x.fillStyle = '#ff2a18';
@@ -987,12 +1040,12 @@ function codeTex(code) {
     return mkTex(c);
   });
 }
-function noteTex() {
-  return once('note', () => {
+function noteTex(alt) {
+  return once('note' + (alt ? 'a' : ''), () => {
     const W = 128, H = 160, c = cnv(W, H), x = c.getContext('2d');
     x.fillStyle = '#cfc6ad'; x.fillRect(0, 0, W, H);
-    stains(x, W, 5, '110,90,50', 0.3);
-    x.strokeStyle = 'rgba(40,34,26,0.75)'; x.lineWidth = 2;
+    stains(x, W, 5, alt ? '120,20,10' : '110,90,50', 0.3);
+    x.strokeStyle = alt ? 'rgba(110,16,10,0.85)' : 'rgba(40,34,26,0.75)'; x.lineWidth = 2;
     for (let i = 0; i < 8; i++) { const y = 22 + i * 16; x.beginPath(); x.moveTo(14, y); let px = 14; while (px < W - 18 - rand(30)) { px += 4 + rand(6); x.lineTo(px, y + (Math.random() - 0.5) * 3); } x.stroke(); }
     x.fillStyle = 'rgba(0,0,0,0.25)'; x.beginPath(); x.moveTo(W, 0); x.lineTo(W - 22, 0); x.lineTo(W, 22); x.fill();
     grain(x, W, H, 20);
@@ -1019,6 +1072,20 @@ function sootTex() {
     const g = x.createRadialGradient(W / 2, 40, 4, W / 2, 60, 110);
     g.addColorStop(0, 'rgba(8,6,4,0.75)'); g.addColorStop(1, 'rgba(8,6,4,0)');
     x.fillStyle = g; x.fillRect(0, 0, W, H);
+    return mkTex(c);
+  });
+}
+function bloodTex() {
+  return once('blood', () => {
+    const W = 64, H = 256, c = cnv(W, H), x = c.getContext('2d');
+    for (let k = 0; k < 7; k++) {
+      const px = 16 + Math.random() * 32, w = 3 + Math.random() * 7;
+      const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, 'rgba(80,6,4,0)'); g.addColorStop(0.2, 'rgba(90,8,6,0.85)'); g.addColorStop(1, 'rgba(60,4,2,0.5)');
+      x.fillStyle = g; x.beginPath(); x.moveTo(px, 0);
+      for (let y = 0; y <= H; y += 16) x.lineTo(px + Math.sin(y / 30 + k) * 3, y);
+      for (let y = H; y >= 0; y -= 16) x.lineTo(px + w + Math.sin(y / 30 + k) * 3, y);
+      x.fill();
+    }
     return mkTex(c);
   });
 }
@@ -1062,7 +1129,7 @@ function woodTex() {
 // 3D
 // =====================================================================
 const canvas = $('view');
-let renderer, scene, camera, lantern, dust, floorGroup = null, chaserMesh = null;
+let renderer, scene, camera, lantern, dust, floorGroup = null, chaserMesh = null, ceilMeshes = [], waterMesh = null, swingers = [], wisps = [];
 const M = {}, G = {};
 let torches = [], figures = [], ironDoor = null;
 
@@ -1110,6 +1177,11 @@ function init3D() {
   M.brass = new THREE.MeshStandardMaterial({ color: 0x8a6a2c, roughness: 0.4, metalness: 0.8 });
   M.pillar = new THREE.MeshStandardMaterial({ map: w1.map, bumpMap: w1.bump, bumpScale: 0.05, color: 0x8c8679, roughness: 0.95 });
   M.note = new THREE.MeshStandardMaterial({ map: noteTex(), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 });
+  M.noteAlt = new THREE.MeshStandardMaterial({ map: noteTex(true), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 });
+  M.wallRed = new THREE.MeshStandardMaterial({ map: w0.map, bumpMap: w0.bump, bumpScale: 0.05, color: 0xc4746a, roughness: 0.95 });
+  M.rope = new THREE.MeshStandardMaterial({ color: 0x6b5a3a, roughness: 1 });
+  M.blood = new THREE.MeshStandardMaterial({ map: bloodTex(), transparent: true, depthWrite: false, roughness: 0.3, polygonOffset: true, polygonOffsetFactor: -2 });
+  M.water = new THREE.MeshStandardMaterial({ color: 0x0b1c22, roughness: 0.08, metalness: 0.4, transparent: true, opacity: 0.86 });
   M.web = new THREE.MeshBasicMaterial({ map: webTex(), transparent: true, depthWrite: false, opacity: 0.6, side: THREE.DoubleSide });
   M.soot = new THREE.MeshBasicMaterial({ map: sootTex(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
   signTexture = mkTex(signCanvas);
@@ -1236,19 +1308,27 @@ function makeDoll() {
 
 function buildScene(f) {
   if (floorGroup) scene.remove(floorGroup);
+  ceilMeshes = []; swingers = []; wisps = []; waterMesh = null;
   floorGroup = new THREE.Group(); scene.add(floorGroup);
   torches = []; figures = []; ironDoor = null;
   const down = f.objs.find(o => o.kind === 'down'), low = f.lowCeil;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const cx = W2(x), cz = W2(y);
-    const isDown = down && down.x === x && down.y === y;
+    const isDown = (down && down.x === x && down.y === y) || (f.hole && f.hole.x === x && f.hole.y === y);
     if (!isDown) { const fm = new THREE.Mesh(G.cell, M.floor); fm.rotation.x = -Math.PI / 2; fm.rotation.z = ((x * 5 + y * 3) % 4) * Math.PI / 2; fm.position.set(cx, 0, cz); floorGroup.add(fm); }
     const isLow = low && low.x === x && low.y === y;
     const cm = new THREE.Mesh(G.cell, M.ceil); cm.rotation.x = Math.PI / 2; cm.position.set(cx, isLow ? 1.82 : 2.4, cz); floorGroup.add(cm);
+    cm.userData.y0 = cm.position.y; ceilMeshes.push(cm);
     for (let s = 0; s < 4; s++) {
-      if (hasWall(f, x, y, s)) placeOnFace(new THREE.Mesh(G.wall, (x * 7 + y * 3 + s) % 3 ? M.wall0 : M.wall1), x, y, s, 1.2, 0);
+      if (hasWall(f, x, y, s)) placeOnFace(new THREE.Mesh(G.wall, f.redWall === faceKey(x, y, s) ? M.wallRed : (x * 7 + y * 3 + s) % 3 ? M.wall0 : M.wall1), x, y, s, 1.2, 0);
       else if (isLow) { const li = plane(2, 0.58, M.lintel); li.position.set(cx + DX[s], 2.11, cz + DY[s]); li.rotation.y = ROT[s]; floorGroup.add(li); }
     }
+  }
+  // 床の穴（落ちれば戻される）
+  if (f.hole) {
+    const cx = W2(f.hole.x), cz = W2(f.hole.y);
+    for (let s = 0; s < 4; s++) { const wl = new THREE.Mesh(G.well, M.well); wl.position.set(cx + DX[s] * 0.999, -1.5, cz + DY[s] * 0.999); wl.rotation.y = ROT[s]; floorGroup.add(wl); }
+    const bt = new THREE.Mesh(G.cell, M.black); bt.rotation.x = -Math.PI / 2; bt.position.set(cx, -2.9, cz); floorGroup.add(bt);
   }
   // 下り階段：床に穴、石段が闇へ降りていく
   if (down) {
@@ -1285,6 +1365,10 @@ function buildScene(f) {
   f.decos.filter(d => d.kind === 'torch').forEach(d => { const g = new THREE.Group(); g.add(plane(0.9, 1.8, M.soot)); placeOnFace(g, d.x, d.y, d.side, 1.9, 0.006); });
   f.decos.forEach(d => addDeco(f, d));
   f.objs.forEach(o => addObj(f, o));
+  if (f.danger && f.danger.type === 'water') {
+    waterMesh = new THREE.Mesh(new THREE.PlaneGeometry(N * 2, N * 2), M.water);
+    waterMesh.rotation.x = -Math.PI / 2; waterMesh.position.set(N, -0.05, N); waterMesh.visible = false; floorGroup.add(waterMesh);
+  }
   chaserMesh = null;
   if (f.danger && f.danger.type === 'chaser') {
     chaserMesh = makeFigure(); chaserMesh.visible = false;
@@ -1326,6 +1410,7 @@ function addDeco(f, d) {
       const ash = new THREE.Mesh(once('g-ash', () => new THREE.SphereGeometry(0.06, 8, 6)), M.black); ash.position.set(0, 0.36, 0.22); ash.scale.y = 0.5; g.add(ash);
     }
     placeOnFace(g, d.x, d.y, d.side, 1.42, 0);
+    if (d.upside) { g.rotation.z = Math.PI; g.children.forEach(o => { if (o.isSprite) o.material.rotation = Math.PI; }); }
   } else if (d.kind === 'poster') {
     const m = plane(0.62, 0.83, once('pm' + d.text, () => new THREE.MeshStandardMaterial({ map: posterTex(d.text), roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2 })));
     if (d.upside) m.rotation.z = Math.PI;
@@ -1360,7 +1445,7 @@ function addObj(f, o) {
     if (o.broken) {
       const b = new THREE.Mesh(G.vaseBase, M.vase); b.position.set(px, 0, pz); floorGroup.add(b);
       for (let k = 0; k < 9; k++) { const s = new THREE.Mesh(G.shard, M.vase); s.position.set(px + (Math.random() - 0.5) * 0.9, 0.03, pz + (Math.random() - 0.5) * 0.9); s.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3); s.scale.setScalar(0.6 + Math.random()); floorGroup.add(s); }
-    } else { const v = new THREE.Mesh(G.vase, M.vase); v.position.set(px, 0, pz); floorGroup.add(v); }
+    } else { const v = new THREE.Mesh(G.vase, M.vase); v.position.set(px, 0, pz); v.scale.setScalar(o.scale || 1); floorGroup.add(v); }
   } else if (o.kind === 'statue' || o.kind === 'follower') {
     const fig = makeFigure(); fig.position.set(cx, 0, cz); fig.visible = o.x >= 0; floorGroup.add(fig); figures.push({ mesh: fig, obj: o });
   } else if (o.kind === 'doll') {
@@ -1375,8 +1460,30 @@ function addObj(f, o) {
     }
   } else if (o.kind === 'puddle') {
     const m = new THREE.Mesh(G.puddle, M.puddle); m.rotation.x = -Math.PI / 2; m.scale.set(1.4, 1, 1); m.position.set(cx, 0.005, cz + 0.1); floorGroup.add(m);
+  } else if (o.kind === 'rope') {
+    const g = new THREE.Group(); g.position.set(cx + 0.25, 2.4, cz - 0.15);
+    const line = new THREE.Mesh(once('g-ropeL', () => new THREE.CylinderGeometry(0.014, 0.014, 0.95, 6)), M.rope); line.position.y = -0.475;
+    const loop = new THREE.Mesh(once('g-ropeO', () => new THREE.TorusGeometry(0.13, 0.018, 6, 18)), M.rope); loop.position.y = -1.08;
+    g.add(line, loop); floorGroup.add(g); swingers.push(g);
+  } else if (o.kind === 'ceye') {
+    [[-0.4, -0.3, 0.6], [0.35, 0.1, 0.8], [-0.1, 0.5, 0.5]].forEach(([ax, az, sc]) => {
+      const m = new THREE.Mesh(once('pg1.2x0.6', () => new THREE.PlaneGeometry(1.2, 0.6)), decalMat(decalTex('eye')));
+      m.rotation.x = Math.PI / 2; m.rotation.z = Math.random() * 3; m.scale.setScalar(sc); m.position.set(cx + ax, 2.39, cz + az); floorGroup.add(m);
+    });
+  } else if (o.kind === 'wisp') {
+    const g = new THREE.Group(); g.position.set(cx, 1.5, cz);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex('halo'), color: 0xbfd8ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    halo.scale.set(0.5, 0.9, 1);
+    const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: spriteTex('flame'), color: 0xe8f2ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    core.scale.set(0.12, 0.2, 1);
+    const light = new THREE.PointLight(0x9fc4ff, 1.3, 5, 2);
+    g.add(halo, core, light); floorGroup.add(g); wisps.push(g);
+  } else if (o.kind === 'blood') {
+    const m = new THREE.Mesh(once('g-blood', () => new THREE.PlaneGeometry(0.5, 2)), M.blood);
+    m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, Math.atan2(-DX[o.dir], -DY[o.dir]), 0);
+    m.position.set(cx + DX[o.dir] * 0.5, 0.008, cz + DY[o.dir] * 0.5); floorGroup.add(m);
   } else if (o.kind === 'note') {
-    const m = new THREE.Mesh(once('g-note', () => new THREE.PlaneGeometry(0.26, 0.34)), M.note);
+    const m = new THREE.Mesh(once('g-note', () => new THREE.PlaneGeometry(0.26, 0.34)), f.noteAlt ? M.noteAlt : M.note);
     m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, o.rot || 0, 0);
     m.position.set(cx + (o.ox || 0) * 2, 0.007, cz + (o.oy || 0) * 2); floorGroup.add(m);
   } else if (o.kind === 'up') {
@@ -1399,6 +1506,7 @@ const S = {
   floorStart: 0, runStart: 0, elapsedBefore: 0, stepsFloor: 0, stepAlt: false,
   stats: { floors: 0, resets: 0, caught: 0 }, found: new Set(), doorOpen: false, confirm: null,
   danger: null, darkMul: 1, nextBeat: 0, pathIdx: null, queuedRun: false,
+  notesRead: new Set(), memoUsed: false, upStreak: 0, pendingEnding: null,
   history: [], lastInput: 0, idleSaid: false
 };
 const D = () => DIFFS[S.diff];
@@ -1482,19 +1590,21 @@ function updatePrompt() {
 function newRun(diff) {
   S.diff = diff; S.base = genBase(diff);
   S.count = 0; S.lastAnom = null; S.stats = { floors: 0, resets: 0, caught: 0 }; S.found = new Set();
+  S.notesRead = new Set(); S.memoUsed = false; S.upStreak = 0; S.pendingEnding = null;
   S.elapsedBefore = 0; S.runStart = performance.now();
   buildFloor(); saveRun();
 }
 const elapsed = () => S.elapsedBefore + (S.phase === 'pause' ? 0 : performance.now() - S.runStart);
 function saveRun() {
   if (!S.base) return;
-  store.set('bd2.save', JSON.stringify({ v: 2, diff: S.diff, base: S.base, count: S.count, stats: S.stats, found: [...S.found], elapsed: elapsed(), lastAnom: S.lastAnom }));
+  store.set('bd2.save', JSON.stringify({ v: 2, diff: S.diff, base: S.base, count: S.count, stats: S.stats, found: [...S.found], elapsed: elapsed(), lastAnom: S.lastAnom, notesRead: [...S.notesRead], memoUsed: S.memoUsed, upStreak: S.upStreak }));
 }
 function loadRun() {
   const s = store.json('bd2.save', null);
   if (!s || s.v !== 2 || !s.base || !DIFFS[s.diff]) return false;
   S.diff = s.diff; S.base = s.base; S.count = s.count || 0; S.stats = s.stats || { floors: 0, resets: 0 };
   S.found = new Set(s.found || []); S.elapsedBefore = s.elapsed || 0; S.runStart = performance.now(); S.lastAnom = s.lastAnom || null;
+  S.notesRead = new Set(s.notesRead || []); S.memoUsed = !!s.memoUsed; S.upStreak = s.upStreak || 0; S.pendingEnding = null;
   buildFloor(); return true;
 }
 const catalog = () => new Set(store.json('bd2.catalog', []));
@@ -1502,7 +1612,7 @@ function addCatalog(id) { const c = catalog(); c.add(id); store.set('bd2.catalog
 
 function setPhase(p) {
   S.phase = p;
-  ['title', 'pause', 'end', 'catalog', 'keypad', 'loading', 'note', 'intro'].forEach(k => { $('ov-' + k).hidden = p !== k; });
+  ['title', 'pause', 'end', 'catalog', 'keypad', 'loading', 'note', 'intro', 'ending'].forEach(k => { $('ov-' + k).hidden = p !== k; });
   $('game').dataset.phase = p;
   if (p !== 'play' && p !== 'keypad') setMemo(false);
   if (p === 'pause') $('pause-info').textContent = D().label + '・歩いた階 ' + S.stats.floors;
@@ -1523,6 +1633,9 @@ function clearMemos() { memoText.value = ''; store.del('bd2.memo'); store.del('o
 function judge(claimAnomaly) {
   S.confirm = null; S.danger = null; $('danger-vig').style.opacity = 0;
   const correct = claimAnomaly === (S.anomaly !== null);
+  // 何もない0番で引き返し続けると……
+  if (claimAnomaly && S.count === 0 && !S.anomaly) S.upStreak++; else S.upStreak = 0;
+  if (S.upStreak >= 5) S.pendingEnding = 'return';
   S.stats.floors++;
   if (correct) { if (S.anomaly) { S.found.add(S.anomaly); addCatalog(S.anomaly); } S.count++; }
   else { if (S.count > 0) S.stats.resets++; S.count = 0; }
@@ -1537,10 +1650,12 @@ function judge(claimAnomaly) {
 function nearestYaw(cur, target) { let t = target; while (t - cur > Math.PI) t -= Math.PI * 2; while (t - cur < -Math.PI) t += Math.PI * 2; return t; }
 function afterStairs() {
   const fd = $('fade');
+  if (S.pendingEnding) { fd.classList.add('on'); setTimeout(() => { playEnding(S.pendingEnding); fd.classList.remove('on'); }, 1200); return; }
   if (S.count >= 8) {
     // 出口の光
+    const id = S.notesRead.size >= 8 ? 'note' : (S.stats.resets === 0 && !S.stats.caught) ? 'perfect' : !S.memoUsed ? 'blank' : 'exit';
     fd.classList.add('white', 'on'); sound.chime();
-    setTimeout(() => { finish(); fd.classList.remove('on'); setTimeout(() => fd.classList.remove('white'), 2500); }, 2600);
+    setTimeout(() => { playEnding(id); fd.classList.remove('on'); setTimeout(() => fd.classList.remove('white'), 2500); }, 2600);
     return;
   }
   fd.classList.add('on');
@@ -1549,17 +1664,36 @@ function afterStairs() {
     setTimeout(() => { fd.classList.remove('on'); beginPlay(); }, 350);
   }, 800);
 }
-function finish() {
+const endingsSeen = () => new Set(store.json('bd2.endings', []));
+let endingTimer = null, endingId = null;
+function playEnding(id) {
+  endingId = id;
+  const e = ENDINGS.find(x => x.id === id), box = $('ending-lines');
+  const seen = endingsSeen(); seen.add(id); store.set('bd2.endings', JSON.stringify([...seen]));
+  box.textContent = ''; box.classList.toggle('bad', !e.good);
+  e.lines.forEach((ln, i) => { const p = document.createElement('p'); p.textContent = ln; p.style.animationDelay = (REDUCED ? 0 : i * 1.7) + 's'; box.appendChild(p); });
+  const sk = document.createElement('p'); sk.className = 'skip'; sk.textContent = 'Space・クリックで先へ'; box.appendChild(sk);
+  store.del('bd2.save');
+  setPhase('ending');
+  clearTimeout(endingTimer); endingTimer = setTimeout(endEnding, (REDUCED ? 2 : e.lines.length * 1.7 + 3) * 1000);
+}
+function endEnding() { if (S.phase !== 'ending') return; clearTimeout(endingTimer); finish(endingId); }
+$('ov-ending').addEventListener('click', endEnding);
+function finish(id) {
+  const e = ENDINGS.find(x => x.id === id) || ENDINGS[3];
+  $('end-title').textContent = e.name;
+  $('end-text').textContent = e.sum;
+  $('end-ecount').textContent = endingsSeen().size + ' / ' + ENDINGS.length;
   const sec = Math.round(elapsed() / 1000);
   const fmt = s => Math.floor(s / 60) + '分' + String(s % 60).padStart(2, '0') + '秒';
-  const recs = store.json('bd2.records', {}), prev = recs[S.diff], better = !prev || sec < prev;
+  const recs = store.json('bd2.records', {}), prev = recs[S.diff], better = e.good && (!prev || sec < prev);
   if (better) { recs[S.diff] = sec; store.set('bd2.records', JSON.stringify(recs)); }
   $('end-diff').textContent = D().label;
   $('end-time').textContent = fmt(sec);
   $('end-floors').textContent = S.stats.floors + ' 階';
   $('end-resets').textContent = S.stats.resets + ' 回';
   $('end-caught').textContent = (S.stats.caught || 0) + ' 回';
-  $('end-best').textContent = fmt(better ? sec : prev) + (better && prev ? '（更新）' : '');
+  $('end-best').textContent = (better ? fmt(sec) : prev ? fmt(prev) : '—') + (better && prev ? '（更新）' : '');
   $('end-found').textContent = S.found.size + ' 種';
   $('end-cat').textContent = catalog().size;
   store.del('bd2.save');
@@ -1628,6 +1762,7 @@ function arrive(to) {
   moveFollower();
   if (S.danger && !S.danger.on) { const pi = S.pathIdx.get(i); if (pi != null && pi >= S.danger.trig) triggerDanger(now); }
   if (S.danger && S.danger.on && S.danger.type === 'chaser' && S.danger.x === S.px && S.danger.y === S.py) { caught(); return; }
+  if (S.floor.hole && S.floor.hole.x === S.px && S.floor.hole.y === S.py) { caught('fall'); return; }
   updateMeta(); updatePrompt();
 }
 // 危険な異変：走ってくる人影／迫る闇
@@ -1647,7 +1782,8 @@ function triggerDanger(now) {
     say('……奥に、誰かいる。こっちに来る。');
   } else {
     d.limit = 6000 + d.trig * 950;
-    say('……松明が、消えていく。');
+    if (d.type === 'water') waterMesh.visible = true;
+    say(d.type === 'dark' ? '……松明が、消えていく。' : d.type === 'ceiling' ? '……地鳴り。天井が、下りてくる。' : '……足元が濡れている。水が、満ちてくる。');
   }
 }
 function chaserNext(d) {
@@ -1680,25 +1816,40 @@ function updateDanger(now) {
     $('danger-vig').style.opacity = clamp(1 - dist / 4, 0.15, 1);
   } else {
     const p = clamp((now - d.t0) / d.limit, 0, 1);
-    S.darkMul = 1 - p;
-    scene.fog.density = 0.17 + p * p * 1.5;
+    if (d.type === 'dark') { S.darkMul = 1 - p; scene.fog.density = 0.17 + p * p * 1.5; }
+    if (d.type === 'ceiling') {
+      const y = 2.4 - p * 1.15;
+      ceilMeshes.forEach(m => { m.position.y = Math.min(m.userData.y0, y); });
+      if (!d.nextRumble || now > d.nextRumble) { d.nextRumble = now + 420; sound.noise(0.5, 'lowpass', 90, 0.8, 0.7, 0.6); S.bumpT = now - 120; }
+    }
+    if (d.type === 'water') {
+      waterMesh.position.y = p * 1.42;
+      if (!d.nextBub || now > d.nextBub) { d.nextBub = now + 300 + Math.random() * 500; sound.tone(300 + Math.random() * 500, 0.08, 0.04, 'sine', 0, 0.6, 900); }
+    }
     $('danger-vig').style.opacity = p * 0.9;
     if (p >= 1) { caught(); return; }
   }
-  if (now >= S.nextBeat) { sound.beat(); const p = d.type === 'dark' ? clamp((now - d.t0) / d.limit, 0, 1) : 0.6; S.nextBeat = now + 760 - p * 360; }
+  if (now >= S.nextBeat) { sound.beat(); const p = d.limit ? clamp((now - d.t0) / d.limit, 0, 1) : 0.6; S.nextBeat = now + 760 - p * 360; }
 }
-function caught() {
+function caught(force) {
   if (S.phase === 'caught') return;
-  const kind = S.danger && S.danger.type;
+  const kind = force || (S.danger && S.danger.type);
   S.danger = null; S.anim = null; S.queued = null; S.confirm = null;
   S.stats.floors++; if (S.count > 0) S.stats.resets++; S.stats.caught = (S.stats.caught || 0) + 1; S.count = 0;
   setPhase('caught');
-  sound.scream();
-  const sc = $('scare'); sc.classList.remove('on'); void sc.offsetWidth; sc.classList.add('on');
+  const sk = { fall: 'fall', ceiling: 'crush', water: 'drown' }[kind] || 'face';
+  if (sk === 'face') sound.scream();
+  else if (sk === 'fall') { sound.noise(1.2, 'bandpass', 600, 0.5, 0.9, 0.8); sound.tone(400, 1.0, 0.1, 'sine', 0, 0.8, 80); }
+  else if (sk === 'crush') { sound.noise(0.9, 'lowpass', 120, 0.8, 1.6, 0.5); sound.bump(); }
+  else { for (let i = 0; i < 12; i++) sound.tone(200 + Math.random() * 700, 0.1, 0.06, 'sine', i * 0.07, 0.8, 1000); sound.noise(1.2, 'lowpass', 300, 0.8, 0.6, 0.8); }
+  const sc = $('scare'); sc.dataset.kind = sk; sc.classList.remove('on'); void sc.offsetWidth; sc.classList.add('on');
   setTimeout(() => $('fade').classList.add('on'), 1000);
+  const msg = { dark: '……闇の中で、何かを忘れてきた気がする。', fall: '……落ちた。ここは、どこだっけ。', ceiling: '……押し潰される夢を見た。', water: '……水の音が、耳から離れない。' }[kind] || '……捕まった。ここは、どこだっけ。';
   setTimeout(() => {
-    sc.classList.remove('on'); buildFloor(); saveRun();
-    setTimeout(() => { $('fade').classList.remove('on'); beginPlay(); say(kind === 'dark' ? '……闇の中で、何かを忘れてきた気がする。' : '……捕まった。ここは、どこだっけ。'); }, 450);
+    sc.classList.remove('on');
+    if (S.stats.caught >= 5) { $('fade').classList.remove('on'); playEnding('lost'); return; }
+    buildFloor(); saveRun();
+    setTimeout(() => { $('fade').classList.remove('on'); beginPlay(); say(msg); }, 450);
   }, 2000);
 }
 function drawScareFace() {
@@ -1745,7 +1896,8 @@ function kpPress(k) {
   if (kpVal.length < 4) { kpVal += k; drawKp(); sound.key(); }
 }
 function openNote() {
-  $('note-text').textContent = NOTES[Math.min(S.count, NOTES.length - 1)];
+  $('note-text').textContent = S.floor.noteAlt ? NOTE_ALT : NOTES[Math.min(S.count, NOTES.length - 1)];
+  if (!S.floor.noteAlt) S.notesRead.add(Math.min(S.count, NOTES.length - 1));
   setPhase('note'); sound.noise(0.25, 'highpass', 3000, 0.6, 0.25, 0.2);
 }
 function closeNote() { setPhase('play'); canvas.focus({ preventScroll: true }); say(pick(['……誰が書いたんだろう。', '見覚えのある字だ。', 'メモしておこう。'])); }
@@ -1768,6 +1920,7 @@ document.addEventListener('keydown', e => {
   if (scr && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && el && el.dataset && el.dataset.cycle) { cycle(el.dataset.cycle, e.key === 'ArrowLeft' ? -1 : 1); e.preventDefault(); return; }
   if (S.phase === 'note') { if ([' ', 'Enter', 'Escape', 'e', 'f'].includes(e.key)) { e.preventDefault(); closeNote(); } return; }
   if (S.phase === 'intro') { if ([' ', 'Enter', 'Escape'].includes(e.key)) { e.preventDefault(); skipIntro(); } return; }
+  if (S.phase === 'ending') { if ([' ', 'Enter', 'Escape'].includes(e.key)) { e.preventDefault(); endEnding(); } return; }
   if (S.phase === 'keypad') {
     if (/^[0-9]$/.test(e.key)) { kpPress(e.key); e.preventDefault(); }
     else if (e.key === 'Backspace') { kpPress('del'); e.preventDefault(); }
@@ -1839,6 +1992,8 @@ $('btn-catalog').addEventListener('click', () => {
   $('cat-count').textContent = c.size + ' / ' + ANOMS.length;
   const recs = store.json('bd2.records', {}), fmtR = v => v ? Math.floor(v / 60) + '分' + String(v % 60).padStart(2, '0') + '秒' : '—';
   $('records').textContent = '最速記録　' + DIFF_KEYS.map(k => DIFFS[k].label + ' ' + fmtR(recs[k])).join('　');
+  const es = endingsSeen();
+  $('endings-list').textContent = 'エンディング ' + es.size + ' / ' + ENDINGS.length + '　' + ENDINGS.map(e => es.has(e.id) ? e.name : '？？？').join('・');
   setPhase('catalog'); $('btn-cat-back').focus({ preventScroll: true });
 });
 $('btn-cat-back').addEventListener('click', toTitle);
@@ -1952,6 +2107,7 @@ function frame(now) {
   if (now - S.bumpT < 260) { const t = (now - S.bumpT) / 260; cy += Math.sin(t * Math.PI * 3) * 0.02 * (1 - t); pitch += Math.sin(t * Math.PI * 3) * 0.012 * (1 - t); }
   if (S.phase !== 'stairs' && !S.hold && !a) {
     if (objHere('down')) cy -= 0.25;
+    if (S.floor.hole && S.floor.hole.x === S.px && S.floor.hole.y === S.py) cy -= 0.8;
     if (S.floor.lowCeil && S.floor.lowCeil.x === S.px && S.floor.lowCeil.y === S.py) cy -= 0.12;
   }
   camera.position.set(cx, 1.28 + cy, cz);
@@ -1985,6 +2141,8 @@ function frame(now) {
     if (f.mesh.userData.head) f.mesh.userData.head.rotation.z = Math.sin(now / 2300 + f.mesh.id) * 0.06;
   });
   if (ironDoor) { ironDoor.open += (ironDoor.target - ironDoor.open) * Math.min(1, dt * 1.6); ironDoor.slab.position.y = 1.125 + ironDoor.open * 2.15; }
+  swingers.forEach((g, i) => { g.rotation.z = Math.sin(now / 1300 + i) * 0.06; g.rotation.x = Math.sin(now / 1700 + i) * 0.04; });
+  wisps.forEach((g, i) => { g.position.y = 1.45 + Math.sin(now / 700 + i) * 0.12; g.children[2].intensity = 1.1 + Math.sin(now / 90) * 0.2; });
   updateDanger(now);
   if (S.phase === 'play') {
     S.mem[idx(S.px, S.py)] = now;
@@ -2003,13 +2161,13 @@ function frame(now) {
 // =====================================================================
 const memoText = $('memo-text');
 memoText.value = store.get('bd2.memo') || store.get('oblivion.memo') || '';
-memoText.addEventListener('input', () => store.set('bd2.memo', memoText.value));
+memoText.addEventListener('input', () => { store.set('bd2.memo', memoText.value); S.memoUsed = true; });
 $('chips').addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });
 $('chips').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   const txt = b.dataset.ins === 'dir' ? (D().noCompass ? '向き？' : DIRN[S.dir] + '向き') : b.dataset.ins;
   const st = memoText.selectionStart ?? memoText.value.length, en = memoText.selectionEnd ?? memoText.value.length;
-  memoText.setRangeText(txt + ' ', st, en, 'end'); store.set('bd2.memo', memoText.value);
+  memoText.setRangeText(txt + ' ', st, en, 'end'); store.set('bd2.memo', memoText.value); S.memoUsed = true;
 });
 const TABS = ['text', 'map', 'sketch'];
 function setTab(w) {
@@ -2056,7 +2214,7 @@ const mapNote = (() => {
       const i = Math.floor(gi), j = Math.floor(gj); if (i < 0 || j < 0 || i >= GN || j >= GN) return;
       const k = j * GN + i; data.m[k] = data.m[k] === mode ? '' : mode;
     }
-    save(); draw();
+    save(); draw(); S.memoUsed = true;
   }
   c.addEventListener('pointerdown', e => { e.preventDefault(); hit(e); });
   document.querySelectorAll('.mk').forEach(b => b.addEventListener('click', () => {
@@ -2077,7 +2235,7 @@ const sketch = (() => {
     sc.strokeStyle = '#2a2923'; sc.lineCap = 'round'; sc.lineJoin = 'round'; sc.lineWidth = tool === 'eraser' ? 26 : 4;
     sc.beginPath(); sc.moveTo(a[0], a[1]); sc.lineTo(b[0], b[1]); sc.stroke();
   };
-  sk.addEventListener('pointerdown', e => { drawing = true; last = pos(e); sk.setPointerCapture(e.pointerId); stroke(last, [last[0] + 0.1, last[1]]); });
+  sk.addEventListener('pointerdown', e => { drawing = true; S.memoUsed = true; last = pos(e); sk.setPointerCapture(e.pointerId); stroke(last, [last[0] + 0.1, last[1]]); });
   sk.addEventListener('pointermove', e => { if (!drawing) return; const p = pos(e); stroke(last, p); last = p; });
   const end = () => { if (!drawing) return; drawing = false; try { store.set('bd2.sketch', sk.toDataURL()); } catch (e) {} };
   sk.addEventListener('pointerup', end); sk.addEventListener('pointercancel', end);
