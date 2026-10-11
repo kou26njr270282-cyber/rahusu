@@ -1,0 +1,570 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>勇者おことわり</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<style>
+/* Layout: one narrow column like an old handheld screen — status window, play field, message window, pad. */
+:root {
+  --night: #0c0e1c;
+  --window: #05060d;
+  --line: #f2f2f2;
+  --text: #f2f2f2;
+  --gold: #ffd84a;
+  --alarm: #ff6b6b;
+  --dim: #8a90b8;
+  --font: "DotGothic16", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Meiryo", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--night); color: var(--text); }
+body { font-family: var(--font); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 560px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 32px; display: flex; flex-direction: column; gap: 12px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 1.7rem; font-weight: 400; letter-spacing: .08em; color: var(--gold); text-wrap: balance; }
+.sub { margin: 0; color: var(--dim); font-size: .9rem; }
+.win { background: var(--window); border: 3px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 12px; font-variant-numeric: tabular-nums; }
+.hud div { min-width: 0; }
+.hud .k { display: block; font-size: .72rem; color: var(--dim); letter-spacing: .06em; }
+.hud .v { font-size: 1.05rem; white-space: nowrap; }
+.hud .alarm { color: var(--alarm); }
+.stage { position: relative; border: 3px solid var(--line); border-radius: 8px; overflow: hidden; background: #000; }
+canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
+.overlay { position: absolute; inset: 0; display: flex; align-items: safe center; overflow-y: auto; justify-content: center; padding: 12px; background: rgba(5, 6, 13, .78); }
+.overlay .win { max-width: 420px; width: 100%; margin-block: auto; }
+.overlay h2 { margin: 0 0 6px; font-size: 1.25rem; font-weight: 400; color: var(--gold); }
+.overlay p { margin: 0 0 8px; }
+.overlay ul { margin: 0 0 8px; padding-left: 1.2em; }
+.overlay .row { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.overlay .big { font-size: 1.4rem; color: var(--gold); }
+.msg { min-height: 6.6em; }
+.msg p { margin: 0; }
+.msg p:not(:last-child) { color: var(--dim); }
+.msg p:last-child::before { content: "▶ "; color: var(--gold); }
+button { font-family: var(--font); font-size: 1rem; color: var(--text); background: var(--window); border: 2px solid var(--line); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+button:hover { color: var(--gold); border-color: var(--gold); }
+button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.dpad button { padding: 0; font-size: 1.2rem; }
+.dpad .u { grid-area: 1 / 2; } .dpad .l { grid-area: 2 / 1; } .dpad .r { grid-area: 2 / 3; } .dpad .d { grid-area: 3 / 2; }
+.side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.abtn { width: 84px; height: 84px; border-radius: 50%; font-size: .95rem; white-space: nowrap; touch-action: none; user-select: none; -webkit-user-select: none; }
+.keys { color: var(--dim); font-size: .8rem; text-align: right; margin: 0; }
+details { color: var(--dim); font-size: .9rem; }
+details summary { cursor: pointer; color: var(--text); }
+details ul { padding-left: 1.2em; margin: 6px 0 0; }
+@media (max-width: 420px) {
+  .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dpad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>勇者おことわり</h1>
+    <p class="sub">村人Aの ながい 3日間</p>
+  </header>
+
+  <div class="win hud" id="hud">
+    <div><span class="k">ひにち</span><span class="v" id="hDay">1日目</span></div>
+    <div><span class="k" id="hPhaseK">じょうきょう</span><span class="v" id="hPhase">-</span></div>
+    <div><span class="k">てもち</span><span class="v" id="hCarry">なし</span></div>
+    <div><span class="k">いえの ざいさん</span><span class="v" id="hAsset">0G</span></div>
+  </div>
+
+  <div class="stage">
+    <canvas id="cv" aria-label="村人Aの家"></canvas>
+    <div class="overlay" id="ov"></div>
+  </div>
+
+  <div class="win msg" id="msg" aria-live="polite"></div>
+
+  <div class="controls">
+    <div class="dpad" id="dpad">
+      <button class="u" data-dir="up" aria-label="うえ">▲</button>
+      <button class="l" data-dir="left" aria-label="ひだり">◀</button>
+      <button class="r" data-dir="right" aria-label="みぎ">▶</button>
+      <button class="d" data-dir="down" aria-label="した">▼</button>
+    </div>
+    <div class="side">
+      <button id="skip" hidden>もう きていいよ</button>
+      <button class="abtn" id="abtn">しらべる</button>
+      <p class="keys">矢印 / WASD で いどう<br>スペース / Z で しらべる・しまう</p>
+    </div>
+  </div>
+
+  <details>
+    <summary>あそびかた</summary>
+    <ul>
+      <li>勇者が くるまでに、入れものの 中身を うごかして かくそう。もてるのは 1こずつ。</li>
+      <li>🔒きんこは 勇者に あけられない。でも 2こまでしか 入らない。</li>
+      <li>勇者が 一度しらべた 入れもの（済）は、その日は もう しらべない。あとから そこへ しまうのが コツ。</li>
+      <li>勇者に ぶつかると 話しかけられて しばらく うごけない。もっている物は「くれるの？」と もっていかれる。</li>
+      <li>われた🏺ツボは 1こ 15G の しゅうりだいが かかる。</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+(() => {
+  const MAP = [
+    "###########",
+    "#B..T....D#",
+    "#.........#",
+    "#P..##..P.#",
+    "#...##....#",
+    "#K.......K#",
+    "#P.......P#",
+    "#S..D.....#",
+    "#####.#####",
+  ];
+  const W = 11, H = 9, T = 48;
+  const DOOR = { x: 5, y: 8 };
+  const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  const REPAIR = 15;
+
+  const ITEMS = {
+    gem:   { e: "💎", n: "かほうの ほうせき", v: 200 },
+    gold:  { e: "💰", n: "50ゴールド", v: 50 },
+    herb:  { e: "🌿", n: "やくそう", v: 10 },
+    bread: { e: "🍞", n: "パン", v: 5 },
+  };
+  const KINDS = {
+    P: { type: "pot",    e: "🏺", name: "ツボ",   cap: 1, act: 0.8 },
+    D: { type: "drawer", e: "🗄️", name: "タンス", cap: 2, act: 1.4 },
+    K: { type: "barrel", e: "🛢️", name: "タル",   cap: 1, act: 1.0 },
+    S: { type: "safe",   e: "🔒", name: "きんこ", cap: 2, act: 1.0 },
+    B: { type: "bed",    e: "🛏️", name: "ベッド", cap: 0, act: 2.6 },
+    T: { type: "table",  e: "🍲", name: "テーブル", cap: 0, act: 0 },
+  };
+  const WAVES = [
+    { prep: 14, speed: 2.6, act: 1.0,  heroes: [["ゆうしゃ", "🦸"]], stock: ["gem", "gold", "gold", "herb", "bread"] },
+    { prep: 11, speed: 3.3, act: 0.85, heroes: [["ゆうしゃ", "🦸"]], stock: ["gold", "herb", "bread"] },
+    { prep: 11, speed: 3.3, act: 0.85, heroes: [["ゆうしゃ", "🦸"], ["まほうつかい", "🧙"]], stock: ["gold", "gold", "herb"] },
+  ];
+  const GREET = ["こんにちは！", "まおうって どこ？", "なにか いい ものない？", "この むらの なまえは？"];
+
+  const cv = document.getElementById("cv");
+  const ctx = cv.getContext("2d");
+  cv.width = W * T; cv.height = H * T;
+  const $ = (id) => document.getElementById(id);
+  const ov = $("ov");
+
+  let S, objects, objAt;
+  const key = (x, y) => x + "," + y;
+  const walkable = (x, y) => x >= 0 && y >= 0 && x < W && y < H && MAP[y][x] === ".";
+
+  function newGame() {
+    objects = []; objAt = {};
+    MAP.forEach((row, y) => [...row].forEach((c, x) => {
+      if (KINDS[c]) {
+        const o = { ...KINDS[c], x, y, items: [], broken: false };
+        objects.push(o); objAt[key(x, y)] = o;
+      }
+    }));
+    S = {
+      wave: 0, phase: "title", timer: 0,
+      player: { x: 5, y: 5, fx: 5, fy: 5, tx: 5, ty: 5, t: 1, moving: false, face: "down", carry: null, frozen: 0, say: "" },
+      heroes: [], visited: new Set(), bedUsed: false,
+      stolen: [], waveStolen: [], repairCost: 0, waveRepair: 0, totalAdded: 0,
+      log: [],
+    };
+    renderLog();
+    showTitle();
+  }
+
+  // ---------- messages ----------
+  function msg(text) {
+    S.log.push(text);
+    if (S.log.length > 3) S.log.shift();
+    renderLog();
+  }
+  function renderLog() {
+    $("msg").innerHTML = S.log.map((l) => `<p>${l}</p>`).join("") || "<p>…</p>";
+  }
+
+  // ---------- waves ----------
+  function restock(list) {
+    for (const k of list) {
+      const spots = objects.filter((o) => ["pot", "drawer", "barrel"].includes(o.type) && !o.broken && o.items.length < o.cap);
+      if (!spots.length) break;
+      spots[Math.floor(Math.random() * spots.length)].items.push(k);
+      S.totalAdded += ITEMS[k].v;
+    }
+  }
+  function startWave() {
+    const cfg = WAVES[S.wave];
+    S.visited = new Set(); S.bedUsed = false; S.heroes = []; S.waveStolen = []; S.waveRepair = 0;
+    restock(cfg.stock);
+    S.phase = "prep"; S.timer = cfg.prep;
+    ov.hidden = true;
+    msg(S.wave === 0
+      ? "1日目の あさ。かあさんが いえの ものを あちこちに しまった。"
+      : `${S.wave + 1}日目の あさ。かあさんが かいものから かえってきた。`);
+    msg(S.wave === 2 ? "とおくから 足音が ふたつ きこえる…！" : "とおくから 足音が きこえる…");
+    $("skip").hidden = false;
+  }
+  function startHeroes() {
+    const cfg = WAVES[S.wave];
+    S.phase = "hero"; $("skip").hidden = true;
+    S.heroes = cfg.heroes.map(([name, e], i) => ({
+      name, e, x: DOOR.x, y: DOOR.y, fx: DOOR.x, fy: DOOR.y, tx: DOOR.x, ty: DOOR.y, t: 1, moving: false,
+      state: "wait", delay: i * 1.6, path: [], target: null, actT: 0, actMax: 1, pause: 0, talkCd: 0,
+      speed: cfg.speed, actMul: cfg.act,
+    }));
+  }
+  function endWave() {
+    const broken = objects.filter((o) => o.broken);
+    S.waveRepair = broken.length * REPAIR;
+    S.repairCost += S.waveRepair;
+    broken.forEach((o) => (o.broken = false));
+    S.phase = "result";
+    const last = S.wave === WAVES.length - 1;
+    const lost = S.waveStolen.reduce((a, k) => a + ITEMS[k].v, 0);
+    ov.innerHTML = `<div class="win">
+      <h2>${S.wave + 1}日目の よる</h2>
+      <p>${S.waveStolen.length ? "きょう もっていかれた もの:" : "きょうは なにも とられなかった！"}</p>
+      ${S.waveStolen.length ? `<p class="big">${S.waveStolen.map((k) => ITEMS[k].e).join(" ")}</p>` : ""}
+      <div class="row"><span>とられた がく</span><span>${lost}G</span></div>
+      <div class="row"><span>ツボの しゅうりだい（${broken.length}こ）</span><span>${S.waveRepair}G</span></div>
+      <div class="row"><span>いえの ざいさん</span><span>${assets()}G</span></div>
+      <p style="margin-top:10px"><button id="next">${last ? "けっかを みる" : "ねる（つぎの日へ）"}</button></p>
+    </div>`;
+    ov.hidden = false;
+    $("next").onclick = () => { if (S.phase !== "result") return; if (last) showEnd(); else { S.wave++; startWave(); } };
+    $("next").focus();
+  }
+  function assets() {
+    let v = objects.reduce((a, o) => a + o.items.reduce((b, k) => b + ITEMS[k].v, 0), 0);
+    if (S.player.carry) v += ITEMS[S.player.carry].v;
+    return v;
+  }
+  function showTitle() {
+    ov.innerHTML = `<div class="win">
+      <h2>あなたは 村人A</h2>
+      <p>この いえには まいにち 勇者が かってに はいってきて、ツボを わり、タンスを あさっていく。</p>
+      <p>3日間、いえの ざいさんを まもりぬこう。とくに 💎かほうは ぜったいに わたすな。</p>
+      <p><button id="start">はじめる</button></p>
+    </div>`;
+    ov.hidden = false;
+    $("start").onclick = startWave;
+  }
+  function showEnd() {
+    S.phase = "end";
+    const kept = assets();
+    const score = kept - S.repairCost;
+    const ratio = score / S.totalAdded;
+    const rank = ratio >= 0.8 ? "でんせつの むらびと" : ratio >= 0.55 ? "しっかりものの むらびと" : ratio >= 0.3 ? "ふつうの むらびと" : "ゆうしゃの おさいふ";
+    const gemSafe = objects.some((o) => o.items.includes("gem")) || S.player.carry === "gem";
+    ov.innerHTML = `<div class="win">
+      <h2>3日間 おつかれさま</h2>
+      <div class="row"><span>のこった ざいさん</span><span>${kept}G</span></div>
+      <div class="row"><span>とられた ぜんぶ</span><span>${S.stolen.reduce((a, k) => a + ITEMS[k].v, 0)}G</span></div>
+      <div class="row"><span>しゅうりだい</span><span>-${S.repairCost}G</span></div>
+      <div class="row"><span>スコア</span><span class="big">${score}G</span></div>
+      <p style="margin-top:8px">しょうごう：<span class="big">${rank}</span></p>
+      <p>${gemSafe ? "💎かほうは ぶじだった。かあさんも にっこり。" : "💎かほうは 勇者の ふくろの なか…。"}</p>
+      <p><button id="again">もういちど</button></p>
+    </div>`;
+    ov.hidden = false;
+    $("again").onclick = newGame;
+    $("again").focus();
+  }
+
+  // ---------- pathfinding ----------
+  function bfs(sx, sy) {
+    const prev = new Map(), dist = new Map();
+    const q = [[sx, sy]]; dist.set(key(sx, sy), 0);
+    while (q.length) {
+      const [x, y] = q.shift();
+      for (const [dx, dy] of Object.values(DIRS)) {
+        const nx = x + dx, ny = y + dy, k = key(nx, ny);
+        if (!walkable(nx, ny) || dist.has(k)) continue;
+        dist.set(k, dist.get(key(x, y)) + 1); prev.set(k, [x, y]); q.push([nx, ny]);
+      }
+    }
+    return { prev, dist };
+  }
+  function pathTo(prev, sx, sy, gx, gy) {
+    const out = []; let cur = [gx, gy];
+    while (!(cur[0] === sx && cur[1] === sy)) { out.unshift(cur); cur = prev.get(key(cur[0], cur[1])); if (!cur) return null; }
+    return out;
+  }
+
+  // ---------- movers ----------
+  function stepMover(m, dt, speed) {
+    if (!m.moving) return true;
+    m.t += dt * speed;
+    if (m.t >= 1) { m.t = 1; m.moving = false; m.x = m.tx; m.y = m.ty; return true; }
+    return false;
+  }
+  function beginMove(m, nx, ny) {
+    m.fx = m.x; m.fy = m.y; m.tx = nx; m.ty = ny; m.t = 0; m.moving = true;
+  }
+  const rx = (m) => m.moving ? m.fx + (m.tx - m.fx) * m.t : m.x;
+  const ry = (m) => m.moving ? m.fy + (m.ty - m.fy) * m.t : m.y;
+
+  // ---------- player ----------
+  const held = [];
+  function updatePlayer(dt) {
+    const p = S.player;
+    if (p.frozen > 0) { p.frozen -= dt; if (p.frozen <= 0) p.say = ""; return; }
+    if (!stepMover(p, dt, 6.5)) return;
+    const d = held[held.length - 1];
+    if (!d) return;
+    p.face = d;
+    const [dx, dy] = DIRS[d];
+    if (walkable(p.x + dx, p.y + dy)) beginMove(p, p.x + dx, p.y + dy);
+  }
+  function action() {
+    if (!["prep", "hero"].includes(S.phase)) return;
+    const p = S.player;
+    if (p.frozen > 0) return;
+    const x = Math.round(rx(p)), y = Math.round(ry(p));
+    const order = [p.face, ...Object.keys(DIRS).filter((d) => d !== p.face)];
+    const near = order.map((d) => objAt[key(x + DIRS[d][0], y + DIRS[d][1])]).filter((o) => o && o.cap > 0);
+    if (!near.length) { msg("ちかくに 入れものが ない。"); return; }
+    if (!p.carry) {
+      const o = near.find((o) => o.items.length);
+      if (!o) { msg(`${near[0].broken ? "われた " : ""}${near[0].name}は からっぽだ。`); return; }
+      p.carry = o.items.pop();
+      msg(`${o.name}から ${ITEMS[p.carry].e}${ITEMS[p.carry].n}を とりだした。`);
+    } else {
+      const o = near.find((o) => !o.broken && o.items.length < o.cap);
+      if (!o) { msg(near[0].broken ? "ツボは われていて しまえない！" : `${near[0].name}は いっぱいだ。`); return; }
+      o.items.push(p.carry);
+      const done = S.phase === "hero" && S.visited.has(o) && o.type !== "safe";
+      msg(`${ITEMS[p.carry].e}を ${o.name}に しまった。${o.type === "safe" ? "これで あんしん。" : done ? "（もう しらべられた ばしょだ）" : ""}`);
+      p.carry = null;
+    }
+  }
+
+  // ---------- heroes ----------
+  function updateHero(h, dt) {
+    if (h.state === "gone") return;
+    if (h.state === "wait") {
+      h.delay -= dt;
+      if (h.delay <= 0) { h.state = "walk"; msg(`ガチャ！ ${h.name}が かってに はいってきた！`); }
+      return;
+    }
+    h.talkCd -= dt;
+    if (h.pause > 0) { h.pause -= dt; return; }
+    if (!stepMover(h, dt, h.speed)) return;
+
+    if (h.state === "act") {
+      h.actT -= dt;
+      if (h.actT <= 0) { loot(h, h.target); h.target = null; h.state = "walk"; }
+      return;
+    }
+    if (h.path.length) { const [nx, ny] = h.path.shift(); beginMove(h, nx, ny); return; }
+    if (h.state === "leave") { h.state = "gone"; msg(`${h.name}は でていった。「おじゃましました」は なかった。`); return; }
+    if (h.target) {
+      h.state = "act"; h.actMax = h.actT = h.target.act * h.actMul;
+      if (h.target.type === "bed") msg(`${h.name}「ふかふかの ベッドだ。ちょっと ひとやすみ…」`);
+      return;
+    }
+    // pick the nearest container nobody has checked yet
+    const { prev, dist } = bfs(h.x, h.y);
+    let best = null, bestD = Infinity, bestTile = null;
+    for (const o of objects) {
+      if (o.type === "table" || S.visited.has(o) || (o.type === "bed" && S.bedUsed)) continue;
+      for (const [dx, dy] of Object.values(DIRS)) {
+        const ax = o.x + dx, ay = o.y + dy;
+        const dd = ax === h.x && ay === h.y ? 0 : dist.get(key(ax, ay));
+        if (dd !== undefined && dd < bestD) { bestD = dd; best = o; bestTile = [ax, ay]; }
+      }
+    }
+    if (!best) {
+      h.state = "leave";
+      h.path = (h.x === DOOR.x && h.y === DOOR.y) ? [] : pathTo(prev, h.x, h.y, DOOR.x, DOOR.y) || [];
+      return;
+    }
+    S.visited.add(best);
+    if (best.type === "bed") S.bedUsed = true;
+    h.target = best;
+    h.path = bestD === 0 ? [] : pathTo(prev, h.x, h.y, bestTile[0], bestTile[1]) || [];
+  }
+  function loot(h, o) {
+    if (o.type === "safe") { msg(`${h.name}は きんこを しらべた。カギが かかっている！ ${h.name}「ちっ。」`); return; }
+    if (o.type === "bed") { msg(`${h.name}は HPが ぜんかいふくした！（シーツは ぐちゃぐちゃだ）`); return; }
+    const verb = { pot: "ツボを もちあげて なげつけた！ パリーン！", drawer: "タンスを あけた！", barrel: "タルを のぞきこんだ！" }[o.type];
+    if (o.type === "pot") o.broken = true;
+    if (o.items.length) {
+      const got = o.items.splice(0);
+      S.stolen.push(...got); S.waveStolen.push(...got);
+      msg(`${h.name}は ${verb} ${got.map((k) => ITEMS[k].e + ITEMS[k].n).join("と ")}を てにいれた！`);
+    } else {
+      msg(`${h.name}は ${verb} …なにも なかった。`);
+    }
+  }
+  function checkBump() {
+    const p = S.player;
+    if (p.frozen > 0) return;
+    for (const h of S.heroes) {
+      if (h.state === "wait" || h.state === "gone" || h.talkCd > 0) continue;
+      if (Math.hypot(rx(h) - rx(p), ry(h) - ry(p)) > 0.7) continue;
+      h.talkCd = 4; h.pause = 1.2; p.frozen = 1.7;
+      p.say = "ここは ハジメの むら です。";
+      msg(`${h.name}「${GREET[Math.floor(Math.random() * GREET.length)]}」 むらびとA「ここは ハジメの むら です。」`);
+      if (p.carry) {
+        const k = p.carry; p.carry = null;
+        S.stolen.push(k); S.waveStolen.push(k);
+        msg(`${h.name}「お、それ くれるの？ ありがとう！」 ${ITEMS[k].e}${ITEMS[k].n}を もっていかれた！`);
+      }
+      return;
+    }
+  }
+
+  // ---------- drawing ----------
+  function emoji(ch, x, y, size, alpha = 1) {
+    ctx.globalAlpha = alpha;
+    ctx.font = `${size}px ${EMOJI_FONT}`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(ch, x, y);
+    ctx.globalAlpha = 1;
+  }
+  function label(text, x, y, color = "#f2f2f2") {
+    ctx.font = `12px "DotGothic16", monospace`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const w = ctx.measureText(text).width + 8;
+    ctx.fillStyle = "rgba(5,6,13,.85)"; ctx.fillRect(x - w / 2, y - 8, w, 16);
+    ctx.fillStyle = color; ctx.fillText(text, x, y + 1);
+  }
+  function bubble(text, x, y) {
+    ctx.font = `13px "DotGothic16", monospace`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const w = ctx.measureText(text).width + 14;
+    const bx = Math.max(4, Math.min(cv.width - w - 4, x - w / 2));
+    ctx.fillStyle = "#05060d"; ctx.strokeStyle = "#f2f2f2"; ctx.lineWidth = 2;
+    ctx.fillRect(bx, y - 13, w, 26); ctx.strokeRect(bx, y - 13, w, 26);
+    ctx.fillStyle = "#f2f2f2"; ctx.fillText(text, bx + w / 2, y + 1);
+  }
+  function drawTiles() {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const px = x * T, py = y * T;
+      if (MAP[y][x] === "#") {
+        ctx.fillStyle = "#4a4f6a"; ctx.fillRect(px, py, T, T);
+        ctx.fillStyle = "#363a52";
+        ctx.fillRect(px, py + T / 2 - 2, T, 3);
+        ctx.fillRect(px + (y % 2 ? T / 2 : 0), py, 3, T / 2);
+        ctx.fillRect(px + (y % 2 ? 0 : T / 2), py + T / 2, 3, T / 2);
+      } else {
+        ctx.fillStyle = (x + y) % 2 ? "#a8743f" : "#b07b44"; ctx.fillRect(px, py, T, T);
+        ctx.fillStyle = "#8d5f31";
+        for (let i = 1; i < 3; i++) ctx.fillRect(px, py + (T / 3) * i, T, 2);
+      }
+    }
+    // door
+    ctx.fillStyle = "#2a1a0e"; ctx.fillRect(DOOR.x * T + 6, DOOR.y * T, T - 12, T);
+    ctx.fillStyle = "#6b4423"; ctx.fillRect(DOOR.x * T + 6, DOOR.y * T, T - 12, 6);
+  }
+  function drawObjects() {
+    for (const o of objects) {
+      const cx = o.x * T + T / 2, cy = o.y * T + T / 2;
+      if (o.type === "table") {
+        ctx.fillStyle = "#6b4423"; ctx.fillRect(o.x * T + 4, o.y * T + 10, T - 8, T - 16);
+        emoji(o.e, cx, cy, 24);
+        continue;
+      }
+      if (o.type === "safe") { ctx.fillStyle = "#5c6378"; ctx.fillRect(o.x * T + 5, o.y * T + 5, T - 10, T - 10); }
+      if (o.broken) {
+        emoji(o.e, cx, cy + 6, 26, 0.35);
+        ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(cx - 10, cy - 4); ctx.lineTo(cx + 2, cy + 6); ctx.lineTo(cx - 4, cy + 14); ctx.stroke();
+      } else {
+        emoji(o.e, cx, cy + 2, o.type === "safe" ? 26 : 32);
+      }
+      if (o.items.length) {
+        o.items.forEach((k, i) => emoji(ITEMS[k].e, o.x * T + 10 + i * 14, o.y * T + 9, 13));
+      }
+      if (S.phase === "hero" && S.visited.has(o) && o.type !== "bed") label("済", o.x * T + T - 10, o.y * T + T - 9, "#ffd84a");
+    }
+  }
+  function drawHero(h) {
+    if (h.state === "wait" || h.state === "gone") return;
+    const cx = rx(h) * T + T / 2, cy = ry(h) * T + T / 2;
+    emoji(h.e, cx, cy, 32);
+    label(h.name, cx, cy + 22, "#ff6b6b");
+    if (h.state === "act" && h.target) {
+      const w = 36, f = 1 - Math.max(0, h.actT) / h.actMax;
+      ctx.fillStyle = "#05060d"; ctx.fillRect(cx - w / 2, cy - 30, w, 7);
+      ctx.fillStyle = "#ff6b6b"; ctx.fillRect(cx - w / 2 + 1, cy - 29, (w - 2) * f, 5);
+      if (h.target.type === "bed") emoji("💤", cx + 14, cy - 18, 16);
+    }
+  }
+  function drawPlayer() {
+    const p = S.player;
+    const cx = rx(p) * T + T / 2, cy = ry(p) * T + T / 2;
+    emoji("🧑", cx, cy, 30);
+    label("むらびとA", cx, cy + 22);
+    if (p.carry) emoji(ITEMS[p.carry].e, cx, cy - 24, 18);
+    if (p.say) bubble(p.say, cx, cy - 38);
+  }
+  function draw() {
+    drawTiles();
+    drawObjects();
+    S.heroes.forEach(drawHero);
+    drawPlayer();
+    if (S.phase === "prep") {
+      ctx.fillStyle = "rgba(255,107,107,.18)";
+      ctx.fillRect(DOOR.x * T, DOOR.y * T, T, T);
+    }
+  }
+
+  // ---------- HUD ----------
+  function hud() {
+    $("hDay").textContent = `${Math.min(S.wave + 1, 3)}日目`;
+    const ph = $("hPhase");
+    ph.classList.toggle("alarm", S.phase === "hero" || (S.phase === "prep" && S.timer < 4));
+    if (S.phase === "prep") { $("hPhaseK").textContent = "勇者 とうちゃくまで"; ph.textContent = `${Math.ceil(S.timer)}びょう`; }
+    else if (S.phase === "hero") { $("hPhaseK").textContent = "じょうきょう"; ph.textContent = "勇者 しんにゅう中"; }
+    else { $("hPhaseK").textContent = "じょうきょう"; ph.textContent = S.phase === "result" ? "よる" : "-"; }
+    const c = S.player.carry;
+    $("hCarry").textContent = c ? `${ITEMS[c].e} ${ITEMS[c].v}G` : "なし";
+    $("hAsset").textContent = `${assets()}G`;
+  }
+
+  // ---------- loop ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (S.phase === "prep") {
+      S.timer -= dt; updatePlayer(dt);
+      if (S.timer <= 0) startHeroes();
+    } else if (S.phase === "hero") {
+      updatePlayer(dt);
+      S.heroes.forEach((h) => updateHero(h, dt));
+      checkBump();
+      if (S.heroes.every((h) => h.state === "gone")) endWave();
+    }
+    draw(); hud();
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- input ----------
+  const KEYMAP = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", w: "up", s: "down", a: "left", d: "right", W: "up", S: "down", A: "left", D: "right" };
+  const press = (d) => { if (!held.includes(d)) held.push(d); };
+  const release = (d) => { const i = held.indexOf(d); if (i >= 0) held.splice(i, 1); };
+  addEventListener("keydown", (e) => {
+    if (KEYMAP[e.key]) { e.preventDefault(); press(KEYMAP[e.key]); }
+    else if ((e.key === " " || e.key === "z" || e.key === "Z" || e.key === "Enter") && ["prep", "hero"].includes(S.phase)) { e.preventDefault(); if (!e.repeat) action(); }
+  });
+  addEventListener("keyup", (e) => { if (KEYMAP[e.key]) release(KEYMAP[e.key]); });
+  addEventListener("blur", () => (held.length = 0));
+  document.querySelectorAll("#dpad button").forEach((b) => {
+    const d = b.dataset.dir;
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); b.setPointerCapture?.(e.pointerId); press(d); });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => b.addEventListener(ev, () => release(d)));
+  });
+  $("abtn").addEventListener("pointerdown", (e) => { e.preventDefault(); action(); });
+  $("skip").addEventListener("click", () => { if (S.phase === "prep") S.timer = 0; });
+
+  newGame();
+  requestAnimationFrame(frame);
+})();
+</script>
