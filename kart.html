@@ -134,6 +134,19 @@ table.res td.tm { font-variant-numeric: tabular-nums; text-align: right; opacity
 .bigrank { font-size: clamp(40px, 8vw, 72px); font-weight: 900; font-style: italic; margin: 0; color: var(--gold); text-shadow: 0 5px 0 #1d1436, 0 0 30px rgba(255,200,60,.5); text-align: center; }
 @media (orientation: portrait) { #scrResult { align-items: center; } .respanel { max-height: 55%; } }
 
+.modes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: min(760px, 100%); }
+.mode { background: var(--panel); border: 3px solid transparent; border-radius: 18px; padding: 14px 8px; text-align: center; cursor: pointer; color: var(--text); font-family: var(--font); transition: transform .1s; }
+.mode:hover { transform: translateY(-3px); border-color: var(--gold); }
+.mode .emo { font-size: 40px; }
+.mode .nm { font-weight: 900; font-size: 17px; margin-top: 4px; }
+.mode .ds { font-size: 11px; opacity: .8; margin-top: 4px; line-height: 1.5; }
+@media (max-width: 640px) { .modes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-height: 520px) { .mode .emo { font-size: 28px; } .mode .ds { display: none; } .mode { padding: 8px 6px; } }
+.classrow { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; justify-content: center; }
+.classrow .chip { font-size: 15px; padding: 6px 16px; }
+.trophies { margin-top: 10px; font-size: 13px; opacity: .9; text-align: center; min-height: 1em; }
+.resmode { text-align: center; font-weight: 800; font-size: 13px; opacity: .8; }
+table.res td.pt { text-align: right; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
 #touch { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
 #touch .tb {
   position: absolute; pointer-events: auto; border-radius: 50%; background: rgba(255,255,255,.16);
@@ -171,7 +184,7 @@ table.res td.tm { font-variant-numeric: tabular-nums; text-align: right; opacity
 
 <div id="scrTitle" class="overlay hidden">
   <h1 class="logo">わんにゃん<br>カート<small>WANNYAN GRAND PRIX</small></h1>
-  <p class="sub">オリジナルキャラたちの 3D カートレース！ ドリフト・ジャンプ・アイテムで 1位をねらえ</p>
+  <p class="sub">グランプリ・VSレース・タイムアタック・ふうせんバトル！ ドリフトとアイテムで1位をねらえ</p>
   <button class="btn pulse" id="btnStart" type="button">あそぶ</button>
   <div class="howto">
     <kbd>↑</kbd>/<kbd>W</kbd> アクセル　<kbd>↓</kbd>/<kbd>S</kbd> ブレーキ　<kbd>←</kbd><kbd>→</kbd> ハンドル<br>
@@ -179,6 +192,14 @@ table.res td.tm { font-variant-numeric: tabular-nums; text-align: right; opacity
     <kbd>X</kbd>/<kbd>Z</kbd>/<kbd>Enter</kbd> アイテム　<kbd>Esc</kbd>/<kbd>P</kbd> ポーズ　｜ スマホは自動アクセル
   </div>
   <div style="margin-top:10px;font-size:11px;opacity:.7">3Dモデル: Kenney (kenney.nl, CC0)</div>
+</div>
+
+<div id="scrMode" class="overlay dim hidden">
+  <h2 style="font-size:24px;opacity:1;margin-bottom:14px">モードをえらぼう</h2>
+  <div class="modes" id="modeGrid"></div>
+  <div class="classrow" id="classRow"></div>
+  <div class="trophies" id="trophyRow"></div>
+  <div class="row"><button class="btn sec" id="btnModeBack" type="button">もどる</button></div>
 </div>
 
 <div id="scrSelect" class="overlay hidden">
@@ -209,10 +230,11 @@ table.res td.tm { font-variant-numeric: tabular-nums; text-align: right; opacity
 
 <div id="scrResult" class="overlay hidden">
   <div class="respanel">
+    <div class="resmode" id="resMode"></div>
     <div class="bigrank" id="resRank"></div>
     <div id="resBest" style="text-align:center;margin:2px 0 8px;color:var(--gold);font-weight:900"></div>
     <table class="res" id="resTable"></table>
-    <div class="row">
+    <div class="row" id="resButtons">
       <button class="btn" id="btnRetry" type="button">もういちど</button>
       <button class="btn sec" id="btnMenu" type="button">メニューへ</button>
     </div>
@@ -227,9 +249,9 @@ table.res td.tm { font-variant-numeric: tabular-nums; text-align: right; opacity
 //  constants
 // ============================================================
 const LAPS = 3;
-const ROADW = 106;            // drivable asphalt width (matches the Kenney track tiles)
-const CURB = 12;              // curb width on each side
-const WALL = 72;              // lateral distance of the barrier from the centerline
+let ROADW = 120;              // drivable asphalt width (set per course)
+let CURB = 12;               // curb width on each side
+let WALL = 98;               // lateral distance of the barrier from the centerline
 const SP = 6;                 // centerline sample spacing
 const TAU = Math.PI * 2;
 const GRAV = 320;
@@ -238,9 +260,9 @@ const GRAV = 320;
 //  characters (all original)
 // ============================================================
 const FRAMES = {
-  sport:   { name: 'スポーツ', max: 236, acc: 0.95, hand: 2.95, weight: 1.0 },
-  buggy:   { name: 'パワー',   max: 247, acc: 0.78, hand: 2.62, weight: 1.5 },
-  classic: { name: 'テクニック', max: 229, acc: 1.10, hand: 3.25, weight: 0.8 },
+  sport:   { name: 'スポーツ', max: 292, acc: 0.95, hand: 2.55, weight: 1.0 },
+  buggy:   { name: 'パワー',   max: 305, acc: 0.78, hand: 2.30, weight: 1.5 },
+  classic: { name: 'テクニック', max: 283, acc: 1.12, hand: 2.85, weight: 0.8 },
 };
 const SPECIES_LIST = [
   { id: 'dog', emoji: '🐶', name: 'いぬ' }, { id: 'cat', emoji: '🐱', name: 'ねこ' }, { id: 'bear', emoji: '🐻', name: 'くま' },
@@ -268,30 +290,44 @@ const DEFAULT_MY = { id: 'my', name: 'マイキャラ', title: 'きみだけの�
 // ============================================================
 const COURSES = [
   {
-    name: 'グリーンサーキット', emoji: '🌳', ramps: [0.5], obstacles: null, song: 0,
-    loop: [[0, 8], [0, 0], [7, 0], [7, 8]],
-    theme: { kind: 'day', forest: 0.45, ground: '#5ec46f', hill: '#6fbf7f', skyTop: '#2d7ff9', skyHor: '#d5f1ff', fog: '#d5f1ff',
-      sun: 0xfff3dd, sunI: 0.95, sunGlow: '#fff3c4', hemiSky: '#ffffff', hemiGround: '#5a9a5a', hemiI: 0.75 },
+    name: 'グリーンサーキット', emoji: '🌳', song: 0, elev: 16, seed: 0,
+    points: [[300,1000],[300,500],[500,300],[900,300],[1100,500],[1300,400],[1650,350],[1750,600],[1600,900],
+             [1700,1200],[1700,1600],[1450,1750],[1000,1700],[800,1450],[500,1700],[300,1500]],
+    ramps: [0.43], pads: [[0.1, 0], [0.3, -24], [0.63, 24], [0.88, -24]], cuts: [{ f: 0.84, len: 16 }],
+    theme: { kind: 'day', forest: 0.45, ground: '#5ec46f', shoulder: '#6fd07e', hill: '#6fbf7f', skyTop: '#2d7ff9', skyHor: '#d5f1ff', fog: '#d5f1ff', water: '#3aa0ff', sun: 0xfff3dd, sunI: 0.95, sunGlow: '#fff3c4', hemiSky: '#ffffff', hemiGround: '#5a9a5a', hemiI: 0.75 },
   },
   {
-    name: 'サンセットシティ', emoji: '🌇', ramps: [0.2, 0.62], obstacles: null, song: 1,
-    loop: [[0, 9], [0, 0], [4, 0], [4, 3], [8, 3], [8, 0], [11, 0], [11, 9], [6, 9], [6, 6], [3, 6], [3, 9]],
-    theme: { kind: 'sunset', forest: 0.3, ground: '#7cbf5a', hill: '#c7845a', skyTop: '#ff5e62', skyHor: '#ffd08a', fog: '#ffc98a',
-      sun: 0xffc48a, sunI: 1.0, sunGlow: '#ffb070', sunX: 0.9, sunY: 0.25, hemiSky: '#ffd9c0', hemiGround: '#6a5040', hemiI: 0.7 },
+    name: 'サンセットハイウェイ', emoji: '🌇', song: 1, elev: 26, seed: 1, traffic: 6,
+    points: [[1000,260],[1600,400],[1750,800],[1400,1000],[1000,900],[700,1050],[900,1300],[1500,1300],[1750,1600],
+             [1400,1800],[600,1800],[250,1400],[250,800],[450,380]],
+    ramps: [0.7], pads: [[0.08, 0], [0.35, -24], [0.55, 24], [0.9, 0]], cuts: [{ f: 0.3, len: 14 }],
+    theme: { kind: 'sunset', forest: 0.3, ground: '#86c25e', shoulder: '#e9c58a', hill: '#c7845a', skyTop: '#ff5e62', skyHor: '#ffd08a', fog: '#ffc98a', water: '#4a8fd9',
+      sun: 0xffc48a, sunI: 1.0, sunGlow: '#ffb070', sunX: 0.9, sunY: 0.25, hemiSky: '#ffd9c0', hemiGround: '#6a5040', hemiI: 0.7, tree: '#3a9a5c', tree2: '#4fb46a' },
   },
   {
-    name: 'もりのラリー', emoji: '🌲', ramps: [0.42, 0.85], obstacles: null, song: 2,
-    loop: [[0, 10], [0, 0], [9, 0], [9, 4], [5, 4], [5, 6], [9, 6], [9, 10], [6, 10], [6, 8], [3, 8], [3, 10]],
-    theme: { kind: 'forest', forest: 0.85, ground: '#4fae62', hill: '#4f9a6a', skyTop: '#3d8bfd', skyHor: '#e0f6ff', fog: '#e0f6ff',
-      sun: 0xffffff, sunI: 0.9, sunGlow: '#ffffff', hemiSky: '#ffffff', hemiGround: '#3a7a4a', hemiI: 0.75 },
+    name: 'もりのラリー', emoji: '🌲', song: 2, elev: 40, seed: 2,
+    points: [[1000,300],[1700,300],[1750,700],[1300,800],[1300,1100],[1700,1200],[1700,1700],[1000,1750],
+             [1000,1300],[600,1250],[600,1700],[300,1700],[300,300]],
+    ramps: [], gaps: [{ f: 0.05, len: 13 }], pads: [[0.3, -24], [0.5, 24], [0.75, 0]], cuts: [{ f: 0.6, len: 18 }],
+    theme: { kind: 'forest', forest: 0.85, ground: '#4fae62', shoulder: '#5cbf6f', hill: '#4f9a6a', skyTop: '#3d8bfd', skyHor: '#e0f6ff', fog: '#e0f6ff', water: '#2f8fe0',
+      sun: 0xffffff, sunI: 0.9, sunGlow: '#ffffff', hemiSky: '#ffffff', hemiGround: '#3a7a4a', hemiI: 0.75, tree: '#24935a', tree2: '#2fae6c' },
   },
   {
-    name: 'ナイトグランプリ', emoji: '🌙', ramps: [0.3, 0.76], obstacles: null, song: 3,
-    loop: [[0, 11], [0, 0], [3, 0], [3, 4], [6, 4], [6, 0], [10, 0], [10, 7], [7, 7], [7, 11], [4, 11], [4, 8], [2, 8], [2, 11]],
-    theme: { kind: 'night', forest: 0.5, ground: '#2f5a4a', hill: '#1d2a4a', skyTop: '#05061a', skyHor: '#2a2a6a', fog: '#141836',
-      sun: 0xa8b8ff, sunI: 0.55, sunGlow: '#c8d4ff', sunX: -0.4, sunY: 0.6, hemiSky: '#8a9aff', hemiGround: '#203040', hemiI: 0.55 },
+    name: 'ナイトグランプリ', emoji: '🌙', song: 3, elev: 60, seed: 3,
+    points: [[1000,250],[1650,300],[1800,700],[1500,950],[1750,1250],[1650,1700],[1150,1800],[900,1450],[600,1750],
+             [250,1550],[300,1100],[750,900],[300,650],[450,300]],
+    ramps: [0.8], gaps: [{ f: 0.42, len: 14 }], pads: [[0.1, 0], [0.25, -24], [0.6, 24]], cuts: [{ f: 0.68, len: 16 }],
+    theme: { kind: 'night', forest: 0.5, ground: '#2f5a4a', shoulder: '#3b6a58', hill: '#1d2a4a', skyTop: '#05061a', skyHor: '#2a2a6a', fog: '#141836', water: '#1a3a7a', road: '#3a3d4a',
+      sun: 0xa8b8ff, sunI: 0.55, sunGlow: '#c8d4ff', sunX: -0.4, sunY: 0.6, hemiSky: '#8a9aff', hemiGround: '#203040', hemiI: 0.6, tree: '#1f6a4a', tree2: '#2a7f58' },
   },
 ];
+const ARENA = {
+  name: 'ふうせんアリーナ', emoji: '🎈', song: 1, battle: true, circle: { r: 300, cx: 1000, cy: 1000 }, roadW: 470, curb: 0, wall: 240,
+  pads: [[0.0, 0], [0.25, 0], [0.5, 0], [0.75, 0]],
+  theme: { kind: 'day', road: '#5d6170', forest: 0.45, ground: '#5ec46f', shoulder: '#6fd07e', hill: '#6fbf7f', skyTop: '#2d7ff9', skyHor: '#d5f1ff', fog: '#d5f1ff', water: '#3aa0ff', sun: 0xfff3dd, sunI: 0.95, sunGlow: '#fff3c4', hemiSky: '#ffffff', hemiGround: '#5a9a5a', hemiI: 0.75 },
+};
+const CLASSES = { 50: { name: '50cc', mult: 0.8, ai: 0.92 }, 100: { name: '100cc', mult: 1.0, ai: 0.97 }, 150: { name: '150cc', mult: 1.18, ai: 1.0 } };
+const GP_POINTS = [15, 12, 10, 8, 6, 4, 2, 1];
 
 const ITEMS = {
   boost:   { emoji: '🔥', name: 'ターボ' },
@@ -764,7 +800,7 @@ function truckFor(color) {
   }
   return best;
 }
-function buildKart(c) {
+function buildKart(c, withBalloons) {
   const root = new THREE.Group();
   const body = new THREE.Group(); root.add(body);
   const truck = MODELS[truckFor(c.kart)].clone(true);
@@ -799,7 +835,18 @@ function buildKart(c) {
   const dizzy = new THREE.Group(); dizzy.position.set(0, 22, -1.2); dizzy.visible = false; body.add(dizzy);
   for (let i = 0; i < 3; i++) { const st = new THREE.Mesh(new THREE.OctahedronGeometry(0.9), new THREE.MeshBasicMaterial({ color: '#ffe14d' })); st.position.set(Math.cos(i / 3 * TAU) * 3.5, 0, Math.sin(i / 3 * TAU) * 3.5); dizzy.add(st); }
   const sw = new THREE.Object3D();
-  root.userData = { body, mat, dmat, wheels, fronts, drv, exhausts, aura, sw, dizzy, kenney: true };
+  let balloons = null;
+  if (withBalloons) {
+    balloons = [];
+    const cols = [c.kart, c.accent, c.suit];
+    for (let i = 0; i < 3; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 12), new THREE.MeshToonMaterial({ color: cols[i], gradientMap: gradMap }));
+      b.scale.set(1, 1.2, 1); b.position.set((i - 1) * 6, 30 + (i === 1 ? 3 : 0), -10); b.castShadow = true; body.add(b);
+      const str = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 14, 4), toon('#ffffff')); str.position.set((i - 1) * 3, 21, -9); str.rotation.z = -(i - 1) * 0.35; body.add(str);
+      b.userData.str = str; balloons.push(b);
+    }
+  }
+  root.userData = { body, mat, dmat, wheels, fronts, drv, exhausts, aura, sw, dizzy, kenney: true, balloons };
   return root;
 }
 
@@ -889,78 +936,84 @@ function disposeGroup(g) {
   });
 }
 
-// ---- Kenney tile-based course (CC0 models by Kenney, kenney.nl) ----
-const TILE = 160;            // world size of one track tile
-const KS = TILE / 10;        // Kenney tile models are 10 units wide
-const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0]];  // N E S W
-
-// Expand a list of corner cells (a rectilinear loop) into tiles.
-function layoutTiles(V) {
-  const sg = v => (v > 0) - (v < 0);
-  const n = V.length, dirs = [];
-  for (let i = 0; i < n; i++) {
-    const a = V[i], b = V[(i + 1) % n];
-    dirs.push(DIRS.findIndex(d => d[0] === sg(b[0] - a[0]) && d[1] === sg(b[1] - a[1])));
-  }
-  const tiles = [];
-  for (let i = 0; i < n; i++) {
-    const a = V[i], b = V[(i + 1) % n], len = Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]), h = dirs[i];
-    for (let k = 1; k < len; k++) tiles.push({ x: a[0] + DIRS[h][0] * k, y: a[1] + DIRS[h][1] * k, hin: h, hout: h, type: 'F' });
-    const hout = dirs[(i + 1) % n];
-    tiles.push({ x: b[0], y: b[1], hin: h, hout, type: (h + 1) % 4 === hout ? 'R' : 'L' });
-  }
-  return tiles;   // tiles[0] is the first straight after V[0]: the finish tile
-}
-
+// ---- Spline courses dressed with Kenney models (CC0, kenney.nl) ----
 function cloneModel(name) {
   const m = MODELS[name].clone(true);
   m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return m;
 }
 
-function buildCourse(ci) {
-  if (courseGroup) { scene.remove(courseGroup); disposeGroup(courseGroup); }
-  const def = COURSES[ci], th = def.theme, night = th.kind === 'night';
-  const group = new THREE.Group(); courseGroup = group; scene.add(group);
-  const tiles = layoutTiles(def.loop);
-
-  // ---------- centerline from tiles ----------
-  const raw = [];
-  for (const t of tiles) {
-    const cx = t.x * TILE, cy = t.y * TILE, din = DIRS[t.hin], dout = DIRS[t.hout];
-    const ex = cx - din[0] * TILE / 2, ey = cy - din[1] * TILE / 2;
-    if (t.type === 'F') {
-      for (let s = 0; s < 40; s++) raw.push({ x: ex + din[0] * TILE * s / 40, y: ey + din[1] * TILE * s / 40 });
-    } else {
-      const ax = ex + dout[0] * TILE / 2, ay = ey + dout[1] * TILE / 2, r = TILE / 2;
-      const a0 = Math.atan2(ey - ay, ex - ax);
-      const xx = cx + dout[0] * TILE / 2, yy = cy + dout[1] * TILE / 2;
-      let da = wrapAngle(Math.atan2(yy - ay, xx - ax) - a0);
-      for (let s = 0; s < 40; s++) { const a = a0 + da * s / 40; raw.push({ x: ax + Math.cos(a) * r, y: ay + Math.sin(a) * r }); }
+function splinePts(points, closedCircle) {
+  if (closedCircle) {
+    const { r, cx, cy } = closedCircle, n = Math.round(TAU * r / SP), out = [];
+    for (let i = 0; i < n; i++) { const a = i / n * TAU; out.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r }); }
+    return out;
+  }
+  const P = points.map(([x, y]) => ({ x, y }));
+  const raw = [], np = P.length;
+  for (let i = 0; i < np; i++) {
+    const p0 = P[(i - 1 + np) % np], p1 = P[i], p2 = P[(i + 1) % np], p3 = P[(i + 2) % np];
+    for (let s = 0; s < 80; s++) {
+      const t = s / 80, t2 = t * t, t3 = t2 * t;
+      const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+      raw.push({ x: f(p0.x, p1.x, p2.x, p3.x), y: f(p0.y, p1.y, p2.y, p3.y) });
     }
   }
-  // resample to uniform spacing, starting at the middle of the finish tile
-  const startOff = 20;
-  const rot = raw.slice(startOff).concat(raw.slice(0, startOff));
-  const pts = [{ x: rot[0].x, y: rot[0].y }];
-  let prev = rot[0], need = SP;
-  for (let i = 1; i <= rot.length; i++) {
-    const cur = rot[i % rot.length];
+  const pts = [{ x: raw[0].x, y: raw[0].y }];
+  let prev = raw[0], need = SP;
+  for (let i = 1; i <= raw.length; i++) {
+    const cur = raw[i % raw.length];
     let px = prev.x, py = prev.y, seg = Math.hypot(cur.x - px, cur.y - py);
     while (seg >= need) { const t = need / seg; px += (cur.x - px) * t; py += (cur.y - py) * t; pts.push({ x: px, y: py }); seg -= need; need = SP; }
     need -= seg; prev = cur;
   }
   if (Math.hypot(pts[pts.length - 1].x - pts[0].x, pts[pts.length - 1].y - pts[0].y) < SP * 0.6) pts.pop();
+  return pts;
+}
+
+function buildCourse(ci) {
+  if (courseGroup) { scene.remove(courseGroup); disposeGroup(courseGroup); }
+  const def = ci === 'arena' ? ARENA : COURSES[ci], th = def.theme, night = th.kind === 'night', battle = !!def.battle;
+  const group = new THREE.Group(); courseGroup = group; scene.add(group);
+  ROADW = def.roadW || 120; CURB = def.curb ?? 12; WALL = def.wall || 98;
+
+  // ---------- centerline, elevation and features ----------
+  const pts = splinePts(def.points, def.circle);
   const n = pts.length, L = n * SP;
   const ang = pts.map((p, i) => { const a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n]; return Math.atan2(b.y - a.y, b.x - a.x); });
-  const ROAD_Y = 0.05 * KS;
-  const hgt = pts.map(() => ROAD_Y);
+  const curv = i => Math.abs(wrapAngle(ang[(i + 20) % n] - ang[(i - 20 + n) % n]));
+  const straightIdx = (f, win = 70) => { const base = Math.floor(n * f); let best = base, bc = 1e9; for (let o = -win; o <= win; o += 2) { const i = (base + o + n) % n, c = curv(i) + curv((i + 15) % n) + curv((i - 15 + n) % n); if (c < bc) { bc = c; best = i; } } return best; };
+  const ph1 = 0.4 + (def.seed || 0), ph2 = 1.1 + (def.seed || 0) * 1.3;
+  let hgt = pts.map((_, i) => { const t = i / n * TAU; return (def.elev || 0) * (Math.sin(t * 2 + ph1) * 0.6 + Math.sin(t * 3 + ph2) * 0.4); });
+  const h0 = hgt[0];
+  hgt = hgt.map((h, i) => lerp(h0, h, smooth(60, 400, Math.min(i, n - i) * SP)));
+  const minH = Math.min(...hgt);
+  hgt = hgt.map(h => h - minH + 4);
+  const gap = new Uint8Array(n), wallL = new Uint8Array(n).fill(1), wallR = new Uint8Array(n).fill(1);
+  const ramps = [], pads = [], gaps = [];
+  for (const g of def.gaps || []) {
+    const s = straightIdx(g.f, 90), len = g.len;
+    // ramp, then the hole
+    const r0 = (s - 10 + n) % n;
+    ramps.push({ i0: r0, len: 8, lat: 0, w: ROADW - 6, hmax: 13, big: true });
+    pads.push({ idx: (r0 - 14 + n) % n, lat: -20 }, { idx: (r0 - 14 + n) % n, lat: 20 });
+    for (let k = 0; k < len; k++) gap[(s + k) % n] = 1;
+    gaps.push({ s, len });
+  }
+  const cutsResolved = [];
+  for (const c of def.cuts || []) {
+    let s = Math.floor(n * c.f), best = -1;
+    for (let o = -60; o <= 60; o++) { const i = (Math.floor(n * c.f) + o + n) % n, cv = curv(i); if (cv > best) { best = cv; s = i; } }
+    const side = c.side || Math.sign(wrapAngle(ang[(s + 20) % n] - ang[(s - 20 + n) % n])) || 1;
+    for (let k = -c.len; k <= c.len; k++) (side > 0 ? wallR : wallL)[(s + k + n) % n] = 0;
+    cutsResolved.push({ s, side });
+  }
+  for (const f of def.ramps || []) ramps.push({ i0: straightIdx(f), len: 7, lat: 0, w: 56, hmax: 7 });
+  for (const [f, lat] of def.pads || []) pads.push({ idx: straightIdx(f, 40), lat });
   let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
   for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  const curv = i => Math.abs(wrapAngle(ang[(i + 20) % n] - ang[(i - 20 + n) % n]));
-  const straightIdx = (f, win = 70) => { const base = Math.floor(n * f); let best = base, bc = 1e9; for (let o = -win; o <= win; o += 2) { const i = (base + o + n) % n, c = curv(i) + curv((i + 12) % n) + curv((i - 12 + n) % n); if (c < bc) { bc = c; best = i; } } return best; };
-  course = { def, th, pts, ang, hgt, n, L, bounds: { minX, minY, maxX, maxY }, cx, cy, boxes: [], pads: [], ramps: [], coins: [], obstacles: [], anim: [], tiles };
+  course = { def, th, pts, ang, hgt, n, L, bounds: { minX, minY, maxX, maxY }, cx, cy, boxes: [], pads: [], ramps, coins: [], obstacles: [], anim: [], gap, gaps, wallL, wallR, battle, cars: [] };
   const lp = (i, lat) => { const p = pts[i], a = ang[i]; return [p.x - Math.sin(a) * lat, p.y + Math.cos(a) * lat]; };
 
   // ---------- sky, sun, fog ----------
@@ -989,51 +1042,206 @@ function buildCourse(ci) {
     group.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: '#ffffff', size: 14, sizeAttenuation: true, fog: false, map: sparkTex, transparent: true, depthWrite: false })));
   }
 
-  // ---------- track tiles ----------
-  const rotFor = (edges) => {
-    // corner model connects its +z and -x edges; find the y-rotation mapping them onto `edges`
-    const base = [[0, 1], [-1, 0]];
-    for (let k = 0; k < 4; k++) {
-      const th2 = k * Math.PI / 2, c = Math.round(Math.cos(th2)), s = Math.round(Math.sin(th2));
-      const m = base.map(([x, z]) => [x * c + z * s, -x * s + z * c]);
-      if (edges.every(e => m.some(q => q[0] === e[0] && q[1] === e[1]))) return th2;
+  // ---------- road ribbons (Kenney track look) ----------
+  function strip(latA, yA, latB, yB, material, vScale, opts = {}) {
+    const pos = [], uv = [], idx = [];
+    const skip = opts.skip || (() => false);
+    let vi = 0;
+    for (let j = 0; j < n; j++) {
+      const i = j, i2 = (j + 1) % n;
+      if (skip(i) || skip(i2)) continue;
+      for (const k of [i, i2]) {
+        const h = hgt[k], la = typeof latA === 'function' ? latA(k) : latA, lb = typeof latB === 'function' ? latB(k) : latB;
+        const [ax, az] = lp(k, la), [bx, bz] = lp(k, lb);
+        pos.push(ax, h + yA, az, bx, h + yB, bz);
+        const v = (k === i2 && i2 === 0 ? n : k) * SP / vScale; uv.push(0, v, 1, v);
+      }
+      idx.push(vi, vi + 1, vi + 2, vi + 1, vi + 3, vi + 2); vi += 4;
     }
-    return 0;
-  };
-  const occupied = new Set();
-  tiles.forEach((t, i) => {
-    occupied.add(t.x + ',' + t.y);
-    const name = i === 0 ? 'track-finish' : t.type === 'F' ? 'track-straight' : 'track-corner';
-    const m = cloneModel(name);
-    m.scale.setScalar(KS);
-    m.position.set(t.x * TILE, 0, t.y * TILE);
-    if (t.type === 'F') m.rotation.y = (t.hin % 2) ? Math.PI / 2 : 0;
-    else { const din = DIRS[t.hin], dout = DIRS[t.hout]; m.rotation.y = rotFor([[-din[0], -din[1]], [dout[0], dout[1]]]); }
-    group.add(m);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    if (!opts.vertical && g.attributes.normal.count && g.attributes.normal.array[1] < 0) { idx.reverse(); g.setIndex(idx); g.computeVertexNormals(); }
+    const m = new THREE.Mesh(g, material); m.receiveShadow = true; if (opts.cast) m.castShadow = true; group.add(m);
+    return m;
+  }
+  const isGap = i => gap[i] === 1;
+  const roadTex = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = th.road || '#4b4e5a'; g.fillRect(0, 0, w, h); speckle(g, w, h, 1800, 0.05);
+    if (!battle) { g.fillStyle = 'rgba(255,255,255,.85)'; g.fillRect(8, 0, 5, h); g.fillRect(w - 13, 0, 5, h); g.fillStyle = 'rgba(255,255,255,.35)'; for (let y = 0; y < h; y += 128) g.fillRect(w / 2 - 3, y, 6, 64); }
   });
-  // decoration tiles around the track
-  let gx0 = 1e9, gy0 = 1e9, gx1 = -1e9, gy1 = -1e9;
-  for (const t of tiles) { gx0 = Math.min(gx0, t.x); gy0 = Math.min(gy0, t.y); gx1 = Math.max(gx1, t.x); gy1 = Math.max(gy1, t.y); }
-  const M = 2, start = tiles[0];
-  for (let y = gy0 - M; y <= gy1 + M; y++) for (let x = gx0 - M; x <= gx1 + M; x++) {
-    if (occupied.has(x + ',' + y)) continue;
-    const nearStart = Math.abs(x - start.x) + Math.abs(y - start.y) <= 2;
-    const r = (Math.sin(x * 12.9898 + y * 78.233 + ci * 3.1) * 43758.5453) % 1;
-    const rr = Math.abs(r);
-    const name = nearStart && rr < 0.6 ? 'decoration-tents' : rr < th.forest ? 'decoration-forest' : 'decoration-empty';
-    const m = cloneModel(name);
-    m.scale.setScalar(KS); m.position.set(x * TILE, 0, y * TILE); m.rotation.y = Math.floor(rr * 97) % 4 * Math.PI / 2;
-    m.traverse(o => { if (o.isMesh) o.castShadow = false; });
-    group.add(m);
+  const curbTex = canvasTex(32, 64, (g, w, h) => { g.fillStyle = '#ef5a4c'; g.fillRect(0, 0, w, h / 2); g.fillStyle = '#f5f5f5'; g.fillRect(0, h / 2, w, h / 2); g.fillStyle = '#ffd23f'; g.fillRect(w - 7, 0, 7, h); });
+  const shoulderTex = canvasTex(128, 128, (g, w, h) => { g.fillStyle = th.shoulder; g.fillRect(0, 0, w, h); speckle(g, w, h, 700, 0.06); });
+  const lit = o => new THREE.MeshLambertMaterial(o);
+  strip(-ROADW / 2, 0, ROADW / 2, 0, lit({ map: roadTex }), battle ? ROADW : ROADW, { skip: isGap });
+  for (const s of [-1, 1]) {
+    strip(s * ROADW / 2, 0.05, s * (ROADW / 2 + CURB), 0.6, lit({ map: curbTex }), 20, { skip: isGap });
+    if (WALL > ROADW / 2 + CURB + 1) strip(s * (ROADW / 2 + CURB), 0.6, s * WALL, -0.4, lit({ map: shoulderTex }), 60, { skip: isGap });
+    // underside of the road deck (visible across gaps and from below)
+    strip(s * WALL, -0.4, s * WALL, -14, toon(th.deck || '#c9c3b8'), 50, { vertical: true, skip: isGap });
+    // white tube barriers (one tube per continuous run of wall)
+    const flags = s > 0 ? wallR : wallL, off = s * (WALL + 1.5);
+    let run = [];
+    const flush = () => {
+      if (run.length > 3) {
+        const curvePts = run.map(i => { const [x, z] = lp(i, off); return new THREE.Vector3(x, hgt[i] + 3.2, z); });
+        const closed = run.length >= n - 1;
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curvePts, closed), Math.max(8, run.length), 3.2, 8, closed), toon('#f4f4f4'));
+        tube.castShadow = true; tube.receiveShadow = true; group.add(tube);
+        const stripe = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curvePts.map(v => v.clone().setY(v.y - 1.6)), closed), Math.max(8, run.length), 3.25, 8, closed), toon(s > 0 ? '#ef5a4c' : '#4c8bf5'));
+        stripe.scale.set(1, 1, 1); group.add(stripe);
+      }
+      run = [];
+    };
+    for (let i = 0; i < n; i++) { if (flags[i] && !gap[i]) run.push(i); else flush(); }
+    flush();
   }
-  // ground beyond the tiles
+  if (!battle) {
+    const t = canvasTex(128, 16, (g) => { for (let x = 0; x < 16; x++) for (let y = 0; y < 2; y++) { g.fillStyle = (x + y) & 1 ? '#111' : '#fff'; g.fillRect(x * 8, y * 8, 8, 8); } }, false);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(ROADW, 14), lit({ map: t }));
+    m.rotation.x = -Math.PI / 2; m.rotation.z = -ang[0] - Math.PI / 2; m.position.set(pts[0].x, hgt[0] + 0.08, pts[0].y); group.add(m);
+    // Kenney finish arch
+    const arch = cloneModel('track-finish'); arch.scale.setScalar(WALL / 4.6); arch.position.set(pts[0].x, hgt[0] - 0.2, pts[0].y); arch.rotation.y = Math.PI / 2 - ang[0];
+    arch.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    // keep only the arch: hide the tile's own road by sinking it slightly under ours
+    group.add(arch);
+  }
+
+  // ---------- jump ramps ----------
+  for (const r of ramps) {
+    const prof = new THREE.Shape(); prof.moveTo(0, 0); prof.lineTo(r.len * SP, r.hmax); prof.lineTo(r.len * SP, -12); prof.lineTo(0, -1); prof.lineTo(0, 0);
+    const g = new THREE.ExtrudeGeometry(prof, { depth: r.w, bevelEnabled: false }); g.translate(0, 0, -r.w / 2);
+    const rtex = canvasTex(64, 64, (gg, ww, hh) => { gg.fillStyle = '#f2f2f2'; gg.fillRect(0, 0, ww, hh); gg.fillStyle = r.big ? '#ff9f1c' : '#ef5a4c'; gg.fillRect(0, 0, ww, hh / 2); });
+    rtex.repeat.set(0.06, 0.06);
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: rtex }));
+    const [x, z] = lp(r.i0, r.lat);
+    m.position.set(x, hgt[r.i0], z); m.rotation.y = -ang[r.i0]; m.castShadow = m.receiveShadow = true; group.add(m);
+    const atex = canvasTex(64, 64, (gg) => { gg.fillStyle = '#ffd23f'; gg.beginPath(); gg.moveTo(32, 6); gg.lineTo(58, 34); gg.lineTo(42, 34); gg.lineTo(42, 58); gg.lineTo(22, 58); gg.lineTo(22, 34); gg.lineTo(6, 34); gg.closePath(); gg.fill(); }, false);
+    const slope = Math.atan2(r.hmax, r.len * SP);
+    for (const lo of r.big ? [-28, 0, 28] : [0]) {
+      const dec = new THREE.Mesh(new THREE.PlaneGeometry(22, 22), new THREE.MeshBasicMaterial({ map: atex, transparent: true }));
+      const mid = lp((r.i0 + Math.floor(r.len / 2)) % n, r.lat + lo);
+      dec.position.set(mid[0], hgt[r.i0] + r.hmax * 0.5 + 0.3, mid[1]);
+      dec.rotation.set(-Math.PI / 2 + slope, -Math.PI / 2 - ang[r.i0], 0, 'YXZ');
+      group.add(dec);
+    }
+  }
+  // ---------- boost pads ----------
+  const padTex = canvasTex(64, 128, (g, w, h) => {
+    g.fillStyle = '#ff7a00'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffe14d';
+    for (let y = 0; y < h; y += 32) { g.beginPath(); g.moveTo(8, y + 28); g.lineTo(32, y + 6); g.lineTo(56, y + 28); g.lineTo(48, y + 32); g.lineTo(32, y + 16); g.lineTo(16, y + 32); g.closePath(); g.fill(); }
+  });
+  padTex.repeat.set(1, 1.5);
+  for (const pd of pads) {
+    const i = pd.idx, [x, z] = lp(i, pd.lat);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(22, 34), new THREE.MeshBasicMaterial({ map: padTex }));
+    m.rotation.set(-Math.PI / 2, -Math.PI / 2 - ang[i], 0, 'YXZ');
+    m.position.set(x, hgt[i] + 0.15, z); group.add(m);
+    course.pads.push({ idx: i, lat: pd.lat, tex: padTex });
+  }
+  // ---------- item boxes ----------
+  const boxGeo = new THREE.BoxGeometry(10, 10, 10);
+  const boxMat = new THREE.MeshPhongMaterial({ map: boxTex, transparent: true, opacity: 0.9, shininess: 120, emissive: 0x443355 });
+  const addBox = (x, z, h) => { const m = new THREE.Mesh(boxGeo, boxMat); m.position.set(x, h + 8, z); m.castShadow = true; group.add(m); course.boxes.push({ x, y: z, h, t: 0, mesh: m, ph: Math.random() * TAU }); };
+  if (battle) {
+    for (let k = 0; k < 24; k++) { const i = Math.floor(k / 24 * n), lat = (k % 3 - 1) * ROADW * 0.3; const [x, z] = lp(i, lat); addBox(x, z, hgt[i]); }
+  } else {
+    for (const f of def.boxes || [0.18, 0.4, 0.62, 0.84]) {
+      const i = straightIdx(f, 40);
+      for (const lat of [-36, -12, 12, 36]) { const [x, z] = lp(i, lat); addBox(x, z, hgt[i]); }
+    }
+  }
+  // ---------- coins (Kenney coin model) ----------
+  if (!battle) {
+    const list = [];
+    [0.06, 0.22, 0.38, 0.55, 0.7, 0.92].forEach((f, r) => {
+      const i0 = Math.floor(n * f), lat0 = [-30, 20, 0, -20, 30, 10][r];
+      for (let k = 0; k < 5; k++) { const i = (i0 + k * 3) % n; if (gap[i]) continue; const lat = lat0 + Math.sin(k * 0.9) * 12; const [x, z] = lp(i, lat); list.push({ x, y: z, h: hgt[i], t: 0, ph: k * 0.5 }); }
+    });
+    // coin trail hints at shortcuts
+    for (const c of cutsResolved) {
+      for (let k = -2; k <= 2; k++) { const i = (c.s + k * 4 + n) % n; const [x, z] = lp(i, c.side * (WALL + 40)); list.push({ x, y: z, h: 0, t: 0, ph: k * 0.5, cut: true }); }
+    }
+    for (const c of list) { const m = cloneModel('coin'); m.scale.setScalar(16); m.position.set(c.x, c.h + 2, c.y); group.add(m); c.mesh = m; }
+    course.coins = list;
+  }
+  // ---------- traffic (Kenney trucks driving along the course) ----------
+  for (let k = 0; k < (def.traffic || 0); k++) {
+    const name = ['vehicle-truck-yellow', 'vehicle-truck-green', 'vehicle-truck-purple', 'vehicle-truck-red'][k % 4];
+    const m = cloneModel(name); m.scale.setScalar(VS * 1.45); group.add(m);
+    course.cars.push({ mesh: m, idx: Math.floor((k + 0.5) / def.traffic * n), lat: k % 2 ? 26 : -26, sp: rand(95, 125), x: 0, y: 0, h: 0, a: 0 });
+  }
+
+  // ---------- terrain ----------
+  const nearestFull = (x, z) => {
+    let bi = 0, bd = 1e18;
+    for (let i = 0; i < n; i += 5) { const d = (pts[i].x - x) ** 2 + (pts[i].y - z) ** 2; if (d < bd) { bd = d; bi = i; } }
+    for (let o = -5; o <= 5; o++) { const i = (bi + o + n) % n, d = (pts[i].x - x) ** 2 + (pts[i].y - z) ** 2; if (d < bd) { bd = d; bi = i; } }
+    return [bi, Math.sqrt(bd)];
+  };
+  const TSZ = 3400, GRID = 160;
+  const terrainH = (x, z) => {
+    const [bi, d] = nearestFull(x, z);
+    if (battle) return d < WALL + 4 ? hgt[bi] - 3 : lerp(hgt[bi] - 3, 0, smooth(WALL, WALL + 200, d));
+    const near = gap[bi] ? hgt[bi] - 150 : hgt[bi] - 3;
+    return lerp(near, 0, smooth(gap[bi] ? WALL + 60 : WALL + 4, WALL + 280, d));
+  };
+  course.terrainH = terrainH;
+  for (const c of course.coins) if (c.cut) c.h = terrainH(c.x, c.y);
   {
+    const g = new THREE.PlaneGeometry(TSZ, TSZ, GRID, GRID); g.rotateX(-Math.PI / 2); g.translate(cx, 0, cy);
+    const pos = g.attributes.position, col = new Float32Array(pos.count * 3);
+    const c0 = new THREE.Color(th.ground), c1 = new THREE.Color(th.ground).multiplyScalar(0.88), cc = new THREE.Color(), water = new THREE.Color(th.water || '#3aa0ff'), dirt = new THREE.Color('#c48a52');
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i), y = terrainH(x, z);
+      pos.setY(i, y);
+      cc.copy(c0).lerp(c1, (Math.sin(x * 0.013) * Math.sin(z * 0.011) + 1) / 2);
+      if (y < -20) cc.copy(dirt).lerp(water, clamp((-y - 60) / 40, 0, 1));
+      col.set([cc.r, cc.g, cc.b], i * 3);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })); m.receiveShadow = true; group.add(m);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000), new THREE.MeshLambertMaterial({ color: th.ground }));
-    ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.5, cy); ground.receiveShadow = true; group.add(ground);
+    ground.rotation.x = -Math.PI / 2; ground.position.set(cx, -0.8, cy); group.add(ground);
+    for (const gp of gaps) {
+      const i = (gp.s + Math.floor(gp.len / 2)) % n;
+      const w = new THREE.Mesh(new THREE.CircleGeometry(WALL + 70, 32), new THREE.MeshPhongMaterial({ color: th.water || '#3aa0ff', shininess: 90, transparent: true, opacity: 0.88 }));
+      w.rotation.x = -Math.PI / 2; w.position.set(pts[i].x, hgt[i] - 120, pts[i].y); group.add(w);
+    }
   }
-  // distant hills + clouds
+  // ---------- decoration: Kenney forest/tent tiles far from the track, pines nearer ----------
+  if (!battle) {
+    const T = 160;
+    for (let gx = Math.floor((cx - 1500) / T); gx <= Math.ceil((cx + 1500) / T); gx++) for (let gz = Math.floor((cy - 1500) / T); gz <= Math.ceil((cy + 1500) / T); gz++) {
+      const x = gx * T, z = gz * T, [, d] = nearestFull(x, z);
+      if (d < WALL + 330) continue;
+      const rr = Math.abs((Math.sin(gx * 12.9898 + gz * 78.233 + ci * 3.1) * 43758.5453) % 1);
+      if (rr > th.forest + 0.25) continue;
+      const name = rr < 0.08 ? 'decoration-tents' : rr < th.forest ? 'decoration-forest' : 'decoration-empty';
+      const m = cloneModel(name); m.scale.setScalar(T / 10); m.position.set(x, 0.2, z); m.rotation.y = Math.floor(rr * 97) % 4 * Math.PI / 2;
+      m.traverse(o => { if (o.isMesh) o.castShadow = false; });
+      group.add(m);
+    }
+    const spots = [];
+    for (let tries = 0; tries < 2400 && spots.length < 220; tries++) {
+      const x = rand(cx - 1300, cx + 1300), z = rand(cy - 1300, cy + 1300);
+      const [bi, d] = nearestFull(x, z);
+      if (d > WALL + 30 && d < WALL + 330 && !gap[bi]) spots.push({ x, z, y: terrainH(x, z), s: rand(0.9, 1.6), r: rand(0, TAU) });
+    }
+    const dummy = new THREE.Object3D();
+    const inst = (geo, material, fn) => {
+      const im = new THREE.InstancedMesh(geo, material, spots.length); im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
+      spots.forEach((s, i) => { fn(dummy, s); dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix); });
+      group.add(im);
+    };
+    const place = (yOff) => (d, s) => { d.position.set(s.x, s.y + yOff * s.s, s.z); d.scale.setScalar(s.s); d.rotation.set(0, s.r, 0); };
+    inst(new THREE.CylinderGeometry(2, 2.6, 10, 6), toon('#c4733b'), place(5));
+    inst(new THREE.ConeGeometry(13, 22, 6), toon(th.tree || '#2fae6c'), place(18));
+    inst(new THREE.ConeGeometry(9.5, 17, 6), toon(th.tree2 || '#3cc47c'), place(30));
+  }
+  // ---------- distant hills + clouds ----------
   {
-    const mm = new THREE.MeshLambertMaterial({ color: th.hill, flatShading: true, fog: true });
+    const mm = new THREE.MeshLambertMaterial({ color: th.hill, flatShading: true });
     for (let i = 0; i < 30; i++) {
       const a = i / 30 * TAU + rand(-0.05, 0.05), r = rand(2900, 3500), hh = rand(260, 620), rr = rand(400, 700);
       const h = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6, 0, TAU, 0, Math.PI / 2), mm);
@@ -1050,69 +1258,15 @@ function buildCourse(ci) {
       }
     }
   }
-
-  // ---------- jump ramps ----------
-  for (const f of def.ramps) {
-    const i0 = straightIdx(f), len = 7, w = 56, hmax = 7, lat = 0;
-    course.ramps.push({ i0, len, lat, w, hmax });
-    const prof = new THREE.Shape(); prof.moveTo(0, 0); prof.lineTo(len * SP, hmax); prof.lineTo(len * SP, 0); prof.lineTo(0, 0);
-    const g = new THREE.ExtrudeGeometry(prof, { depth: w, bevelEnabled: false }); g.translate(0, 0, -w / 2);
-    const rtex = canvasTex(64, 64, (gg, ww, hh) => { gg.fillStyle = '#f2f2f2'; gg.fillRect(0, 0, ww, hh); gg.fillStyle = '#ef5a4c'; gg.fillRect(0, 0, ww, hh / 2); });
-    rtex.repeat.set(0.06, 0.06);
-    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: rtex }));
-    const [x, z] = lp(i0, lat);
-    m.position.set(x, hgt[i0], z); m.rotation.y = -ang[i0]; m.castShadow = m.receiveShadow = true; group.add(m);
-    const atex = canvasTex(64, 64, (gg) => { gg.fillStyle = '#ffd23f'; gg.beginPath(); gg.moveTo(32, 6); gg.lineTo(58, 34); gg.lineTo(42, 34); gg.lineTo(42, 58); gg.lineTo(22, 58); gg.lineTo(22, 34); gg.lineTo(6, 34); gg.closePath(); gg.fill(); }, false);
-    const slope = Math.atan2(hmax, len * SP);
-    const dec = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshBasicMaterial({ map: atex, transparent: true }));
-    const mid = lp((i0 + 3) % n, lat);
-    dec.position.set(mid[0], hgt[i0] + hmax * 0.5 + 0.3, mid[1]);
-    dec.rotation.set(-Math.PI / 2 + slope, -Math.PI / 2 - ang[i0], 0, 'YXZ');
-    group.add(dec);
-  }
-  // ---------- boost pads ----------
-  const padTex = canvasTex(64, 128, (g, w, h) => {
-    g.fillStyle = '#ff7a00'; g.fillRect(0, 0, w, h); g.fillStyle = '#ffe14d';
-    for (let y = 0; y < h; y += 32) { g.beginPath(); g.moveTo(8, y + 28); g.lineTo(32, y + 6); g.lineTo(56, y + 28); g.lineTo(48, y + 32); g.lineTo(32, y + 16); g.lineTo(16, y + 32); g.closePath(); g.fill(); }
-  });
-  padTex.repeat.set(1, 1.5);
-  [[0.1, 0], [0.3, -22], [0.46, 22], [0.63, -22], [0.88, 22]].forEach(([f, lat]) => {
-    const i = straightIdx(f, 40);
-    const [x, z] = lp(i, lat);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(20, 32), new THREE.MeshBasicMaterial({ map: padTex }));
-    m.rotation.set(-Math.PI / 2, -Math.PI / 2 - ang[i], 0, 'YXZ');
-    m.position.set(x, hgt[i] + 0.15, z); group.add(m);
-    course.pads.push({ idx: i, lat, tex: padTex });
-  });
-  // ---------- item boxes ----------
-  const boxGeo = new THREE.BoxGeometry(10, 10, 10);
-  const boxMat = new THREE.MeshPhongMaterial({ map: boxTex, transparent: true, opacity: 0.9, shininess: 120, emissive: 0x443355 });
-  for (const f of [0.18, 0.4, 0.58, 0.8]) {
-    const i = straightIdx(f, 40);
-    for (const lat of [-33, -11, 11, 33]) {
-      const [x, z] = lp(i, lat);
-      const m = new THREE.Mesh(boxGeo, boxMat); m.position.set(x, hgt[i] + 8, z); m.castShadow = true; group.add(m);
-      course.boxes.push({ x, y: z, h: hgt[i], t: 0, mesh: m, ph: Math.random() * TAU });
+  // ---------- flags, balloons, lamps, grandstand ----------
+  {
+    for (let i = 30; i < n; i += 70) {
+      if (gap[i]) continue;
+      const side = (i / 70 | 0) % 2 ? 1 : -1, [x, z] = lp(i, side * (WALL + 14));
+      const f = cloneModel('flag'); f.scale.setScalar(26); f.position.set(x, hgt[i], z); f.rotation.y = rand(0, TAU); group.add(f);
     }
-  }
-  // ---------- coins (Kenney coin model) ----------
-  {
-    const list = [];
-    [0.06, 0.22, 0.38, 0.55, 0.7, 0.92].forEach((f, r) => {
-      const i0 = Math.floor(n * f), lat0 = [-26, 18, 0, -18, 26, 10][r];
-      for (let k = 0; k < 5; k++) { const i = (i0 + k * 3) % n, lat = lat0 + Math.sin(k * 0.9) * 10; const [x, z] = lp(i, lat); list.push({ x, y: z, h: hgt[i], t: 0, ph: k * 0.5 }); }
-    });
-    for (const c of list) { const m = cloneModel('coin'); m.scale.setScalar(16); m.position.set(c.x, c.h + 2, c.y); group.add(m); c.mesh = m; }
-    course.coins = list;
-  }
-  // ---------- flags and balloons ----------
-  {
-    for (let k = 0; k < tiles.length; k += 3) {
-      const t = tiles[k]; if (t.type !== 'F' || k === 0) continue;
-      const din = DIRS[t.hin], side = (k / 3) % 2 ? 1 : -1;
-      const f = cloneModel('flag'); f.scale.setScalar(KS * 1.6);
-      f.position.set(t.x * TILE + din[1] * side * TILE * 0.47, 0, t.y * TILE - din[0] * side * TILE * 0.47);
-      f.rotation.y = rand(0, TAU); group.add(f);
+    if (!battle) {
+      const stand = cloneModel('decoration-tents'); stand.scale.setScalar(16); const [sx2, sz2] = lp(0, WALL + 95); stand.position.set(sx2, 0.2, sz2); stand.rotation.y = Math.PI / 2 - ang[0]; group.add(stand);
     }
     if (!night) ['#ff5d73', '#ffd23f', '#4cc9ff', '#3ddc97', '#b388ff'].forEach((col, i) => {
       const b = new THREE.Group(), p = new PB();
@@ -1125,21 +1279,27 @@ function buildCourse(ci) {
       course.anim.push(tt => { b.position.y = y0 + Math.sin(tt * 0.5 + ph) * 12; b.rotation.y = tt * 0.1; });
     });
     if (night) {
-      // street lamps along the track
-      for (let k = 1; k < tiles.length; k += 2) {
-        const t = tiles[k], din = DIRS[t.hin];
+      for (let i = 0; i < n; i += 40) {
+        if (gap[i]) continue;
         for (const side of [-1, 1]) {
-          const x = t.x * TILE + din[1] * side * TILE * 0.49, z = t.y * TILE - din[0] * side * TILE * 0.49;
+          const [x, z] = lp(i, side * (WALL + 8));
           const p = new PB();
           p.add(GEO.cyl, '#3a3f5c', [0, 18, 0], 0, [0.8, 36, 0.8]);
           p.add(GEO.box, '#3a3f5c', [0, 36, 0], 0, [3, 2, 3]);
-          const pole = p.mesh(toonV(), false); pole.position.set(x, 0, z); group.add(pole);
+          const pole = p.mesh(toonV(), false); pole.position.set(x, hgt[i], z); group.add(pole);
           const lamp = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex, color: '#ffd98a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-          lamp.scale.setScalar(26); lamp.position.set(x, 35, z); group.add(lamp);
-          const pool = new THREE.Mesh(new THREE.CircleGeometry(30, 20), new THREE.MeshBasicMaterial({ map: sparkTex, color: '#ffcf7a', transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
-          pool.rotation.x = -Math.PI / 2; pool.position.set(x - din[1] * side * 18, 1.2, z + din[0] * side * 18); group.add(pool);
+          lamp.scale.setScalar(26); lamp.position.set(x, hgt[i] + 35, z); group.add(lamp);
+          const [px, pz] = lp(i, side * (WALL - 18));
+          const pool = new THREE.Mesh(new THREE.CircleGeometry(30, 20), new THREE.MeshBasicMaterial({ map: sparkTex, color: '#ffcf7a', transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending }));
+          pool.rotation.x = -Math.PI / 2; pool.position.set(px, hgt[i] + 0.4, pz); group.add(pool);
         }
       }
+    }
+    if (battle) {
+      const pillar = new PB();
+      pillar.add(GEO.cyl, '#f4f4f4', [0, 25, 0], 0, [def.circle.r - WALL - 4, 50, def.circle.r - WALL - 4]);
+      pillar.add(GEO.cyl, '#ef5a4c', [0, 52, 0], 0, [def.circle.r - WALL + 2, 6, def.circle.r - WALL + 2]);
+      const pm = pillar.mesh(toonV()); pm.position.set(def.circle.cx, hgt[0], def.circle.cy); group.add(pm);
     }
   }
 }
@@ -1158,6 +1318,12 @@ function rampAt(i, t, lat) {
     if (d >= 0 && d <= r.len && Math.abs(lat - r.lat) < r.w / 2) return r.hmax * d / r.len;
   }
   return 0;
+}
+function nearestGlobal(x, y) {
+  const { pts, n } = course;
+  let best = 0, bd = 1e18;
+  for (let i = 0; i < n; i += 3) { const p = pts[i], d = (p.x - x) ** 2 + (p.y - y) ** 2; if (d < bd) { bd = d; best = i; } }
+  return nearestIdx(x, y, best);
 }
 function trackH(x, y, i) {
   const { hgt, n } = course, t = alongOf(x, y, i);
@@ -1181,47 +1347,83 @@ let shakeT = 0;
 const charAt = i => i === CHARS.length ? myChar : CHARS[i];
 const statsOf = c => FRAMES[c.frame];
 
+let mode = store.get('mode') || 'vs';
+let raceClass = store.get('class') || 100;
+let gp = null;            // { round, courses, roster, points }
+let battleT = 0, endT = 0;
+let ghost = null;         // { frames, model } replay of the best time-attack run
+let rec = null, recT = 0; // current time-attack recording
+let prevRank = 7, rankCd = 0;
+
 function makeKart(c, isPlayer, slot) {
   const { pts, ang, n } = course;
-  const back = 30 + Math.floor(slot / 2) * 26 + (slot % 2) * 13;
-  const idx = (n - Math.round(back / SP)) % n;
+  let idx, lat;
+  if (course.battle) { idx = Math.floor(slot / 8 * n); lat = 0; }
+  else {
+    const back = 30 + Math.floor(slot / 2) * 26 + (slot % 2) * 13;
+    idx = (n - Math.round(back / SP)) % n; lat = slot % 2 ? 24 : -24;
+  }
   const p = pts[idx], a = ang[idx];
-  const lat = slot % 2 ? 24 : -24;
-  const model = buildKart(c); scene.add(model);
+  const model = buildKart(c, course.battle); scene.add(model);
   const st = statsOf(c);
   return {
     ch: c, st, isPlayer, model, x: p.x - Math.sin(a) * lat, y: p.y + Math.cos(a) * lat, h: course.hgt[idx], angle: a, speed: 0, slip: 0,
     idx, total: (idx - n) * SP, lat, lastLap: 0, finished: false, finishTime: Infinity, rank: slot, steerVis: 0,
     item: null, itemCount: 0, rollT: 0, spinT: 0, spinA: 0, boostT: 0, starT: 0, hopT: 0, smallT: 0, coins: 0, squash: 0, goldT: 0, shieldT: 0, inkT: 0,
-    air: false, vy: 0, airT: 0, trick: false, trickT: 0, prevRamp: 0, cheerT: 0, lookBackT: 0,
+    air: false, vy: 0, airT: 0, trick: false, trickT: 0, prevRamp: 0, cheerT: 0, lookBackT: 0, respawnT: 0,
     drifting: false, driftDir: 0, driftCharge: 0, driftHeld: false, wallCd: 0, wrongT: 0,
-    skill: isPlayer ? 1 : rand(0.94, 1.0), laneOff: rand(-30, 30), laneT: rand(1, 4), itemT: rand(1, 4),
+    balloons: 3, out: false, hits: 0, lapTimes: [],
+    skill: isPlayer ? 1 : rand(0.95, 1.0) * CLASSES[raceClass].ai, laneOff: rand(-30, 30), laneT: rand(1, 4), itemT: rand(1, 4),
+    wander: null,
   };
 }
 function clearRace() {
   for (const k of karts) { scene.remove(k.model); disposeGroup(k.model); }
   for (const e of entities) scene.remove(e.mesh);
+  if (ghost && ghost.model) { scene.remove(ghost.model); disposeGroup(ghost.model); ghost.model = null; }
   karts = []; entities = []; particles = []; messages = []; clearSkids();
 }
-function setupRace(ci, playerChar, demo = false) {
+function setupRace(ci, playerChar, demo = false, roster = null) {
   clearRace();
   buildCourse(ci);
-  const pool = CHARS.filter(c => c.id !== playerChar.id).sort(() => Math.random() - 0.5).slice(0, 7);
-  for (let s = 0, o = 0; s < 8; s++) {
-    if (s === 6) karts.push(player = makeKart(playerChar, !demo, s));
-    else karts.push(makeKart(pool[o++], false, s));
+  if (mode === 'ta' && !demo) {
+    karts.push(player = makeKart(playerChar, true, 6));
+    for (const b of course.boxes) { b.mesh.visible = false; b.t = 1e9; }
+    player.item = 'triple'; player.itemCount = 3;
+    const g = store.get('ghost_' + ci + '_' + raceClass);
+    ghost = g ? { frames: g.f, time: g.t, char: g.c } : null;
+    if (ghost) {
+      const gc = g.c === 'my' ? myChar : (CHARS.find(c => c.id === g.c) || CHARS[0]);
+      ghost.model = buildKart(gc); ghost.model.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.4; o.material.depthWrite = false; } o.castShadow = false; });
+      scene.add(ghost.model);
+    }
+    rec = []; recT = 0;
+  } else {
+    const pool = roster ? roster.filter(c => c.id !== playerChar.id) : CHARS.filter(c => c.id !== playerChar.id).sort(() => Math.random() - 0.5).slice(0, 7);
+    for (let s = 0, o = 0; s < 8; s++) {
+      if (s === 6) karts.push(player = makeKart(playerChar, !demo, s));
+      else karts.push(makeKart(pool[o++], false, s));
+    }
+    ghost = null; rec = null;
   }
-  raceTime = 0; doneTimer = 0; finishOrder = 0; flashT = 0;
+  raceTime = 0; doneTimer = 0; finishOrder = 0; flashT = 0; battleT = 120; endT = 0; prevRank = player.rank; rankCd = 0;
   cam.a = player.angle; cam.y = 0;
 }
+function currentCourseIndex() { return mode === 'battle' ? 'arena' : mode === 'gp' ? gp.courses[gp.round] : selCourse; }
 function startRace() {
-  store.set('char', selChar); store.set('course', selCourse);
-  setupRace(selCourse, charAt(selChar));
+  store.set('char', selChar); store.set('course', selCourse); store.set('mode', mode); store.set('class', raceClass);
+  if (mode === 'gp' && !gp) newGP();
+  setupRace(currentCourseIndex(), charAt(selChar), false, gp ? gp.roster : null);
   countdown = 4.2; state = 'countdown';
   Sound.init(); Music.stop();
   showScreen(null);
   document.getElementById('topbtns').classList.remove('hidden');
   if (isTouch) document.getElementById('touch').classList.remove('hidden');
+}
+function newGP() {
+  const me = charAt(selChar);
+  const roster = [me, ...CHARS.filter(c => c.id !== me.id).sort(() => Math.random() - 0.5).slice(0, 7)];
+  gp = { round: 0, courses: [0, 1, 2, 3], roster, points: new Map(roster.map(c => [c.id, 0])) };
 }
 function say(text, color = '#fff', dur = 1.6) { messages.push({ text, color, t: dur, max: dur }); }
 
@@ -1270,9 +1472,10 @@ function aiInput(k, dt) {
     const dx = e.x - k.x, dy = e.y - k.y, fwd = dx * Math.cos(k.angle) + dy * Math.sin(k.angle);
     if (fwd > 0 && fwd < 90 && Math.abs(dx * -Math.sin(k.angle) + dy * Math.cos(k.angle)) < 14 && Math.random() < 0.6) k.laneOff = latOf(e.x, e.y, k.idx) > 0 ? -30 : 30;
   }
-  for (const o of course.obstacles) {
+  if (course.battle) return aiBattle(k, dt);
+  for (const o of course.cars.concat(course.obstacles)) {
     const dx = o.x - k.x, dy = o.y - k.y, fwd = dx * Math.cos(k.angle) + dy * Math.sin(k.angle);
-    if (fwd > 0 && fwd < 110 && Math.abs(dx * -Math.sin(k.angle) + dy * Math.cos(k.angle)) < o.r + 10) { const ol = latOf(o.x, o.y, k.idx); k.laneOff = ol > 0 ? ol - o.r - 22 : ol + o.r + 22; k.laneT = 1; }
+    if (fwd > 0 && fwd < 130 && Math.abs(dx * -Math.sin(k.angle) + dy * Math.cos(k.angle)) < (o.r || 14) + 12) { const ol = latOf(o.x, o.y, k.idx); k.laneOff = clamp(ol > 0 ? ol - (o.r || 14) - 26 : ol + (o.r || 14) + 26, -44, 44); k.laneT = 1; }
   }
   const look = 10 + Math.floor(Math.abs(k.speed) / 28);
   const ti = (k.idx + look) % n, tp = pts[ti], ta = ang[ti];
@@ -1294,6 +1497,41 @@ function aiInput(k, dt) {
   }
   if (k.air) return { accel: true, brake: false, steer: clamp(diff * 2.6, -1, 1), drift: k.aiTrick && k.airT > 0.06 && k.airT < 0.2 };
   return { accel, brake, steer: clamp(diff * 2.6, -1, 1), drift: wantDrift || (k.drifting && curve > 0.4) };
+}
+
+function aiBattle(k, dt) {
+  if (k.out) return { accel: false, brake: false, steer: 0, drift: false };
+  let tx, ty;
+  const foe = nearestFoe(k);
+  k.laneT -= dt;
+  if (!k.item && k.rollT <= 0) {
+    let bb = null, bd = 1e18;
+    for (const b of course.boxes) { if (b.t > 0) continue; const d = (b.x - k.x) ** 2 + (b.y - k.y) ** 2; if (d < bd) { bd = d; bb = b; } }
+    if (bb) { tx = bb.x; ty = bb.y; }
+  }
+  if (tx === undefined && foe) { tx = foe.x + Math.cos(foe.angle) * foe.speed * 0.4; ty = foe.y + Math.sin(foe.angle) * foe.speed * 0.4; }
+  if (tx === undefined) { if (!k.wander || k.laneT <= 0) { const p = course.pts[Math.floor(Math.random() * course.n)]; k.wander = p; k.laneT = 3; } tx = k.wander.x; ty = k.wander.y; }
+  // steer around the central pillar
+  const c = course.def.circle, pr = c.r - WALL + 20;
+  const vx = tx - k.x, vy = ty - k.y, len = Math.hypot(vx, vy) || 1, ox = c.cx - k.x, oy = c.cy - k.y;
+  const along = (ox * vx + oy * vy) / len, perp = (ox * vy - oy * vx) / len;
+  if (along > 0 && along < len && Math.abs(perp) < pr) { const sgn = perp > 0 ? -1 : 1; tx = c.cx + (-vy / len) * sgn * (pr + 40); ty = c.cy + (vx / len) * sgn * (pr + 40); }
+  const diff = wrapAngle(Math.atan2(ty - k.y, tx - k.x) - k.angle);
+  if (k.item && k.rollT <= 0) {
+    k.itemT -= dt;
+    if (k.itemT <= 0) {
+      const it = k.item, f2 = foe ? Math.hypot(foe.x - k.x, foe.y - k.y) : 1e9;
+      const ahead = foe && Math.abs(wrapAngle(Math.atan2(foe.y - k.y, foe.x - k.x) - k.angle)) < 0.35;
+      const behind = foe && Math.abs(wrapAngle(Math.atan2(foe.y - k.y, foe.x - k.x) - k.angle)) > 2.3;
+      let use = false;
+      if (['rocket', 'ball', 'bomb', 'missile'].includes(it)) use = ahead && f2 < 320;
+      else if (it === 'banana' || it === 'fake') use = behind && f2 < 160;
+      else use = true;
+      if (use) useItem(k);
+      k.itemT = it === 'triple' || it === 'golden' ? 0.7 : rand(0.3, 1.2);
+    }
+  }
+  return { accel: true, brake: Math.abs(diff) > 2.2 && k.speed > 120, steer: clamp(diff * 2.4, -1, 1), drift: Math.abs(diff) > 0.7 && k.speed > 160 };
 }
 
 // ============================================================
@@ -1321,11 +1559,11 @@ function useItem(k) {
     entities.push({ type: 'bomb', x: k.x + fx * 16, y: k.y + fy * 16, a: k.angle, sp: Math.max(160, k.speed + 80), z: 8, vz: 90, idx: k.idx, owner: k, age: 0, fuse: 2.2, mesh });
     if (k.isPlayer) Sound.beep(250, 0.2, 'triangle', 0.12, 150);
   } else if (it === 'ink') {
-    for (const o of karts) if (o !== k && o.total > k.total - 50) o.inkT = 4.5;
+    for (const o of karts) if (o !== k && !o.out && (course.battle || o.total > k.total - 50)) o.inkT = 4.5;
     Sound.noise(0.5, 0.3, 500, null, null, 'lowpass');
     if (k.isPlayer) say('スミをはいた！', '#b388ff', 1.2); else if (player && player.inkT > 0) say(`${k.ch.name}のスミ！`, '#b388ff', 1.2);
   } else if (it === 'missile') {
-    const leader = karts.filter(o => o !== k && !o.finished).sort((a, b) => b.total - a.total)[0] || null;
+    const leader = course.battle ? karts.filter(o => o !== k && !o.out).sort((a, b) => b.balloons - a.balloons)[0] || null : karts.filter(o => o !== k && !o.finished).sort((a, b) => b.total - a.total)[0] || null;
     const mesh = missileMesh(); scene.add(mesh);
     entities.push({ type: 'missile', x: k.x + fx * 16, y: k.y + fy * 16, a: k.angle, idx: k.idx, target: leader, owner: k, age: 0, mesh, z: 18 });
     if (k.isPlayer) { Sound.beep(400, 0.5, 'sawtooth', 0.12, 800); say('1位をねらえ！', '#4cc9ff', 1); }
@@ -1341,7 +1579,7 @@ function useItem(k) {
     entities.push({ type: 'banana', x: k.x - fx * 20, y: k.y - fy * 20, idx: k.idx, owner: k, age: 0, mesh });
     if (k.isPlayer) Sound.beep(300, 0.1, 'triangle');
   } else if (it === 'rocket') {
-    const ahead = karts.filter(o => o !== k && !o.finished && o.total > k.total).sort((a, b) => a.total - b.total)[0] || null;
+    const ahead = course.battle ? nearestFoe(k, 0.6) : (karts.filter(o => o !== k && !o.finished && o.total > k.total).sort((a, b) => a.total - b.total)[0] || null);
     const mesh = rocketMesh(); scene.add(mesh);
     entities.push({ type: 'rocket', x: k.x + fx * 16, y: k.y + fy * 16, a: k.angle, idx: k.idx, target: ahead, owner: k, age: 0, mesh });
     if (k.isPlayer) Sound.beep(500, 0.4, 'sawtooth', 0.12, 600);
@@ -1350,16 +1588,31 @@ function useItem(k) {
     entities.push({ type: 'ball', x: k.x + fx * 16, y: k.y + fy * 16, a: k.angle, idx: k.idx, owner: k, age: 0, mesh, bounces: 0 });
     if (k.isPlayer) Sound.beep(400, 0.15, 'square', 0.12, 200);
   } else if (it === 'thunder') {
-    for (const o of karts) if (o !== k) { spinOut(o, true); o.smallT = 4; }
+    for (const o of karts) if (o !== k && !o.out) { spinOut(o, true, k); o.smallT = 4; }
     flashT = 0.35; Sound.noise(0.8, 0.45, 300); Sound.beep(90, 0.6, 'sawtooth', 0.2, -40);
     if (k.isPlayer) say('カミナリ！', '#ffe14d', 1.2);
     else if (player) say(`${k.ch.name}のカミナリ！`, '#ffe14d', 1.2);
   }
 }
-function spinOut(k, silent) {
-  if (k.starT > 0 || k.spinT > 0) return;
+function spinOut(k, silent, by) {
+  if (k.starT > 0 || k.spinT > 0 || k.out || k.respawnT > 0) return;
   if (k.shieldT > 0) { k.shieldT = 0; if (k.isPlayer) { Sound.beep(1200, 0.2, 'square', 0.1, -600); say('バリアでガード！', '#4cc9ff', 1); } for (let i = 0; i < 16; i++) spawn(k.x, k.h + 8, k.y, rand(-50, 50), rand(10, 60), rand(-50, 50), 0.5, '#7fe3ff', 4, 60); return; }
   k.spinT = 1.2; k.drifting = false; k.driftCharge = 0; k.boostT = 0; k.hopT = 0.3;
+  if (by && by !== k) {
+    by.hits++;
+    if (by.isPlayer) { say('HIT!', '#ff5d73', 0.8); Sound.beep(1400, 0.08, 'square', 0.1); Sound.beep(1900, 0.12, 'square', 0.08); }
+  }
+  if (course.battle) {
+    k.balloons--;
+    const u = k.model.userData;
+    if (u.balloons && u.balloons[k.balloons]) { const b = u.balloons[k.balloons]; const wp = new THREE.Vector3(); b.getWorldPosition(wp); for (let i = 0; i < 14; i++) spawn(wp.x, wp.y, wp.z, rand(-40, 40), rand(-10, 40), rand(-40, 40), 0.5, '#' + b.material.color.getHexString(), 4, 60); }
+    Sound.beep(900, 0.06, 'square', 0.1, -500);
+    if (k.balloons <= 0) {
+      k.out = true; k.item = null;
+      for (let i = 0; i < 30; i++) spawn(k.x, k.h + 8, k.y, rand(-40, 40), rand(20, 60), rand(-40, 40), 0.9, '#888888', 7, 20);
+      say(k.isPlayer ? 'ふうせんが なくなった…' : `${k.ch.name} だつらく！`, k.isPlayer ? '#ff8fa3' : '#ffffff', 1.4);
+    }
+  }
   const lost = Math.min(3, k.coins); k.coins -= lost;
   for (let i = 0; i < lost; i++) spawn(k.x, k.h + 8, k.y, rand(-40, 40), rand(40, 80), rand(-40, 40), 0.8, '#ffcc22', 5, 140);
   if (k.isPlayer) { Sound.beep(600, 0.6, 'square', 0.12, -450); shakeT = 0.35; if (!silent) say('スピン！', '#ff8fa3', 1); }
@@ -1369,10 +1622,10 @@ function explode(x, y, h) {
   for (let i = 0; i < 40; i++) { const a = rand(0, TAU), sp = rand(20, 90); spawn(x, h + 5, y, Math.cos(a) * sp, rand(20, 70), Math.sin(a) * sp, rand(0.4, 0.9), ['#ff6b35', '#ffd23f', '#777777', '#ff3d3d'][i % 4], rand(4, 9), 80); }
   Sound.noise(0.35, 0.3, 300);
 }
-function blast(x, y, h, r) {
+function blast(x, y, h, r, by) {
   explode(x, y, h);
   for (let i = 0; i < 30; i++) { const a = rand(0, TAU); spawn(x + Math.cos(a) * r * 0.6, h + 4, y + Math.sin(a) * r * 0.6, Math.cos(a) * 60, rand(30, 90), Math.sin(a) * 60, 0.7, i % 2 ? '#ff9f1c' : '#ffe14d', rand(6, 11), 60); }
-  for (const k of karts) if ((k.x - x) ** 2 + (k.y - y) ** 2 < r * r) { spinOut(k); k.vyKick = 1; }
+  for (const k of karts) if ((k.x - x) ** 2 + (k.y - y) ** 2 < r * r) spinOut(k, false, by);
   if (player && (player.x - x) ** 2 + (player.y - y) ** 2 < (r * 4) ** 2) shakeT = 0.4;
   Sound.noise(0.6, 0.4, 200);
 }
@@ -1396,7 +1649,7 @@ function updateEntities(dt) {
       const lat = latOf(e.x, e.y, e.idx);
       if (Math.abs(lat) > WALL - 8) { const ta = ang[e.idx], over = lat - Math.sign(lat) * (WALL - 8); e.x -= -Math.sin(ta) * over; e.y -= Math.cos(ta) * over; }
       e.fuse -= dt;
-      if (e.fuse <= 0) { e.dead = true; blast(e.x, e.y, e.h, 46); }
+      if (e.fuse <= 0) { e.dead = true; blast(e.x, e.y, e.h, 46, e.owner); }
     } else if (e.type === 'missile') {
       const tgt = e.target && !e.target.finished ? e.target : null;
       let tx, ty;
@@ -1406,7 +1659,7 @@ function updateEntities(dt) {
       const v = tgt ? 560 : 420;
       e.x += Math.cos(e.a) * v * dt; e.y += Math.sin(e.a) * v * dt;
       spawn(e.x - Math.cos(e.a) * 7, e.h + e.z, e.y - Math.sin(e.a) * 7, rand(-8, 8), rand(5, 15), rand(-8, 8), 0.6, '#7fe3ff', 6, -10);
-      if (tgt && Math.hypot(tgt.x - e.x, tgt.y - e.y) < 16) { e.dead = true; blast(tgt.x, tgt.y, tgt.h, 34); }
+      if (tgt && Math.hypot(tgt.x - e.x, tgt.y - e.y) < 16) { e.dead = true; blast(tgt.x, tgt.y, tgt.h, 34, e.owner); }
       if (e.age > 12) { e.dead = true; explode(e.x, e.y, e.h); }
     } else if (e.type === 'ball') {
       e.x += Math.cos(e.a) * 400 * dt; e.y += Math.sin(e.a) * 400 * dt;
@@ -1422,9 +1675,9 @@ function updateEntities(dt) {
       if (e.dead) break;
       if (k === e.owner && e.age < 0.6) continue;
       if (k.air && k.h > e.h + 8) continue;
-      if (e.type === 'bomb' || e.type === 'missile') { if (e.type === 'bomb' && e.z === 0 && (k.x - e.x) ** 2 + (k.y - e.y) ** 2 < 14 * 14) { e.dead = true; blast(e.x, e.y, e.h, 46); } continue; }
+      if (e.type === 'bomb' || e.type === 'missile') { if (e.type === 'bomb' && e.z === 0 && (k.x - e.x) ** 2 + (k.y - e.y) ** 2 < 14 * 14) { e.dead = true; blast(e.x, e.y, e.h, 46, e.owner); } continue; }
       const r = e.type === 'banana' ? 11 : 13;
-      if ((k.x - e.x) ** 2 + (k.y - e.y) ** 2 < r * r) { e.dead = true; if (e.type !== 'banana') explode(e.x, e.y, e.h); spinOut(k); }
+      if ((k.x - e.x) ** 2 + (k.y - e.y) ** 2 < r * r) { e.dead = true; if (e.type !== 'banana') explode(e.x, e.y, e.h); spinOut(k, false, e.owner); }
     }
   }
   for (const r of entities) if ((r.type === 'rocket' || r.type === 'ball') && !r.dead) for (const b of entities) {
@@ -1469,9 +1722,11 @@ function updateKart(k, inp, dt) {
   }
   if (k.hopT > 0) k.hopT -= dt;
   if (k.starT > 0) { k.starT -= dt; if (k.starT <= 0 && k.isPlayer) Music.speed = player && player.lastLap >= LAPS ? 1.12 : 1; }
-  let max = st.max * k.skill * (1 + k.coins * 0.012);
-  if (!k.isPlayer && player) { const gap = player.total - k.total; if (gap > 250) max *= 1.07; else if (gap < -500) max *= 0.95; }
-  const off = Math.abs(k.lat) > ROADW / 2 + CURB && !k.air && course.th.kind !== 'night';
+  let max = st.max * k.skill * CLASSES[raceClass].mult * (1 + k.coins * 0.012);
+  if (k.out) inp = { accel: false, brake: false, steer: 0, drift: false };
+  if (k.respawnT > 0) { k.respawnT -= dt; inp = { accel: false, brake: false, steer: 0, drift: false }; }
+  if (!k.isPlayer && player && !course.battle) { const gap = player.total - k.total; if (gap > 250) max *= 1.06; else if (gap < -500) max *= 0.95; }
+  const off = Math.abs(k.lat) > ROADW / 2 + CURB && !k.air;
   if (off && k.starT <= 0 && k.boostT <= 0) max *= 0.5;
   if (k.starT > 0) max *= 1.15;
   if (k.goldT > 0) { k.goldT -= dt; if (k.goldT <= 0 && k.item === 'golden') k.item = null; }
@@ -1533,13 +1788,18 @@ function updateKart(k, inp, dt) {
   if (inp.brake && k.speed > 120 && !k.air && Math.random() < 0.7) for (const s of [-1, 1]) addSkid(k.x - fx * 6 + fy * 6 * s, k.h, k.y - fy * 6 - fx * 6 * s, k.angle);
   // track position
   const oldIdx = k.idx;
-  k.idx = nearestIdx(k.x, k.y, k.idx);
+  k.idx = (course.battle || Math.abs(k.lat) > WALL + 10) ? nearestGlobal(k.x, k.y) : nearestIdx(k.x, k.y, k.idx);
   let d = k.idx - oldIdx;
   if (d > course.n / 2) d -= course.n; else if (d < -course.n / 2) d += course.n;
   k.total += d * SP;
   k.lat = latOf(k.x, k.y, k.idx);
-  const lim = WALL - 7;
-  if (Math.abs(k.lat) > lim) {
+  const lim = WALL - 7, sideWall = (k.lat > 0 ? course.wallR : course.wallL)[k.idx] || course.gap[k.idx];
+  const beyond = Math.abs(k.lat) - lim;
+  if (beyond > 0 && (!sideWall || beyond > 30) && Math.abs(k.lat) > WALL + 300) {
+    const a = course.ang[k.idx], over = k.lat - Math.sign(k.lat) * (WALL + 300);
+    k.x -= -Math.sin(a) * over; k.y -= Math.cos(a) * over; k.lat = Math.sign(k.lat) * (WALL + 300); k.speed *= 0.9;
+  }
+  if (beyond > 0 && sideWall && beyond < 30) {
     const a = course.ang[k.idx], over = k.lat - Math.sign(k.lat) * lim;
     k.x -= -Math.sin(a) * over; k.y -= Math.cos(a) * over; k.lat = Math.sign(k.lat) * lim;
     if (k.wallCd <= 0) {
@@ -1560,9 +1820,12 @@ function updateKart(k, inp, dt) {
   // vertical motion: ground following, ramps and airtime
   const t = alongOf(k.x, k.y, k.idx), ramp = rampAt(k.idx, t, k.lat);
   const onCurb = Math.abs(k.lat) > ROADW / 2 && Math.abs(k.lat) < ROADW / 2 + CURB;
-  const ground = trackH(k.x, k.y, k.idx) + ramp + (onCurb ? 0.3 : 0);
+  const inGap = course.gap[k.idx] && Math.abs(k.lat) < WALL + 4;
+  const ground = inGap ? course.hgt[k.idx] - 220 : Math.abs(k.lat) > WALL + 4 ? course.terrainH(k.x, k.y) + 1 : trackH(k.x, k.y, k.idx) + ramp + (onCurb ? 0.3 : 0);
+  if (!k.air && k.h > ground + 3) { k.air = true; k.airT = 0; k.vy = 0; k.trick = false; }
+  if (inGap && k.h < course.hgt[k.idx] - 50) respawnKart(k);
   if (k.air) {
-    k.airT += dt; k.vy -= GRAV * dt; k.h += k.vy * dt;
+    k.airT += dt; k.vy -= GRAV * (k.respawnT > 0 ? 0.25 : 1) * dt; k.h += k.vy * dt;
     if (k.h <= ground) {
       k.h = ground; k.air = false; k.squash = 0.18;
       for (let i = 0; i < 12; i++) spawn(k.x + rand(-6, 6), k.h + 1, k.y + rand(-6, 6), rand(-30, 30), rand(10, 30), rand(-30, 30), 0.45, fxColors().smoke, rand(4, 7), 40);
@@ -1572,7 +1835,8 @@ function updateKart(k, inp, dt) {
     }
   } else {
     if (k.prevRamp > 3 && ramp === 0 && k.speed > 80) {
-      k.air = true; k.airT = 0; k.vy = 60 + k.speed * 0.22; k.trick = false; k.aiTrick = Math.random() < 0.7;
+      const big = course.ramps.some(r => r.big && Math.abs(k.idx - (r.i0 + r.len)) < 6);
+      k.air = true; k.airT = 0; k.vy = (big ? 95 : 60) + k.speed * (big ? 0.2 : 0.22); k.trick = false; k.aiTrick = Math.random() < 0.7;
       if (k.isPlayer) Sound.beep(300, 0.2, 'triangle', 0.1, 300);
     } else k.h = lerp(k.h, ground, Math.min(1, dt * 22));
   }
@@ -1602,6 +1866,14 @@ function updateKart(k, inp, dt) {
       for (let i = 0; i < 5; i++) spawn(c.x, c.h + 5, c.y, rand(-20, 20), rand(20, 40), rand(-20, 20), 0.4, '#ffe14d', 3, 60);
     }
   }
+  for (const car of course.cars) {
+    const dx = k.x - car.x, dy = k.y - car.y, d = Math.hypot(dx, dy);
+    if (d < 22 && !(k.air && k.h > car.h + 16)) {
+      k.x = car.x + dx / d * 22; k.y = car.y + dy / d * 22;
+      if (k.wallCd <= 0) { k.wallCd = 0.6; spinOut(k); k.speed *= 0.5; if (k.isPlayer) { Sound.noise(0.3, 0.4, 150); shakeT = 0.35; } }
+    }
+  }
+  if (course.battle) return;
   // laps
   const lap = Math.floor(k.total / course.L) + 1;
   if (lap > k.lastLap) {
@@ -1611,6 +1883,7 @@ function updateKart(k, inp, dt) {
     }
     k.lastLap = lap;
   }
+  if (lap > 1 && k.lapTimes.length < lap - 1) k.lapTimes.push(raceTime);
   if (!k.finished && k.total >= LAPS * course.L) {
     k.finished = true; k.finishTime = raceTime; k.finishPos = finishOrder++; k.cheerT = 3;
     if (k.isPlayer) onPlayerFinish();
@@ -1620,12 +1893,32 @@ function updateKart(k, inp, dt) {
     k.wrongT = wrong ? k.wrongT + dt : 0;
   }
 }
+function respawnKart(k) {
+  const g = course.gaps.find(gp => ((k.idx - gp.s + course.n) % course.n) < gp.len + 4) || course.gaps[0];
+  const n = course.n, ni = (g.s - 34 + n) % n, p = course.pts[ni], a = course.ang[ni];
+  const d0 = k.idx; k.idx = ni;
+  let d = ni - d0; if (d > n / 2) d -= n; else if (d < -n / 2) d += n; k.total += d * SP;
+  k.x = p.x; k.y = p.y; k.angle = a; k.speed = 0; k.slip = 0; k.drifting = false; k.lat = 0;
+  k.air = true; k.vy = 0; k.h = course.hgt[ni] + 45; k.respawnT = 1.0; k.boostT = 0;
+  if (k.isPlayer) { say('コースアウト！', '#ff8fa3', 1.2); Sound.beep(500, 0.4, 'triangle', 0.12, -300); }
+}
+function nearestFoe(k, cone) {
+  let best = null, bd = 1e18;
+  for (const o of karts) {
+    if (o === k || o.out) continue;
+    const dx = o.x - k.x, dy = o.y - k.y, d = dx * dx + dy * dy;
+    if (cone !== undefined && Math.abs(wrapAngle(Math.atan2(dy, dx) - k.angle)) > cone) continue;
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
 function collideKarts() {
   for (let i = 0; i < karts.length; i++) for (let j = i + 1; j < karts.length; j++) {
     const a = karts[i], b = karts[j], dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
     if (d2 < 15 * 15 && d2 > 0.0001 && Math.abs(a.h - b.h) < 10) {
       const d = Math.sqrt(d2), push = (15 - d), nx = dx / d, ny = dy / d;
-      if (a.starT > 0 && b.starT <= 0) spinOut(b); else if (b.starT > 0 && a.starT <= 0) spinOut(a);
+      if (a.out || b.out) continue;
+      if (a.starT > 0 && b.starT <= 0) spinOut(b, false, a); else if (b.starT > 0 && a.starT <= 0) spinOut(a, false, b);
       const wa = a.st.weight * (a.smallT > 0 ? 0.4 : 1), wb = b.st.weight * (b.smallT > 0 ? 0.4 : 1), sum = wa + wb;
       a.x -= nx * push * wb / sum; a.y -= ny * push * wb / sum; b.x += nx * push * wa / sum; b.y += ny * push * wa / sum;
       const avg = (a.speed + b.speed) / 2; a.speed = lerp(a.speed, avg, 0.3); b.speed = lerp(b.speed, avg, 0.3);
@@ -1634,6 +1927,7 @@ function collideKarts() {
   }
 }
 function updateRanks() {
+  if (course.battle) { [...karts].sort((a, b) => (b.balloons - a.balloons) || (b.hits - a.hits)).forEach((k, i) => k.rank = i); return; }
   [...karts].sort((a, b) => {
     if (a.finished && b.finished) return a.finishPos - b.finishPos;
     if (a.finished) return -1; if (b.finished) return 1;
@@ -1694,6 +1988,8 @@ function syncKart(k, dt) {
   u.aura.visible = k.starT > 0 || k.shieldT > 0;
   if (k.shieldT > 0 && k.starT <= 0) u.aura.material.color.set(k.shieldT < 2 && Math.sin(clock * 20) > 0 ? '#ffffff' : '#4cc9ff');
   u.dizzy.visible = k.spinT > 0; if (k.spinT > 0) u.dizzy.rotation.y = clock * 8;
+  if (u.balloons) u.balloons.forEach((b, i) => { b.visible = b.userData.str.visible = i < k.balloons; b.position.y = 30 + (i === 1 ? 3 : 0) + Math.sin(clock * 3 + i) * 0.8; });
+  m.visible = !(k.out && Math.sin(clock * 20) > 0.3);
   if (k.starT > 0) { u.mat.emissive.setHSL((clock * 2) % 1, 1, 0.3); u.dmat.emissive.setHSL((clock * 2) % 1, 1, 0.3); u.aura.material.color.setHSL((clock * 2 + 0.5) % 1, 1, 0.6); }
   else { u.mat.emissive.setRGB(0, 0, 0); u.dmat.emissive.setRGB(0, 0, 0); }
 }
@@ -1713,6 +2009,26 @@ function simKarts(dt, demo) {
   collideKarts();
   updateEntities(dt);
   updateRanks();
+  for (const car of course.cars) {
+    car.idx = (car.idx + car.sp * dt / SP) % course.n;
+    const i = Math.floor(car.idx), p = course.pts[i], a = course.ang[i];
+    car.x = p.x - Math.sin(a) * car.lat; car.y = p.y + Math.cos(a) * car.lat; car.h = course.hgt[i]; car.a = a;
+    car.mesh.position.set(car.x, car.h, car.y); car.mesh.rotation.y = Math.PI / 2 - a;
+  }
+  if (demo || !player) return;
+  rankCd -= dt;
+  if (!course.battle && mode !== 'ta' && player.rank < prevRank && rankCd <= 0 && raceTime > 3) { Sound.beep(1200, 0.08, 'triangle', 0.1); Sound.beep(1600, 0.1, 'triangle', 0.08); rankCd = 1.2; }
+  prevRank = player.rank;
+  if (rec && !player.finished) { recT += dt; if (recT >= 0.05) { recT = 0; rec.push([Math.round(player.x), Math.round(player.y), Math.round(player.h), Math.round(player.angle * 100)]); } }
+  if (ghost && ghost.model) {
+    const f = raceTime / 0.05, i = Math.floor(f), a = ghost.frames[Math.min(i, ghost.frames.length - 1)], b = ghost.frames[Math.min(i + 1, ghost.frames.length - 1)], t = f - i;
+    if (a && b) { ghost.model.position.set(lerp(a[0], b[0], t), lerp(a[2], b[2], t), lerp(a[1], b[1], t)); ghost.model.rotation.y = Math.PI / 2 - a[3] / 100; }
+  }
+  if (course.battle && state === 'race') {
+    battleT -= dt;
+    const alive = karts.filter(k => !k.out);
+    if (battleT <= 0 || alive.length <= 1 || player.out) { endT += dt; if (endT > (player.out && alive.length > 1 ? 2.5 : 1.5) || battleT <= 0) { state = 'done'; doneTimer = 0.01; Music.fanfare(player.rank === 0); } }
+  }
 }
 function updateScenery(dt) {
   for (const b of course.boxes) {
@@ -1768,7 +2084,7 @@ function update(dt) {
   for (const k of karts) syncKart(k, dt);
   updateParticles(dt);
   Sound.engine(player.speed, true);
-  if (state === 'done') { doneTimer -= dt; if (doneTimer <= 0 || karts.every(k => k.finished)) showResults(); }
+  if (state === 'done') { doneTimer -= dt; if (doneTimer <= 0 || (!course.battle && karts.every(k => k.finished))) showResults(); }
 }
 
 function updateCamera(dt) {
@@ -1875,9 +2191,10 @@ function drawHUD() {
     c.lineJoin = 'round'; c.lineWidth = size * 0.2; c.strokeStyle = '#1d1436'; c.strokeText(text, x, y);
     c.fillStyle = color; c.fillText(text, x, y);
   };
-  if (player.boostT > 0) {
-    c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 2 * u;
-    for (let i = 0; i < 26; i++) {
+  const fast = clamp((Math.abs(player.speed) / (player.st.max * CLASSES[raceClass].mult) - 0.85) / 0.25, 0, 1);
+  if (player.boostT > 0 || fast > 0) {
+    c.strokeStyle = `rgba(255,255,255,${player.boostT > 0 ? 0.55 : 0.25 * fast})`; c.lineWidth = 2 * u;
+    for (let i = 0; i < (player.boostT > 0 ? 26 : 12); i++) {
       const a = rand(0, TAU), r0 = rand(0.35, 0.5) * Math.max(Wd, Hd), r1 = r0 + rand(40, 120) * u;
       c.beginPath(); c.moveTo(Wd / 2 + Math.cos(a) * r0, Hd * 0.55 + Math.sin(a) * r0); c.lineTo(Wd / 2 + Math.cos(a) * r1, Hd * 0.55 + Math.sin(a) * r1); c.stroke();
     }
@@ -1901,17 +2218,35 @@ function drawHUD() {
   c.fillStyle = '#fff3a0'; c.fillRect(cxp - 1.5 * u, cyp - 5 * u, 3 * u, 10 * u);
   txt(`×${player.coins}`, cxp + 14 * u, cyp + 1 * u, 18 * u, player.coins >= 10 ? '#ffd23f' : '#ffffff');
   // lap & time
-  const lap = clamp(Math.floor(player.total / course.L) + 1, 1, LAPS);
-  txt('LAP', Wd - pad - 64 * u, pad + 16 * u, 14 * u, '#ffffff', 'right');
-  txt(`${lap}/${LAPS}`, Wd - pad, pad + 14 * u, 28 * u, '#ffffff', 'right');
-  txt(fmtTime(player.finished ? player.finishTime : raceTime), Wd - pad, pad + 40 * u, 16 * u, '#ffd23f', 'right', 800, false);
+  if (course.battle) {
+    const left = Math.max(0, battleT);
+    txt(`${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`, Wd - pad, pad + 14 * u, 28 * u, left < 20 ? '#ff5d73' : '#ffffff', 'right');
+    const list = [...karts].sort((a, b) => a.rank - b.rank);
+    list.forEach((k, i) => {
+      const y = pad + 50 * u + i * 17 * u;
+      c.globalAlpha = k.out ? 0.4 : 1;
+      txt(k.ch.name, Wd - pad - 52 * u, y, 11 * u, k.isPlayer ? '#ffd23f' : '#ffffff', 'right', 800, false);
+      for (let b = 0; b < 3; b++) { c.beginPath(); c.arc(Wd - pad - 40 * u + b * 14 * u, y, 5 * u, 0, TAU); c.fillStyle = b < k.balloons ? k.ch.kart : 'rgba(255,255,255,.2)'; c.fill(); }
+      c.globalAlpha = 1;
+    });
+  } else {
+    const lap = clamp(Math.floor(player.total / course.L) + 1, 1, LAPS);
+    txt('LAP', Wd - pad - 64 * u, pad + 16 * u, 14 * u, '#ffffff', 'right');
+    txt(`${lap}/${LAPS}`, Wd - pad, pad + 14 * u, 28 * u, '#ffffff', 'right');
+    txt(fmtTime(player.finished ? player.finishTime : raceTime), Wd - pad, pad + 40 * u, 16 * u, '#ffd23f', 'right', 800, false);
+    if (mode === 'ta' && ghost) txt(`ゴースト ${fmtTime(ghost.time)}`, Wd - pad, pad + 58 * u, 11 * u, '#b9b3ff', 'right', 800, false);
+    if (mode === 'gp' && gp) txt(`レース ${gp.round + 1}/${gp.courses.length}`, Wd / 2, pad + 40 * u, 13 * u, '#ffffff', 'center', 800, false);
+  }
   // rank & speed
   const rk = player.rank + 1;
+  const showRank = mode !== 'ta';
   const rankY = isTouch ? Hd - 140 * DPR : Hd - pad - 30 * u;
   const rcol = rk === 1 ? '#ffd23f' : rk === 2 ? '#e3e8f0' : rk === 3 ? '#ffae6b' : '#b9b3ff';
-  txt(`${rk}`, pad, rankY, 70 * u, rcol);
-  c.font = `italic 900 ${Math.round(70 * u)}px ${hudFont}`;
-  txt('位', pad + c.measureText(`${rk}`).width + 6 * u, rankY + 12 * u, 26 * u, '#ffffff');
+  if (showRank) {
+    txt(`${rk}`, pad, rankY, 70 * u, rcol);
+    c.font = `italic 900 ${Math.round(70 * u)}px ${hudFont}`;
+    txt('位', pad + c.measureText(`${rk}`).width + 6 * u, rankY + 12 * u, 26 * u, '#ffffff');
+  }
   const kmh = `${Math.round(Math.abs(player.speed) * 0.55)}`;
   txt(kmh, pad, rankY - 52 * u, 20 * u, '#ffffff');
   c.font = `italic 900 ${Math.round(20 * u)}px ${hudFont}`;
@@ -1923,7 +2258,7 @@ function drawHUD() {
     c.fillStyle = col; c.fillRect(gx, gy, gw * clamp(player.driftCharge / 2.3, 0, 1), 8 * u);
     txt('DRIFT', Wd / 2, gy - 12 * u, 14 * u, col, 'center');
   }
-  drawMinimap(c, u, pad, Wd);
+  if (!course.battle) drawMinimap(c, u, pad, Wd);
   if (player.wrongT > 1 && Math.floor(clock * 3) % 2 === 0) txt('ぎゃくそう！', Wd / 2, Hd * 0.3, 32 * u, '#ff5d73', 'center');
   const cdState = state === 'countdown' || (state === 'paused' && pausedFrom === 'countdown');
   if (cdState && countdown < 3.6) {
@@ -1958,7 +2293,7 @@ function drawMinimap(c, u, pad, Wd) {
 // ============================================================
 //  menus
 // ============================================================
-const screens = ['scrTitle', 'scrSelect', 'scrPause', 'scrResult'];
+const screens = ['scrTitle', 'scrMode', 'scrSelect', 'scrPause', 'scrResult'];
 function showScreen(id) { for (const s of screens) document.getElementById(s).classList.toggle('hidden', s !== id); }
 function setShowKart() {
   if (showKart) { turntable.remove(showKart); disposeGroup(showKart); }
@@ -1984,8 +2319,11 @@ function buildSelect() {
   const bar = (label, v) => `<div class="stat"><span>${label}</span><div class="bar"><i style="width:${Math.round(clamp(v, 0.08, 1) * 100)}%"></i></div></div>`;
   document.getElementById('charStats').innerHTML = bar('スピード', (s.max - 215) / 36) + bar('かそく', (s.acc - 0.6) / 0.55) + bar('ハンドル', (s.hand - 2.4) / 0.9) + bar('おもさ', s.weight / 1.6);
   const og = document.getElementById('courseGrid'); og.innerHTML = '';
-  COURSES.forEach((co, i) => {
-    const best = store.get('best' + i);
+  const showCourses = mode === 'vs' || mode === 'ta';
+  og.previousElementSibling.textContent = mode === 'gp' ? 'わんにゃんカップ（4レース）' : mode === 'battle' ? 'ふうせんアリーナ' : 'コース';
+  og.style.display = showCourses ? '' : 'none';
+  if (showCourses) COURSES.forEach((co, i) => {
+    const best = store.get('best' + i + '_' + raceClass);
     const d = document.createElement('button'); d.type = 'button'; d.className = 'card course' + (i === selCourse ? ' sel' : '');
     d.innerHTML = `<div class="emo">${co.emoji}</div><div class="nm">${co.name}</div><div class="best">${best ? 'ベスト ' + fmtTime(best) : ''}</div>`;
     d.onclick = () => { selCourse = i; Sound.init(); Sound.beep(500 + i * 120, 0.08, 'triangle', 0.1); buildSelect(); };
@@ -2027,20 +2365,71 @@ function buildEditor() {
   inp.oninput = () => { c.name = inp.value.trim() || 'マイキャラ'; store.set('mychar', myChar); document.getElementById('selName').textContent = c.name; };
   o.appendChild(inp);
 }
+function setResButtons(list) {
+  const box = document.getElementById('resButtons'); box.innerHTML = '';
+  list.forEach(([label, fn, sec]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn' + (sec ? ' sec' : ''); b.textContent = label; b.onclick = fn; box.appendChild(b); });
+}
 function showResults() {
   state = 'result'; messages = [];
   Sound.engine(0, false);
   updateRanks();
-  const rows = karts.map(k => ({ k, time: k.finished ? k.finishTime : raceTime + Math.max(0, LAPS * course.L - k.total) / 270 })).sort((a, b) => a.time - b.time);
-  const pos = rows.findIndex(r => r.k.isPlayer) + 1;
-  setupPodium(rows.slice(0, 3).map(r => r.k));
-  document.getElementById('resRank').textContent = pos === 1 ? '🏆 1位！' : pos <= 3 ? `🎉 ${pos}位` : `${pos}位`;
-  const key = 'best' + selCourse, best = store.get(key);
-  let bestMsg = '';
-  if (!best || player.finishTime < best) { store.set(key, player.finishTime); bestMsg = best ? '🌟 ベストタイム更新！' : ''; }
-  document.getElementById('resBest').textContent = bestMsg;
-  document.getElementById('resTable').innerHTML = rows.map((r, i) =>
-    `<tr class="${r.k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${speciesEmoji(r.k.ch.sp)} ${r.k.ch.name}${r.k.isPlayer ? '（あなた）' : ''}</td><td class="tm">${fmtTime(r.time)}</td></tr>`).join('');
+  const nameOf = (c, me) => `${speciesEmoji(c.sp)} ${c.name}${me ? '（あなた）' : ''}`;
+  const tbl = document.getElementById('resTable'), title = document.getElementById('resRank'), sub = document.getElementById('resBest'), md = document.getElementById('resMode');
+  sub.textContent = '';
+  md.textContent = `${{ gp: 'グランプリ', vs: 'VSレース', ta: 'タイムアタック', battle: 'ふうせんバトル' }[mode]}・${CLASSES[raceClass].name}`;
+  if (mode === 'battle') {
+    const rows = [...karts].sort((a, b) => a.rank - b.rank);
+    setupPodium(rows.slice(0, 3));
+    title.textContent = player.rank === 0 ? '🏆 しょうり！' : `${player.rank + 1}位`;
+    tbl.innerHTML = rows.map((k, i) => `<tr class="${k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(k.ch, k.isPlayer)}</td><td class="tm">🎈×${Math.max(0, k.balloons)}　HIT ${k.hits}</td></tr>`).join('');
+    setResButtons([['もういちど', startRace], ['メニューへ', toMode, true]]);
+  } else if (mode === 'ta') {
+    setupPodium([player]);
+    const t = player.finishTime, key = 'best' + selCourse + '_' + raceClass, best = store.get(key);
+    title.textContent = fmtTime(t);
+    if (!best || t < best) {
+      store.set(key, t); store.set('ghost_' + selCourse + '_' + raceClass, { t, c: player.ch.id, f: rec });
+      sub.textContent = best ? `🌟 ベストタイム更新！（前回 ${fmtTime(best)}）ゴーストを保存しました` : 'ゴーストを保存しました。次はゴーストと勝負！';
+    } else sub.textContent = `ベスト ${fmtTime(best)}（+${(t - best).toFixed(2)}秒）`;
+    tbl.innerHTML = player.lapTimes.concat([t]).map((lt, i, arr) => `<tr><td class="rk">LAP ${i + 1}</td><td></td><td class="tm">${fmtTime(lt - (i ? arr[i - 1] : 0))}</td></tr>`).join('');
+    setResButtons([['もういちど', startRace], ['メニューへ', toMode, true]]);
+  } else {
+    const rows = karts.map(k => ({ k, time: k.finished ? k.finishTime : raceTime + Math.max(0, LAPS * course.L - k.total) / 270 })).sort((a, b) => a.time - b.time);
+    const pos = rows.findIndex(r => r.k.isPlayer) + 1;
+    if (mode === 'gp') {
+      rows.forEach((r, i) => gp.points.set(r.k.ch.id, gp.points.get(r.k.ch.id) + GP_POINTS[i]));
+      const last = gp.round === gp.courses.length - 1;
+      const stand = gp.roster.map(c => ({ c, p: gp.points.get(c.id) })).sort((a, b) => b.p - a.p);
+      title.textContent = `${pos}位　+${GP_POINTS[pos - 1]}pt`;
+      sub.textContent = `レース ${gp.round + 1}/${gp.courses.length}：${COURSES[gp.courses[gp.round]].name}`;
+      tbl.innerHTML = rows.map((r, i) => `<tr class="${r.k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(r.k.ch, r.k.isPlayer)}</td><td class="tm">${fmtTime(r.time)}</td><td class="pt">+${GP_POINTS[i]}</td></tr>`).join('');
+      if (last) {
+        setupPodium(stand.slice(0, 3).map(s2 => ({ ch: s2.c })));
+        const myPos = stand.findIndex(s2 => s2.c.id === charAt(selChar).id) + 1;
+        setResButtons([['そうごう結果', () => {
+          const trophy = myPos === 1 ? 'gold' : myPos === 2 ? 'silver' : myPos === 3 ? 'bronze' : null;
+          title.textContent = trophy ? `${{ gold: '🥇', silver: '🥈', bronze: '🥉' }[trophy]} そうごう ${myPos}位！` : `そうごう ${myPos}位`;
+          sub.textContent = trophy ? 'トロフィーをゲット！' : 'つぎはトロフィーをめざそう！';
+          const tk = 'trophy_' + raceClass, old = store.get(tk), rankOf = t2 => ({ gold: 3, silver: 2, bronze: 1 }[t2] || 0);
+          if (trophy && rankOf(trophy) > rankOf(old)) store.set(tk, trophy);
+          tbl.innerHTML = stand.map((s2, i) => `<tr class="${s2.c.id === charAt(selChar).id ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(s2.c, s2.c.id === charAt(selChar).id)}</td><td class="pt">${s2.p}pt</td></tr>`).join('');
+          if (trophy) Music.fanfare(true);
+          gp = null;
+          setResButtons([['もういちど', () => { newGP(); startRace(); }], ['メニューへ', toMode, true]]);
+        }]]);
+      } else {
+        setupPodium(rows.slice(0, 3).map(r => r.k));
+        setResButtons([['つぎのレース ▶', () => { gp.round++; startRace(); }], ['やめる', () => { gp = null; toMode(); }, true]]);
+      }
+    } else {
+      setupPodium(rows.slice(0, 3).map(r => r.k));
+      title.textContent = pos === 1 ? '🏆 1位！' : pos <= 3 ? `🎉 ${pos}位` : `${pos}位`;
+      const key = 'best' + selCourse + '_' + raceClass, best = store.get(key);
+      if (!best || player.finishTime < best) { store.set(key, player.finishTime); if (best) sub.textContent = '🌟 ベストタイム更新！'; }
+      tbl.innerHTML = rows.map((r, i) => `<tr class="${r.k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(r.k.ch, r.k.isPlayer)}</td><td class="tm">${fmtTime(r.time)}</td></tr>`).join('');
+      setResButtons([['もういちど', startRace], ['メニューへ', toMode, true]]);
+    }
+  }
   showScreen('scrResult');
   document.getElementById('touch').classList.add('hidden');
   document.getElementById('topbtns').classList.add('hidden');
@@ -2054,19 +2443,46 @@ function toTitle() {
   setupRace(Math.floor(Math.random() * COURSES.length), CHARS[Math.floor(Math.random() * CHARS.length)], true);
   state = 'title'; cam.focusT = 0; showScreen('scrTitle');
 }
+const MODES = [
+  ['gp', '🏆', 'グランプリ', '4コース連続でポイントをきそう。トロフィーをめざせ'],
+  ['vs', '🏁', 'VSレース', 'すきなコースで1レース'],
+  ['ta', '⏱️', 'タイムアタック', 'ひとりで走ってベストタイム。自分のゴーストと勝負'],
+  ['battle', '🎈', 'ふうせんバトル', 'アイテムで相手のふうせんをわれ！さいごまで残れ'],
+];
+function toMode() {
+  if (!course || course.battle || mode === 'ta' || karts.length < 8) setupRace(Math.floor(Math.random() * COURSES.length), CHARS[Math.floor(Math.random() * CHARS.length)], true);
+  state = 'title'; cam.focusT = 0; gp = null; Sound.engine(0, false);
+  if (!Music.timer || Music.song !== SONGS[4]) Music.play(4);
+  const mg = document.getElementById('modeGrid'); mg.innerHTML = '';
+  for (const [id, emo, nm, ds] of MODES) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'mode';
+    b.innerHTML = `<div class="emo">${emo}</div><div class="nm">${nm}</div><div class="ds">${ds}</div>`;
+    b.onclick = () => { mode = id; Sound.beep(800, 0.08, 'triangle', 0.1); toSelect(); };
+    mg.appendChild(b);
+  }
+  const cr = document.getElementById('classRow'); cr.innerHTML = '<b style="align-self:center;margin-right:4px">スピード</b>';
+  for (const c of [50, 100, 150]) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (raceClass === c ? ' sel' : ''); b.textContent = CLASSES[c].name + (c === 150 ? ' 🔥' : '');
+    b.onclick = () => { raceClass = c; store.set('class', c); toMode(); }; cr.appendChild(b);
+  }
+  const tr = [50, 100, 150].map(c => { const t = store.get('trophy_' + c); return t ? `${CLASSES[c].name} ${{ gold: '🥇', silver: '🥈', bronze: '🥉' }[t]}` : null; }).filter(Boolean);
+  document.getElementById('trophyRow').textContent = tr.length ? 'トロフィー：' + tr.join('　') : '';
+  showScreen('scrMode');
+  document.getElementById('touch').classList.add('hidden');
+  document.getElementById('topbtns').classList.add('hidden');
+}
 function toSelect() {
   state = 'select'; Sound.engine(0, false); buildSelect(); setShowKart(); showScreen('scrSelect');
   if (!Music.timer || Music.song !== SONGS[4]) Music.play(4);
   document.getElementById('touch').classList.add('hidden');
   document.getElementById('topbtns').classList.add('hidden');
 }
-document.getElementById('btnStart').onclick = () => { Sound.init(); toSelect(); };
-document.getElementById('btnBack').onclick = () => { toTitle(); };
-document.getElementById('btnGo').onclick = startRace;
-document.getElementById('btnRetry').onclick = startRace;
+document.getElementById('btnStart').onclick = () => { Sound.init(); toMode(); };
+document.getElementById('btnModeBack').onclick = () => { toTitle(); };
+document.getElementById('btnBack').onclick = () => { toMode(); };
+document.getElementById('btnGo').onclick = () => { gp = null; startRace(); };
 document.getElementById('btnRetry2').onclick = startRace;
-document.getElementById('btnMenu').onclick = toSelect;
-document.getElementById('btnQuit').onclick = toSelect;
+document.getElementById('btnQuit').onclick = () => { gp = null; toMode(); };
 document.getElementById('btnResume').onclick = togglePause;
 document.getElementById('btnPause').onclick = togglePause;
 const muteBtn = document.getElementById('btnMute');
