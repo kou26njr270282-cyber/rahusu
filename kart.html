@@ -861,6 +861,10 @@ function loadAssets() {
   return Promise.all(Object.entries(ASSETS.models).map(([name, data]) => new Promise((res, rej) => {
     const mgr = new THREE.LoadingManager();
     mgr.setURLModifier(u => u.includes('colormap') ? 'data:image/png;base64,' + ASSETS.textures[ASSETS.texOf[name]] : u);
+    // The viewer's sandbox blocks fetch(), which GLTFLoader's ImageBitmapLoader uses for textures.
+    // Hiding createImageBitmap while the parser is created makes it fall back to a plain <img> loader.
+    const cib = window.createImageBitmap;
+    try { window.createImageBitmap = undefined; } catch (e) {}
     new THREE.GLTFLoader(mgr).parse(b64(data), '', g => {
       const root = g.scene;
       root.traverse(o => {
@@ -869,6 +873,7 @@ function loadAssets() {
       });
       MODELS[name] = root; res();
     }, rej);
+    try { window.createImageBitmap = cib; } catch (e) {}
   })));
 }
 function disposeGroup(g) {
