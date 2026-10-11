@@ -50,6 +50,9 @@ canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; 
 .cast .foe { color: var(--alarm); }
 .rules { margin: 0 0 8px; padding-left: 1.3em; font-size: .9rem; line-height: 1.5; }
 .rules li + li { margin-top: 4px; }
+.diary { margin-top: 10px; padding: 10px 12px; background: #f3e6c4; color: #3a2a1a; border-radius: 4px; transform: rotate(-.6deg); box-shadow: 3px 3px 0 rgba(0,0,0,.35); font-size: .88rem; line-height: 1.55; }
+.diary .dt { color: #8a4a22; font-size: .8rem; margin-bottom: 4px; border-bottom: 1px dashed #b89a68; }
+.diary p { margin: 0; }
 .msg { min-height: 6.6em; }
 .msg p { margin: 0; }
 .msg p:not(:last-child) { color: var(--dim); }
@@ -190,6 +193,13 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       title: "ゆうしゃ パーティー（3人）", desc: "さいごの 日。ゆうしゃ・せんし・まほうつかいが ぜんいんで くる！",
       tip: "さいごの 日！ どうぐを ぜんぶ つかって まもりきれ！" },
   ];
+  const OBJ_LINES = {
+    pot: ["やめて〜！ わらないで！", "ひぃっ こっち きた！", "ツボにも いのちが あるんだ！"],
+    drawer: ["あけちゃ だめ〜！", "ひきだしは プライベート！", "こないで〜！"],
+    safe: ["ふふん、あかないよ", "カギは かあさんが もってる"],
+    safeMage: ["じゅもんは ずるい！", "ひぃ まほうつかいだ！"],
+    bed: ["くつで のらないで〜！", "シーツ あらった ばかり！"],
+  };
   const GREET = ["こんにちは！", "まおうって どこ？", "なにか いい もの ない？", "この むらの なまえは？", "レベル いくつ？", "ぼく ゆうしゃ！"];
   const ACT_LINES = {
     pot: ["ツボだ！ わらなきゃ！", "ツボは わる もの！", "いい おとが しそう"],
@@ -346,7 +356,8 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       player: { x: 5, y: 5, fx: 5, fy: 5, tx: 5, ty: 5, t: 1, moving: false, face: "down", flip: false, carry: null, frozen: 0, say: "" },
       heroes: [], visited: new Set(), bedUsed: false,
       traps: new Set(), decoys: new Set(), floor: {}, tools: {}, unlocked: new Set(),
-      stolen: [], waveStolen: [], repairCost: 0, bonus: 0, ska: 0, totalAdded: 0,
+      stolen: [], waveStolen: [], repairCost: 0, bonus: 0, ska: 0, lv: {},
+      d: { pots: 0, stolen: [], slips: 0, decoy: 0, scold: 0, talks: 0, bed: 0, safeFail: 0 }, totalAdded: 0,
       tut: 0, seenDone: false, seenBump: false,
       fx: [], parts: [], shake: 0, momT: 0,
       log: [],
@@ -387,6 +398,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     for (const t of TOOLS) S.tools[t.id] = (S.tools[t.id] || 0) + cfg.tools[t.id];
     restock(cfg.stock);
     S.ska = 0;
+    S.d = { pots: 0, stolen: [], slips: 0, decoy: 0, scold: 0, talks: 0, bed: 0, safeFail: 0 };
     const fresh = TOOLS.filter((t) => cfg.tools[t.id] && !S.unlocked.has(t.id));
     fresh.forEach((t) => S.unlocked.add(t.id));
     if (S.wave === 0) { beginPrep(fresh); return; }
@@ -419,9 +431,9 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     const cfg = WAVES[S.wave];
     S.phase = "hero"; $("skip").hidden = true;
     S.heroes = cfg.heroes.map((hd, i) => ({
-      ...hd, x: DOOR.x, y: DOOR.y, fx: DOOR.x, fy: DOOR.y, tx: DOOR.x, ty: DOOR.y, t: 1, moving: false, flip: false,
+      ...hd, lv: S.lv[hd.name] || 1 + S.wave, x: DOOR.x, y: DOOR.y, fx: DOOR.x, fy: DOOR.y, tx: DOOR.x, ty: DOOR.y, t: 1, moving: false, flip: false,
       state: "wait", delay: i * 1.6, path: [], target: null, actT: 0, actMax: 1, pause: 0, slip: 0, talkCd: 0,
-      say: "", sayT: 0, bag: [], scold: 0, speed: cfg.speed, actMul: cfg.act,
+      say: "", sayT: 0, bag: [], scold: 0, speed: cfg.speed * Math.pow(1.03, (S.lv[hd.name] || 1) - 1), actMul: cfg.act,
     }));
   }
   function endWave() {
@@ -442,11 +454,31 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       <div class="row"><span>ツボの しゅうりだい（${broken.length}こ）</span><span>${repair}G</span></div>
       <div class="row"><span>ムダあし ボーナス（スカ ${S.ska}かい）</span><span style="color:#7be07b">+${S.ska * SKA}G</span></div>
       <div class="row"><span>いえの ざいさん</span><span>${assets()}G</span></div>
+      <div class="diary"><div class="dt">ゆうしゃの にっき（こっそり よんだ）</div>${diary().map((l) => `<p>${l}</p>`).join("")}</div>
       <p style="margin-top:10px"><button id="next">${last ? "けっかを みる" : "ねる（つぎの日へ）"}</button></p>
     </div>`;
     ov.hidden = false; ov.parentElement.classList.add("cover");
     $("next").onclick = () => { if (S.phase !== "result") return; if (last) showEnd(); else { S.wave++; startWave(); } };
     $("next").focus();
+  }
+  function diary() {
+    const d = S.d, h = S.heroes[0], out = [];
+    const many = S.heroes.length > 1 ? "みんなで " : "";
+    out.push(`${S.wave + 1}にちめ。きょうも ${many}むらびとAの いえに いった。`);
+    if (d.pots) out.push(`ツボを ${d.pots}こ わった。いい おとが した。`);
+    if (d.stolen.length) {
+      const names = [...new Set(d.stolen)].map((k) => ITEMS[k].n).join("と ");
+      out.push(d.stolen.includes("gem") ? `${names}を てにいれた！ とくに ほうせきは すごい。うって けんを かおう。` : `${names}を てにいれた。うれしい。`);
+    } else out.push("なにも とれなかった。この いえ びんぼう なのかな。");
+    if (d.slips) out.push(`バナナで ${d.slips}かい ころんだ。だれが おいたんだ。`);
+    if (d.decoy) out.push("ひかる いしを ひろった。ただの いしだった。くやしい。");
+    if (d.scold) out.push("しらない おばさんに おこられた。こわかった。");
+    if (d.talks) out.push("むらびとAに はなしかけた。また「ハジメの むら」って いってた。あの ひと それしか いわない。");
+    if (S.ska >= 3) out.push("からっぽの 入れものが おおかった。だれかが うごかしてる きがする…");
+    if (d.bed) out.push("ベッドで ねた。ふかふかだった。");
+    if (d.safeFail) out.push("きんこは あかなかった。ちっ。");
+    out.push(S.wave === WAVES.length - 1 ? "あしたは いよいよ まおうを たおしに いく。" : `レベルが ${h ? h.lv : 1}に なった。あしたも いこう。`);
+    return out;
   }
   function assets() {
     let v = objects.reduce((a, o) => a + o.items.reduce((b, k) => b + ITEMS[k].v, 0), 0);
@@ -637,6 +669,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     } else if (id === "bell") {
       const act = S.heroes.filter((h) => h.state !== "wait" && h.state !== "gone");
       if (!act.length) { msg("まだ ゆうしゃが いない。かあさんは いそがしい。"); return; }
+      S.d.scold++;
       act.forEach((h) => { h.scold = 3.5; heroSay(h, "ご、ごめんなさい…", 3.5); });
       S.momT = 3.5; S.shake = 0.15; SFX.bell();
       msg("チリーン！ かあさん「くつ ぬぎなさい！！ ひとの いえで なにしてるの！」 ゆうしゃは せいざした。");
@@ -655,11 +688,12 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     const k = key(h.x, h.y);
     if (S.traps.has(k)) {
       S.traps.delete(k);
-      h.slip = 2.6; h.path.unshift([h.x, h.y]); h.path.shift();
+      h.slip = 2.6; S.d.slips++; h.path.unshift([h.x, h.y]); h.path.shift();
       SFX.slip(); S.shake = 0.2;
       heroSay(h, "うわあっ！？", 1.6);
       if (h.bag.length) {
         const item = h.bag.pop();
+        const di = S.d.stolen.lastIndexOf(item); if (di >= 0) S.d.stolen.splice(di, 1);
         const i = S.waveStolen.lastIndexOf(item); if (i >= 0) S.waveStolen.splice(i, 1);
         const j = S.stolen.lastIndexOf(item); if (j >= 0) S.stolen.splice(j, 1);
         const nk = dropSpot(h.x, h.y);
@@ -672,7 +706,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       return true;
     }
     if (S.decoys.has(k)) {
-      S.decoys.delete(k); h.pause = 1.5;
+      S.decoys.delete(k); h.pause = 1.5; S.d.decoy++;
       heroSay(h, "なんだ ただの いしか…", 1.5);
       msg(`${h.name}は キラキラいしを ひろった！ …ただの いしだった。${h.name}は がっかりしている。`);
       return true;
@@ -680,7 +714,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     const list = S.floor[k];
     if (list && list.length) {
       const got = list.splice(0); delete S.floor[k];
-      h.bag.push(...got); S.stolen.push(...got); S.waveStolen.push(...got);
+      gain(h, got);
       SFX.steal();
       got.forEach((g) => pop(`-${ITEMS[g].v}G`, h.x + 0.5, h.y, "#ff6b6b"));
       msg(`${h.name}は ゆかの ${got.map((g) => ITEMS[g].n).join("と ")}を ひろった！「おちてた！ ラッキー！」`);
@@ -753,7 +787,10 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       return;
     }
     S.visited.add(best);
-    if (best.type === "bed") S.bedUsed = true;
+    if (best.type === "bed") { S.bedUsed = true; S.d.bed++; }
+    objSay(best, best.items.length || best.type === "bed"
+      ? rand(OBJ_LINES[best.type === "safe" && h.safeOpener ? "safeMage" : best.type])
+      : rand(["なかみ からっぽだよ〜", "なにも ないってば〜", "くるなら くれば？"]), best.items.length || best.type === "bed" ? "scared" : "smug");
     h.target = best;
     h.path = (bestTile[0] === h.x && bestTile[1] === h.y) ? [] : pathTo(prev, h.x, h.y, bestTile[0], bestTile[1]) || [];
   }
@@ -762,19 +799,19 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       heroSay(h, "ひらけ〜 ゴマ！"); SFX.bell();
       if (o.items.length) {
         const got = o.items.splice(0);
-        h.bag.push(...got); S.stolen.push(...got); S.waveStolen.push(...got);
+        gain(h, got);
         got.forEach((g, i) => pop(`-${ITEMS[g].v}G`, o.x + 0.5, o.y - i * 0.4, "#ff6b6b"));
         msg(`${h.name}は じゅもんで きんこを あけた！ ${got.map((k) => ITEMS[k].n).join("と ")}を てにいれた！`);
       } else { ska(h, o); msg(`${h.name}は じゅもんで きんこを あけた！ …からっぽだった。`); }
       return;
     }
-    if (o.type === "safe") { heroSay(h, "ちっ。"); SFX.safe(); msg(`${h.name}は きんこを しらべた。カギが かかっている！`); return; }
+    if (o.type === "safe") { S.d.safeFail++; objSay(o, "ほらね、あかないでしょ", "smug"); heroSay(h, "ちっ。"); SFX.safe(); msg(`${h.name}は きんこを しらべた。カギが かかっている！`); return; }
     if (o.type === "bed") { heroSay(h, "ふっかーつ！"); msg(`${h.name}は かってに ベッドで ねて、HPが ぜんかいふくした！`); return; }
     const verb = { pot: "ツボを もちあげて なげつけた！ パリーン！", drawer: "タンスを あけた！", barrel: "タルを のぞきこんだ！" }[o.type];
-    if (o.type === "pot") { o.broken = true; SFX.crash(); S.shake = 0.3; shards(o.x + 0.5, o.y + 0.5); }
+    if (o.type === "pot") { o.broken = true; S.d.pots++; SFX.crash(); S.shake = 0.3; shards(o.x + 0.5, o.y + 0.5); }
     if (o.items.length) {
       const got = o.items.splice(0);
-      h.bag.push(...got); S.stolen.push(...got); S.waveStolen.push(...got);
+      gain(h, got);
       if (o.type !== "pot") SFX.steal();
       got.forEach((g, i) => pop(`-${ITEMS[g].v}G`, o.x + 0.5, o.y - i * 0.4, "#ff6b6b"));
       heroSay(h, got.includes("stick") ? "ひのきのぼうだ！ さいきょう！" : got.includes("medal") ? "ちいさなメダル！ あつめてるんだ！" : "やったー！");
@@ -784,12 +821,24 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       msg(`${h.name}は ${verb} …なにも なかった。`);
     }
   }
+  function objSay(o, text, mood, t = 1.6) { o.say = text; o.sayT = t; o.mood = mood; }
   function ska(h, o) {
+    objSay(o, rand(["ざんねんでした〜", "べーっだ", "スカ〜！"]), "smug", 1.4);
     S.ska++;
     heroSay(h, rand(["なにも ない…", "あれ？ からっぽ…", "おかしいな…", "スカだ…"]));
     pop("スカ！", o.x + 0.5, o.y + 0.2, "#7be07b");
     pop(`+${SKA}G`, o.x + 0.5, o.y + 0.7, "#7be07b");
     tone(300, 200, 0.15, "triangle", 0.06); tone(200, 120, 0.2, "triangle", 0.06, 0.15);
+  }
+  function gain(h, got) {
+    h.bag.push(...got); S.stolen.push(...got); S.waveStolen.push(...got);
+    S.d.stolen.push(...got);
+    h.lv += got.length; S.lv[h.name] = h.lv; h.speed *= Math.pow(1.05, got.length);
+    setTimeout(() => {
+      pop("LEVEL UP!", rx(h) + 0.5, ry(h) - 0.4, "#ffd84a");
+      [784, 988, 1175, 1568].forEach((f, i) => tone(f, f, 0.09, "square", 0.05, i * 0.08));
+    }, 350);
+    msg(`${h.name}の レベルが ${h.lv}に あがった！ あしが すこし はやくなった。`);
   }
   function checkBump() {
     const p = S.player;
@@ -797,14 +846,14 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     for (const h of S.heroes) {
       if (h.state === "wait" || h.state === "gone" || h.talkCd > 0 || h.slip > 0 || h.scold > 0) continue;
       if (Math.hypot(rx(h) - rx(p), ry(h) - ry(p)) > 0.7) continue;
-      h.talkCd = 4; h.pause = 1.2; p.frozen = 1.7;
+      h.talkCd = 4; h.pause = 1.2; p.frozen = 1.7; S.d.talks++;
       p.say = "ここは ハジメの むら です。";
       heroSay(h, rand(GREET), 1.7);
       SFX.talk();
       msg(`${h.name}に はなしかけられた！ むらびとAは 「ここは ハジメの むら です。」と しか いえない！`);
       if (p.carry) {
         const k = p.carry; p.carry = null;
-        h.bag.push(k); S.stolen.push(k); S.waveStolen.push(k);
+        gain(h, [k]);
         SFX.steal(); pop(`-${ITEMS[k].v}G`, rx(p) + 0.5, ry(p), "#ff6b6b");
         msg(`${h.name}「お、それ くれるの？ ありがとう！」 ${ITEMS[k].n}を もっていかれた！`);
       }
@@ -839,27 +888,179 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     ctx.fillRect(bx, by, w, 26); ctx.strokeRect(bx, by, w, 26);
     ctx.fillStyle = "#f2f2f2"; ctx.fillText(text, bx + w / 2, by + 14);
   }
-  function drawTiles() {
+  // static layer: floor, walls, rug, hearth
+  const BG = document.createElement("canvas");
+  BG.width = W * T; BG.height = H * T;
+  function seeded(n) { let x = Math.sin(n * 9301 + 49297) * 233280; return x - Math.floor(x); }
+  function buildHouse() {
+    const c = BG.getContext("2d");
+    // floor planks
+    const fx0 = T, fy0 = T, fw = 9 * T, fh = 7 * T, PH = 12;
+    const woods = ["#b07b44", "#a8743f", "#b8834b", "#a36f3c", "#ad7842"];
+    for (let r = 0; r * PH < fh; r++) {
+      let x = -Math.floor(seeded(r) * 60), i = 0;
+      while (x < fw) {
+        const len = 60 + Math.floor(seeded(r * 31 + i) * 60);
+        c.fillStyle = woods[Math.floor(seeded(r * 7 + i * 3) * woods.length)];
+        c.fillRect(fx0 + x, fy0 + r * PH, len, PH);
+        c.fillStyle = "rgba(255,230,190,.12)";
+        c.fillRect(fx0 + x + 6, fy0 + r * PH + 3 + Math.floor(seeded(r + i) * 5), len * 0.5, 1);
+        c.fillStyle = "#7d522a"; c.fillRect(fx0 + x, fy0 + r * PH, 2, PH);
+        x += len; i++;
+      }
+      c.fillStyle = "#7d522a"; c.fillRect(fx0, fy0 + r * PH + PH - 1, fw, 1);
+    }
+    // shadow under the top wall
+    const sg = c.createLinearGradient(0, T, 0, T + 14);
+    sg.addColorStop(0, "rgba(30,15,5,.45)"); sg.addColorStop(1, "rgba(30,15,5,0)");
+    c.fillStyle = sg; c.fillRect(T, T, fw, 14);
+    // rug
+    const rx0 = 6 * T + 6, ry0 = 4 * T + 8, rw = 3 * T - 12, rh = 3 * T - 16;
+    c.fillStyle = "#d9a441"; c.fillRect(rx0, ry0, rw, rh);
+    c.fillStyle = "#9c2f3a"; c.fillRect(rx0 + 4, ry0 + 4, rw - 8, rh - 8);
+    c.strokeStyle = "#d9a441"; c.lineWidth = 2; c.strokeRect(rx0 + 10, ry0 + 10, rw - 20, rh - 20);
+    c.fillStyle = "#c44b55";
+    for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
+      const cx = rx0 + rw / 2 + (i - 1) * 36, cy = ry0 + rh / 2 + (j - 1) * 34;
+      c.beginPath(); c.moveTo(cx, cy - 9); c.lineTo(cx + 9, cy); c.lineTo(cx, cy + 9); c.lineTo(cx - 9, cy); c.fill();
+    }
+    c.fillStyle = "#f0d58a";
+    for (let i = 0; i < rw; i += 6) { c.fillRect(rx0 + i, ry0 - 3, 2, 3); c.fillRect(rx0 + i, ry0 + rh, 2, 3); }
+    // door mat
+    c.fillStyle = "#4f7a3a"; c.fillRect(5 * T + 6, 7 * T + 14, T - 12, T - 18);
+    c.fillStyle = "#6c9a50"; c.fillRect(5 * T + 10, 7 * T + 18, T - 20, T - 26);
+    // outer walls (seen from above)
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (MAP[y][x] !== "#") continue;
       const px = x * T, py = y * T;
-      if (MAP[y][x] === "#") {
-        ctx.fillStyle = "#4a4f6a"; ctx.fillRect(px, py, T, T);
-        ctx.fillStyle = "#363a52";
-        ctx.fillRect(px, py + T / 2 - 2, T, 3);
-        ctx.fillRect(px + (y % 2 ? T / 2 : 0), py, 3, T / 2);
-        ctx.fillRect(px + (y % 2 ? 0 : T / 2), py + T / 2, 3, T / 2);
+      const pillar = x >= 4 && x <= 5 && y >= 3 && y <= 4;
+      if (pillar) continue;
+      if (y === 0 && x > 0 && x < W - 1) {
+        c.fillStyle = "#e9dcc0"; c.fillRect(px, py, T, T);
+        c.fillStyle = "#ddcca8"; for (let i = 2; i < T; i += 8) c.fillRect(px + i, py + 8, 2, T - 18);
+        c.fillStyle = "#4a3020"; c.fillRect(px, py, T, 8);
+        c.fillStyle = "#7a5232"; c.fillRect(px, py + T - 12, T, 12);
+        c.fillStyle = "#5c3a1f"; c.fillRect(px, py + T - 12, T, 2);
       } else {
-        ctx.fillStyle = (x + y) % 2 ? "#a8743f" : "#b07b44"; ctx.fillRect(px, py, T, T);
-        ctx.fillStyle = "#8d5f31";
-        for (let i = 1; i < 3; i++) ctx.fillRect(px, py + (T / 3) * i, T, 2);
+        c.fillStyle = "#5a3c26"; c.fillRect(px, py, T, T);
+        c.fillStyle = "#47301e";
+        for (let i = 0; i < T; i += 12) c.fillRect(px, py + i, T, 1);
+        c.fillStyle = "#7a5232";
+        if (x === 0) c.fillRect(px + T - 4, py, 4, T);
+        if (x === W - 1) c.fillRect(px, py, 4, T);
+        if (y === H - 1) c.fillRect(px, py, T, 4);
       }
     }
-    ctx.fillStyle = "#2a1a0e"; ctx.fillRect(DOOR.x * T + 6, DOOR.y * T, T - 12, T);
-    ctx.fillStyle = "#6b4423"; ctx.fillRect(DOOR.x * T + 6, DOOR.y * T, T - 12, 6);
-    if (S.phase === "prep") {
-      ctx.fillStyle = `rgba(255,107,107,${0.2 + 0.15 * Math.sin(S.clock * 6)})`;
-      ctx.fillRect(DOOR.x * T, DOOR.y * T, T, T);
+    // wall decorations: shelf (x=4), portrait (x=9)
+    const sx = 4 * T, sy = 0;
+    c.fillStyle = "#5c3a1f"; c.fillRect(sx + 4, sy + 26, T - 8, 4);
+    [["#c0703a", 8], ["#4f9a3a", 20], ["#2f5fd0", 32]].forEach(([col, ox]) => { c.fillStyle = col; c.fillRect(sx + ox, sy + 14, 8, 12); c.fillStyle = "#1a1020"; c.fillRect(sx + ox + 2, sy + 12, 4, 2); });
+    const qx = 9 * T + 10, qy = 11;
+    c.fillStyle = "#d9a441"; c.fillRect(qx, qy, 28, 24);
+    c.fillStyle = "#8ab4d8"; c.fillRect(qx + 3, qy + 3, 22, 18);
+    c.fillStyle = "#f2c79b"; c.fillRect(qx + 10, qy + 6, 8, 7);
+    c.fillStyle = "#6b3b1f"; c.fillRect(qx + 9, qy + 4, 10, 3);
+    c.fillStyle = "#c8323c"; c.fillRect(qx + 8, qy + 13, 12, 8);
+    // hearth (the pillar)
+    const hx = 4 * T, hy = 3 * T, hw = 2 * T, hh = 2 * T;
+    c.fillStyle = "#8e4a36"; c.fillRect(hx, hy, hw, hh);
+    c.fillStyle = "#6e3626";
+    for (let r = 0; r < hh; r += 10) {
+      c.fillRect(hx, hy + r, hw, 2);
+      for (let i = (r / 10) % 2 ? 0 : 10; i < hw; i += 20) c.fillRect(hx + i, hy + r, 2, 10);
     }
+    c.fillStyle = "#4a3020"; c.fillRect(hx - 2, hy + 40, hw + 4, 8);
+    c.fillStyle = "#1a0d08";
+    c.beginPath(); c.moveTo(hx + 22, hy + hh - 2); c.lineTo(hx + 22, hy + 66); c.quadraticCurveTo(hx + hw / 2, hy + 50, hx + hw - 22, hy + 66); c.lineTo(hx + hw - 22, hy + hh - 2); c.fill();
+    c.fillStyle = "#5a5a66"; c.fillRect(hx + 18, hy + hh - 4, hw - 36, 4);
+  }
+  function drawTiles() {
+    ctx.drawImage(BG, 0, 0);
+    const t = S.clock;
+    // windows with sky
+    const sky = [["#9fd3ff", "#e8f6ff"], ["#ffc48a", "#ffe6c8"], ["#ff9a7a", "#ffd0a8"], ["#5a5aa8", "#ff9a7a"]][Math.min(S.wave, 3)];
+    for (const wx of [2, 7]) {
+      const px = wx * T + 8, py = 9;
+      ctx.fillStyle = "#5c3a1f"; ctx.fillRect(px - 3, py - 3, 38, 32);
+      const gr = ctx.createLinearGradient(0, py, 0, py + 26); gr.addColorStop(0, sky[0]); gr.addColorStop(1, sky[1]);
+      ctx.fillStyle = gr; ctx.fillRect(px, py, 32, 26);
+      ctx.fillStyle = "rgba(255,255,255,.9)";
+      const cx = px + ((t * 4 + wx * 13) % 44) - 8;
+      ctx.save(); ctx.beginPath(); ctx.rect(px, py, 32, 26); ctx.clip();
+      ctx.fillRect(cx, py + 7, 12, 4); ctx.fillRect(cx + 3, py + 4, 6, 3);
+      ctx.restore();
+      ctx.fillStyle = "#5c3a1f"; ctx.fillRect(px + 15, py, 2, 26); ctx.fillRect(px, py + 12, 32, 2);
+      ctx.fillStyle = "#c8323c"; ctx.fillRect(px - 6, py - 4, 6, 32); ctx.fillRect(px + 32, py - 4, 6, 32);
+      // light shaft onto the floor
+      ctx.fillStyle = "rgba(255,240,200,.07)";
+      ctx.beginPath(); ctx.moveTo(px, T); ctx.lineTo(px + 32, T); ctx.lineTo(px + 52, T * 3); ctx.lineTo(px + 8, T * 3); ctx.fill();
+    }
+    // clock
+    const kx = 5 * T + T / 2, ky = 22;
+    ctx.fillStyle = "#5c3a1f"; ctx.beginPath(); ctx.arc(kx, ky, 13, 0, 7); ctx.fill();
+    ctx.fillStyle = "#f4f0e0"; ctx.beginPath(); ctx.arc(kx, ky, 10, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#1a1020"; ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(kx, ky); ctx.lineTo(kx + Math.cos(t - 1.57) * 8, ky + Math.sin(t - 1.57) * 8);
+    ctx.moveTo(kx, ky); ctx.lineTo(kx + Math.cos(t / 12 - 1.57) * 5, ky + Math.sin(t / 12 - 1.57) * 5); ctx.stroke();
+    // fire
+    const fx = 5 * T, fy = 5 * T - 6;
+    for (let i = 0; i < 5; i++) {
+      const h = 12 + Math.sin(t * 12 + i * 1.7) * 4 + (i === 2 ? 6 : 0);
+      ctx.fillStyle = i % 2 ? "#ffb02e" : "#ff6a1e";
+      ctx.fillRect(fx - 20 + i * 8, fy - h, 7, h);
+    }
+    ctx.fillStyle = "#ffe27a"; ctx.fillRect(fx - 6, fy - 8 - Math.abs(Math.sin(t * 9)) * 4, 12, 8);
+    // door
+    const dx = DOOR.x * T, dy = DOOR.y * T;
+    const open = S.phase === "hero" && S.heroes.some((h) => h.state !== "wait" && h.state !== "gone" && Math.hypot(rx(h) - DOOR.x, ry(h) - DOOR.y) < 1.2);
+    ctx.fillStyle = "#3b2616"; ctx.fillRect(dx + 3, dy, T - 6, T);
+    if (open) {
+      ctx.fillStyle = "#7fbf5a"; ctx.fillRect(dx + 7, dy + 4, T - 14, T - 4);
+      ctx.fillStyle = "#c9a36a"; ctx.fillRect(dx + 16, dy + 4, T - 32, T - 4);
+    } else {
+      ctx.fillStyle = "#8b5a2b"; ctx.fillRect(dx + 7, dy + 4, T - 14, T - 4);
+      ctx.fillStyle = "#6b4423"; for (let i = 13; i < T - 7; i += 8) ctx.fillRect(dx + i, dy + 4, 1, T - 4);
+      ctx.fillStyle = "#f0c419"; ctx.fillRect(dx + T - 15, dy + 24, 4, 4);
+    }
+    if (S.phase === "prep") {
+      ctx.fillStyle = `rgba(255,107,107,${0.15 + 0.12 * Math.sin(t * 6)})`;
+      ctx.fillRect(dx, dy, T, T);
+    }
+  }
+  function drawLight() {
+    const t = S.clock;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    const fl = 0.16 + Math.sin(t * 11) * 0.02 + Math.sin(t * 7.3) * 0.02;
+    const g1 = ctx.createRadialGradient(5 * T, 5 * T, 4, 5 * T, 5 * T, 150);
+    g1.addColorStop(0, `rgba(255,140,40,${fl})`); g1.addColorStop(1, "rgba(255,140,40,0)");
+    ctx.fillStyle = g1; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.restore();
+    const v = ctx.createRadialGradient(cv.width / 2, cv.height / 2, cv.height * 0.35, cv.width / 2, cv.height / 2, cv.width * 0.7);
+    v.addColorStop(0, "rgba(10,5,20,0)"); v.addColorStop(1, `rgba(10,5,20,${S.phase === "hero" ? 0.5 : 0.35})`);
+    ctx.fillStyle = v; ctx.fillRect(0, 0, cv.width, cv.height);
+  }
+  function shadow(x, y, w = 16) {
+    ctx.fillStyle = "rgba(20,10,0,.28)";
+    ctx.beginPath(); ctx.ellipse(x, y, w, 5, 0, 0, 7); ctx.fill();
+  }
+  function face(o, px, py) {
+    if (o.broken || o.type === "table") return;
+    const cy = { pot: 31, drawer: 23, safe: 18, bed: 34, barrel: 28 }[o.type] || 28;
+    const cx0 = px + T / 2 + (o.type === "safe" ? -8 : 0);
+    const scared = o.sayT > 0 && o.mood === "scared";
+    const smug = o.sayT > 0 && o.mood === "smug";
+    const wob = scared ? Math.sin(S.clock * 40) * 1.5 : 0;
+    const blink = ((S.clock + o.x * 0.7 + o.y * 1.3) % 3.4) < 0.12;
+    for (const sx of [-6, 6]) {
+      const ex = cx0 + sx + wob, ey = py + cy;
+      if (blink && !scared) { ctx.fillStyle = "#1a1020"; ctx.fillRect(ex - 3, ey, 6, 2); continue; }
+      if (smug) { ctx.fillStyle = "#1a1020"; ctx.fillRect(ex - 3, ey + 1, 6, 2); ctx.fillRect(ex - 3, ey - 1, 2, 2); continue; }
+      const r = scared ? 4 : 3;
+      ctx.fillStyle = "#fff"; ctx.fillRect(ex - r, ey - r, r * 2, r * 2);
+      ctx.fillStyle = "#1a1020"; ctx.fillRect(ex - 1 + (scared ? 0 : Math.sign(Math.sin(S.clock * 0.7 + o.x))), ey - 1, 2, 3);
+    }
+    if (scared) { ctx.fillStyle = "#8ab4ff"; ctx.fillRect(cx0 + 12, py + cy - 10 + (S.clock * 18) % 6, 3, 5); }
   }
   function drawObjects(g) {
     for (const o of objects) {
@@ -875,8 +1076,10 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
         ctx.fillStyle = "#e8e2d0"; ctx.beginPath(); ctx.ellipse(px + T / 2, py + 22, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
         continue;
       }
+      if (o.type !== "bed") shadow(px + T / 2, py + T - 5, 15);
       if (o.broken) spr("potBroken", px, py, T);
       else spr(o.type, px, py, T);
+      face(o, px, py);
       if (o.items.length && o.type !== "safe") {
         ctx.strokeStyle = `rgba(255,216,74,${0.55 + 0.35 * Math.sin(S.clock * 5)})`; ctx.lineWidth = 2; ctx.strokeRect(px + 3, py + 3, T - 6, T - 6);
       }
@@ -887,6 +1090,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
         label("済", 0, 0, "#ffd84a"); ctx.restore();
       }
     }
+    for (const o of objects) if (o.sayT > 0) bubble(o.say, o.x * T + T / 2, o.y * T - 4, "#ffd84a");
     if (g && g.target) {
       const bob = Math.sin(S.clock * 6) * 4;
       const cx = g.target.x * T + T / 2, cy = g.target.y * T - 10 + bob;
@@ -909,6 +1113,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     if (h.state === "wait" || h.state === "gone") return;
     const cx = rx(h) * T, cy = ry(h) * T;
     const bob = h.moving ? Math.abs(Math.sin(S.clock * 14)) * -3 : 0;
+    shadow(cx + T / 2, cy + T - 4);
     if (h.slip > 0) {
       ctx.save(); ctx.translate(cx + T / 2, cy + T / 2 + 8); ctx.rotate(Math.PI / 2 * (h.flip ? -1 : 1));
       ctx.drawImage(SPR[h.spr], -T / 2, -T / 2, T, T); ctx.restore();
@@ -918,7 +1123,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
       spr(h.spr, cx, cy + bob + (h.scold > 0 ? 6 : 0), T, h.flip);
       if (h.scold > 0) { ctx.fillStyle = "#8ab4ff"; ctx.fillRect(cx + T - 10, cy + 6 + (S.clock * 20) % 10, 3, 6); }
     }
-    label(h.name, cx + T / 2, cy + T + 2, "#ff6b6b");
+    label(`${h.name} Lv${h.lv}`, cx + T / 2, cy + T + 2, "#ff6b6b");
     if (h.state === "act" && h.target) {
       const w = 36, f = 1 - Math.max(0, h.actT) / h.actMax;
       ctx.fillStyle = "#05060d"; ctx.fillRect(cx + T / 2 - w / 2, cy - 6, w, 7);
@@ -931,6 +1136,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     const cx = rx(p) * T, cy = ry(p) * T;
     const bob = p.moving ? Math.abs(Math.sin(S.clock * 16)) * -3 : 0;
     const shake = p.frozen > 0 ? Math.sin(S.clock * 40) * 1.5 : 0;
+    shadow(cx + T / 2, cy + T - 4);
     spr("villager", cx + shake, cy + bob, T, p.flip);
     label("あなた", cx + T / 2, cy + T + 2, "#ffd84a");
     if (p.carry) spr(p.carry, cx + 12, cy - 18 + bob, 24);
@@ -964,6 +1170,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     drawObjects(g);
     S.heroes.forEach(drawHero);
     drawPlayer();
+    drawLight();
     drawFx(dt);
     if (S.momT > 0) {
       S.momT -= dt;
@@ -975,7 +1182,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   // ================= HUD =================
   let lastGuide = "";
   function hud(g) {
-    $("hDay").textContent = `${Math.min(S.wave + 1, 3)}日目`;
+    $("hDay").textContent = `${Math.min(S.wave + 1, WAVES.length)}日目`;
     const ph = $("hPhase");
     const tutWait = S.phase === "prep" && S.wave === 0 && S.tut < 2;
     ph.classList.toggle("alarm", S.phase === "hero" || (S.phase === "prep" && S.timer < 4 && !tutWait));
@@ -1014,6 +1221,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     S.clock += dt;
+    if (objects) for (const o of objects) if (o.sayT > 0) o.sayT -= dt;
     const g = guide();
     if (S.phase === "prep") {
       if (!(S.wave === 0 && S.tut < 2)) S.timer -= dt;
@@ -1052,6 +1260,7 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
   $("skip").addEventListener("click", () => { if (S.phase === "prep") { S.tut = Math.max(S.tut, 2); S.timer = 0; } });
   $("snd").addEventListener("click", () => { soundOn = !soundOn; $("snd").textContent = `おと: ${soundOn ? "ON" : "OFF"}`; if (soundOn) initAudio(); });
 
+  buildHouse();
   newGame();
   requestAnimationFrame(frame);
 })();
