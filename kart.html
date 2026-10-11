@@ -290,22 +290,22 @@ const DEFAULT_MY = { id: 'my', name: 'マイキャラ', title: 'きみだけの�
 // ============================================================
 const COURSES = [
   {
-    name: 'グリーンサーキット', emoji: '🌳', song: 0, elev: 16, seed: 0,
+    name: 'グリーンサーキット', emoji: '🌳', song: 0, elev: 34, seed: 0, windmills: true, springs: [[0.57, 0]], boulders: { f: 0.22, len: 110, count: 3 },
     points: [[300,1000],[300,500],[500,300],[900,300],[1100,500],[1300,400],[1650,350],[1750,600],[1600,900],
              [1700,1200],[1700,1600],[1450,1750],[1000,1700],[800,1450],[500,1700],[300,1500]],
     ramps: [0.43], pads: [[0.1, 0], [0.3, -24], [0.63, 24], [0.88, -24]], cuts: [{ f: 0.84, len: 16 }],
     theme: { kind: 'day', forest: 0.45, ground: '#5ec46f', shoulder: '#6fd07e', hill: '#6fbf7f', skyTop: '#2d7ff9', skyHor: '#d5f1ff', fog: '#d5f1ff', water: '#3aa0ff', sun: 0xfff3dd, sunI: 0.95, sunGlow: '#fff3c4', hemiSky: '#ffffff', hemiGround: '#5a9a5a', hemiI: 0.75 },
   },
   {
-    name: 'サンセットハイウェイ', emoji: '🌇', song: 1, elev: 26, seed: 1, traffic: 6,
+    name: 'サンセットハイウェイ', emoji: '🌇', song: 1, elev: 46, seed: 1, traffic: 7, springs: [[0.47, -26], [0.47, 26]],
     points: [[1000,260],[1600,400],[1750,800],[1400,1000],[1000,900],[700,1050],[900,1300],[1500,1300],[1750,1600],
              [1400,1800],[600,1800],[250,1400],[250,800],[450,380]],
-    ramps: [0.7], pads: [[0.08, 0], [0.35, -24], [0.55, 24], [0.9, 0]], cuts: [{ f: 0.3, len: 14 }],
+    ramps: [0.7, 0.2], pads: [[0.08, 0], [0.1, 0], [0.12, 0], [0.35, -24], [0.55, 24], [0.9, 0]], cuts: [{ f: 0.3, len: 14 }],
     theme: { kind: 'sunset', forest: 0.3, ground: '#86c25e', shoulder: '#e9c58a', hill: '#c7845a', skyTop: '#ff5e62', skyHor: '#ffd08a', fog: '#ffc98a', water: '#4a8fd9',
       sun: 0xffc48a, sunI: 1.0, sunGlow: '#ffb070', sunX: 0.9, sunY: 0.25, hemiSky: '#ffd9c0', hemiGround: '#6a5040', hemiI: 0.7, tree: '#3a9a5c', tree2: '#4fb46a' },
   },
   {
-    name: 'もりのラリー', emoji: '🌲', song: 2, elev: 40, seed: 2,
+    name: 'もりのラリー', emoji: '🌲', song: 2, elev: 70, seed: 2, thwomps: { f: 0.32, count: 3 }, muds: [[0.47, -28], [0.47, 30], [0.82, 0]], springs: [[0.68, -30]],
     points: [[1000,300],[1700,300],[1750,700],[1300,800],[1300,1100],[1700,1200],[1700,1700],[1000,1750],
              [1000,1300],[600,1250],[600,1700],[300,1700],[300,300]],
     ramps: [], gaps: [{ f: 0.05, len: 13 }], pads: [[0.3, -24], [0.5, 24], [0.75, 0]], cuts: [{ f: 0.6, len: 18 }],
@@ -313,10 +313,10 @@ const COURSES = [
       sun: 0xffffff, sunI: 0.9, sunGlow: '#ffffff', hemiSky: '#ffffff', hemiGround: '#3a7a4a', hemiI: 0.75, tree: '#24935a', tree2: '#2fae6c' },
   },
   {
-    name: 'ナイトグランプリ', emoji: '🌙', song: 3, elev: 60, seed: 3,
+    name: 'ナイトグランプリ', emoji: '🌙', song: 3, elev: 85, seed: 3, cannon: { from: 0.12, to: 0.31 }, thwomps: { f: 0.62, count: 2 }, fireworks: true,
     points: [[1000,250],[1650,300],[1800,700],[1500,950],[1750,1250],[1650,1700],[1150,1800],[900,1450],[600,1750],
              [250,1550],[300,1100],[750,900],[300,650],[450,300]],
-    ramps: [0.8], gaps: [{ f: 0.42, len: 14 }], pads: [[0.1, 0], [0.25, -24], [0.6, 24]], cuts: [{ f: 0.68, len: 16 }],
+    ramps: [0.8], gaps: [{ f: 0.45, len: 14 }], pads: [[0.36, -24], [0.75, 24]], cuts: [{ f: 0.88, len: 16 }],
     theme: { kind: 'night', forest: 0.5, ground: '#2f5a4a', shoulder: '#3b6a58', hill: '#1d2a4a', skyTop: '#05061a', skyHor: '#2a2a6a', fog: '#141836', water: '#1a3a7a', road: '#3a3d4a',
       sun: 0xa8b8ff, sunI: 0.55, sunGlow: '#c8d4ff', sunX: -0.4, sunY: 0.6, hemiSky: '#8a9aff', hemiGround: '#203040', hemiI: 0.6, tree: '#1f6a4a', tree2: '#2a7f58' },
   },
@@ -989,6 +989,10 @@ function buildCourse(ci) {
   hgt = hgt.map((h, i) => lerp(h0, h, smooth(60, 400, Math.min(i, n - i) * SP)));
   const minH = Math.min(...hgt);
   hgt = hgt.map(h => h - minH + 4);
+  // banked corners: the outside of each turn is raised
+  const bankRaw = pts.map((_, i) => battle ? 0 : clamp(wrapAngle(ang[(i + 18) % n] - ang[(i - 18 + n) % n]) * 0.28, -0.22, 0.22));
+  const bank = bankRaw.map((_, i) => { let a = 0; for (let o = -14; o <= 14; o++) a += bankRaw[(i + o + n) % n]; return a / 29; });
+  const surf = (i, lat) => hgt[i] - lat * bank[i];
   const gap = new Uint8Array(n), wallL = new Uint8Array(n).fill(1), wallR = new Uint8Array(n).fill(1);
   const ramps = [], pads = [], gaps = [];
   for (const g of def.gaps || []) {
@@ -1013,7 +1017,7 @@ function buildCourse(ci) {
   let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
   for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-  course = { def, th, pts, ang, hgt, n, L, bounds: { minX, minY, maxX, maxY }, cx, cy, boxes: [], pads: [], ramps, coins: [], obstacles: [], anim: [], gap, gaps, wallL, wallR, battle, cars: [] };
+  course = { bank, def, th, pts, ang, hgt, n, L, bounds: { minX, minY, maxX, maxY }, cx, cy, boxes: [], pads: [], ramps, coins: [], obstacles: [], anim: [], gap, gaps, wallL, wallR, battle, cars: [] };
   const lp = (i, lat) => { const p = pts[i], a = ang[i]; return [p.x - Math.sin(a) * lat, p.y + Math.cos(a) * lat]; };
 
   // ---------- sky, sun, fog ----------
@@ -1053,7 +1057,7 @@ function buildCourse(ci) {
       for (const k of [i, i2]) {
         const h = hgt[k], la = typeof latA === 'function' ? latA(k) : latA, lb = typeof latB === 'function' ? latB(k) : latB;
         const [ax, az] = lp(k, la), [bx, bz] = lp(k, lb);
-        pos.push(ax, h + yA, az, bx, h + yB, bz);
+        pos.push(ax, h + yA - la * bank[k], az, bx, h + yB - lb * bank[k], bz);
         const v = (k === i2 && i2 === 0 ? n : k) * SP / vScale; uv.push(0, v, 1, v);
       }
       idx.push(vi, vi + 1, vi + 2, vi + 1, vi + 3, vi + 2); vi += 4;
@@ -1084,7 +1088,7 @@ function buildCourse(ci) {
     let run = [];
     const flush = () => {
       if (run.length > 3) {
-        const curvePts = run.map(i => { const [x, z] = lp(i, off); return new THREE.Vector3(x, hgt[i] + 3.2, z); });
+        const curvePts = run.map(i => { const [x, z] = lp(i, off); return new THREE.Vector3(x, surf(i, off) + 3.2, z); });
         const closed = run.length >= n - 1;
         const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(curvePts, closed), Math.max(8, run.length), 3.2, 8, closed), toon('#f4f4f4'));
         tube.castShadow = true; tube.receiveShadow = true; group.add(tube);
@@ -1136,7 +1140,7 @@ function buildCourse(ci) {
     const i = pd.idx, [x, z] = lp(i, pd.lat);
     const m = new THREE.Mesh(new THREE.PlaneGeometry(22, 34), new THREE.MeshBasicMaterial({ map: padTex }));
     m.rotation.set(-Math.PI / 2, -Math.PI / 2 - ang[i], 0, 'YXZ');
-    m.position.set(x, hgt[i] + 0.15, z); group.add(m);
+    m.position.set(x, surf(i, pd.lat) + 0.2, z); m.rotation.z = 0; group.add(m);
     course.pads.push({ idx: i, lat: pd.lat, tex: padTex });
   }
   // ---------- item boxes ----------
@@ -1148,7 +1152,7 @@ function buildCourse(ci) {
   } else {
     for (const f of def.boxes || [0.18, 0.4, 0.62, 0.84]) {
       const i = straightIdx(f, 40);
-      for (const lat of [-36, -12, 12, 36]) { const [x, z] = lp(i, lat); addBox(x, z, hgt[i]); }
+      for (const lat of [-36, -12, 12, 36]) { const [x, z] = lp(i, lat); addBox(x, z, surf(i, lat)); }
     }
   }
   // ---------- coins (Kenney coin model) ----------
@@ -1156,7 +1160,7 @@ function buildCourse(ci) {
     const list = [];
     [0.06, 0.22, 0.38, 0.55, 0.7, 0.92].forEach((f, r) => {
       const i0 = Math.floor(n * f), lat0 = [-30, 20, 0, -20, 30, 10][r];
-      for (let k = 0; k < 5; k++) { const i = (i0 + k * 3) % n; if (gap[i]) continue; const lat = lat0 + Math.sin(k * 0.9) * 12; const [x, z] = lp(i, lat); list.push({ x, y: z, h: hgt[i], t: 0, ph: k * 0.5 }); }
+      for (let k = 0; k < 5; k++) { const i = (i0 + k * 3) % n; if (gap[i]) continue; const lat = lat0 + Math.sin(k * 0.9) * 12; const [x, z] = lp(i, lat); list.push({ x, y: z, h: surf(i, lat), t: 0, ph: k * 0.5 }); }
     });
     // coin trail hints at shortcuts
     for (const c of cutsResolved) {
@@ -1183,7 +1187,7 @@ function buildCourse(ci) {
   const terrainH = (x, z) => {
     const [bi, d] = nearestFull(x, z);
     if (battle) return d < WALL + 4 ? hgt[bi] - 3 : lerp(hgt[bi] - 3, 0, smooth(WALL, WALL + 200, d));
-    const near = gap[bi] ? hgt[bi] - 150 : hgt[bi] - 3;
+    const near = gap[bi] ? hgt[bi] - 150 : hgt[bi] - Math.abs(bank[bi]) * (WALL + 20) - 4;
     return lerp(near, 0, smooth(gap[bi] ? WALL + 60 : WALL + 4, WALL + 280, d));
   };
   course.terrainH = terrainH;
@@ -1258,6 +1262,72 @@ function buildCourse(ci) {
       }
     }
   }
+  // ---------- gimmicks ----------
+  course.springs = []; course.thwomps = []; course.boulders = []; course.muds = []; course.cannon = null; course.fireworks = !!def.fireworks;
+  for (const [f, lat] of def.springs || []) {
+    const i = straightIdx(f, 40), [x, z] = lp(i, lat);
+    const p = new PB(); p.add(GEO.cyl, '#2fbf71', [0, 1.2, 0], 0, [13, 2.4, 13]); p.add(GEO.cyl, '#ffffff', [0, 2.6, 0], 0, [8, 0.6, 8]);
+    for (let q = 0; q < 6; q++) { const a = q / 6 * TAU; p.add(GEO.sph, '#ffffff', [Math.cos(a) * 10, 2.2, Math.sin(a) * 10], 0, [2, 0.8, 2]); }
+    const m = p.mesh(toonV()); m.position.set(x, surf(i, lat), z); group.add(m);
+    course.springs.push({ x, y: z, mesh: m, t: 0 });
+  }
+  for (const [f, lat] of def.muds || []) {
+    const i = straightIdx(f, 30), [x, z] = lp(i, lat);
+    const tex = canvasTex(128, 128, (g) => { g.fillStyle = '#5e4026'; for (let q = 0; q < 9; q++) { g.beginPath(); g.arc(64 + rand(-28, 28), 64 + rand(-28, 28), rand(16, 30), 0, TAU); g.fill(); } g.fillStyle = 'rgba(255,255,255,.14)'; for (let q = 0; q < 6; q++) { g.beginPath(); g.arc(rand(34, 94), rand(34, 94), rand(3, 7), 0, TAU); g.fill(); } }, false);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshLambertMaterial({ map: tex, transparent: true, depthWrite: false }));
+    m.rotation.set(-Math.PI / 2, 0, rand(0, TAU)); m.position.set(x, surf(i, lat) + 0.3, z); group.add(m);
+    course.muds.push({ x, y: z, r: 25 });
+  }
+  if (def.thwomps) {
+    const i0 = straightIdx(def.thwomps.f, 60);
+    for (let q = 0; q < def.thwomps.count; q++) {
+      const i = (i0 + q * 10) % n, lat = [-30, 26, -4, 32, -26][q % 5], [x, z] = lp(i, lat);
+      const p = new PB();
+      p.add(roundBox(26, 26, 26, 3), '#8f95a6', [0, 13, 0]);
+      for (const sx of [-1, 1]) { p.add(GEO.box, '#ffffff', [sx * 5.5, 16, 13.2], 0, [6, 5, 0.6]); p.add(GEO.box, '#141414', [sx * 5.5, 15.5, 13.6], 0, [2.6, 3, 0.5]); p.add(GEO.box, '#141414', [sx * 5.5, 20, 13.6], [0, 0, -sx * 0.4], [7, 1.4, 0.5]); }
+      p.add(GEO.box, '#141414', [0, 7, 13.6], 0, [12, 2, 0.5]);
+      for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.add(GEO.cone, '#6c7283', [sx * 14.5, 13 + sy * 8, 0], [0, 0, -sx * Math.PI / 2], [3, 5, 3]);
+      const m = p.mesh(toonV()); group.add(m);
+      const base = surf(i, lat);
+      m.position.set(x, base + 60, z); m.rotation.y = -Math.PI / 2 - ang[i];
+      const sh = new THREE.Mesh(new THREE.CircleGeometry(17, 20), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25, depthWrite: false }));
+      sh.rotation.x = -Math.PI / 2; sh.position.set(x, base + 0.4, z); group.add(sh);
+      course.thwomps.push({ x, y: z, base, mesh: m, shadow: sh, ph: q * 1.05, yOff: 60, r: 18 });
+    }
+  }
+  if (def.boulders) {
+    const i0 = straightIdx(def.boulders.f, 80);
+    for (let q = 0; q < def.boulders.count; q++) {
+      const p = new PB(); p.add(new THREE.DodecahedronGeometry(1, 1), '#a08c74', [0, 0, 0], 0, 16); p.add(new THREE.DodecahedronGeometry(1, 0), '#86735d', [7, 6, 8], 0, 6); p.add(new THREE.DodecahedronGeometry(1, 0), '#86735d', [-8, -4, 9], 0, 5);
+      const m = p.mesh(toonV()); m.rotation.order = 'YXZ'; group.add(m);
+      course.boulders.push({ mesh: m, i0, len: def.boulders.len, pos: q * def.boulders.len / def.boulders.count, lat: [-28, 22, -4][q % 3], x: 0, y: 0, h: 0, r: 16, roll: 0 });
+    }
+  }
+  if (def.cannon) {
+    const a = straightIdx(def.cannon.from, 40), b = Math.floor(n * def.cannon.to) % n;
+    course.cannon = { a, b };
+    const [x, z] = lp(a, 0);
+    const ctex = canvasTex(128, 128, (g) => { const gr = g.createRadialGradient(64, 64, 10, 64, 64, 64); gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.4, '#ff4fd8'); gr.addColorStop(1, '#5a1a9a'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); g.fillStyle = '#ffffff'; g.font = '900 44px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('▲▲', 64, 66); }, false);
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(ROADW, 40), new THREE.MeshBasicMaterial({ map: ctex }));
+    pad.rotation.set(-Math.PI / 2, -Math.PI / 2 - ang[a], 0, 'YXZ'); pad.position.set(x, hgt[a] + 0.35, z); group.add(pad);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(WALL + 6, 6, 10, 40, Math.PI), toon('#ff4fd8')); ring.position.set(x, hgt[a], z); ring.rotation.y = Math.PI / 2 - ang[a]; group.add(ring);
+    const span = (b - a + n) % n;
+    for (let q = 1; q < 9; q++) {
+      const u = q / 9, i = Math.floor(a + span * u) % n, [hx, hz] = lp(i, 0);
+      const hoop = new THREE.Mesh(new THREE.TorusGeometry(28, 2.5, 8, 28), new THREE.MeshBasicMaterial({ color: q % 2 ? '#4cc9ff' : '#ff4fd8' }));
+      hoop.position.set(hx, lerp(hgt[a], hgt[b], u) + Math.sin(Math.PI * u) * 300 + 8, hz); hoop.rotation.y = Math.PI / 2 - ang[i]; group.add(hoop);
+      course.anim.push(t => { hoop.rotation.z = t * 2; });
+    }
+  }
+  if (def.windmills) for (let q = 0; q < 5; q++) {
+    let x = 0, z = 0, d = 0, tries = 0;
+    do { x = rand(cx - 1100, cx + 1100); z = rand(cy - 1100, cy + 1100); d = Math.sqrt(Math.min(...pts.filter((_, i2) => i2 % 8 === 0).map(p => (p.x - x) ** 2 + (p.y - z) ** 2))); tries++; } while ((d < WALL + 300 || d > WALL + 600) && tries < 300);
+    const p = new PB(); p.add(GEO.cyl, '#f4efe6', [0, 40, 0], 0, [12, 80, 12]); p.add(GEO.cone, '#ef5a4c', [0, 92, 0], 0, [17, 24, 17]); p.add(GEO.box, '#8a5a3b', [0, 10, 12], 0, [8, 16, 1]);
+    const tower = p.mesh(toonV()); tower.position.set(x, terrainH(x, z), z); tower.rotation.y = rand(0, TAU); group.add(tower);
+    const bl = new PB(); for (let q2 = 0; q2 < 4; q2++) { const a2 = q2 * Math.PI / 2; bl.add(GEO.box, '#ffffff', [Math.cos(a2) * 26, Math.sin(a2) * 26, 0], [0, 0, a2], [48, 8, 1]); }
+    const blades = bl.mesh(toonV()); const hub = new THREE.Group(); hub.position.set(x, terrainH(x, z) + 76, z); hub.rotation.y = tower.rotation.y; blades.position.z = 14; hub.add(blades); group.add(hub);
+    course.anim.push(t => { blades.rotation.z = t * 1.2; });
+  }
   // ---------- flags, balloons, lamps, grandstand ----------
   {
     for (let i = 30; i < n; i += 70) {
@@ -1326,9 +1396,10 @@ function nearestGlobal(x, y) {
   return nearestIdx(x, y, best);
 }
 function trackH(x, y, i) {
-  const { hgt, n } = course, t = alongOf(x, y, i);
+  const { hgt, n, bank } = course, t = alongOf(x, y, i);
   const j = t >= 0 ? (i + 1) % n : (i - 1 + n) % n;
-  return lerp(hgt[i], hgt[j], Math.min(1, Math.abs(t)));
+  const lat = clamp(latOf(x, y, i), -WALL, WALL);
+  return lerp(hgt[i], hgt[j], Math.min(1, Math.abs(t))) - lat * lerp(bank[i], bank[j], Math.min(1, Math.abs(t)));
 }
 
 // ============================================================
@@ -1372,7 +1443,7 @@ function makeKart(c, isPlayer, slot) {
     item: null, itemCount: 0, rollT: 0, spinT: 0, spinA: 0, boostT: 0, starT: 0, hopT: 0, smallT: 0, coins: 0, squash: 0, goldT: 0, shieldT: 0, inkT: 0,
     air: false, vy: 0, airT: 0, trick: false, trickT: 0, prevRamp: 0, cheerT: 0, lookBackT: 0, respawnT: 0,
     drifting: false, driftDir: 0, driftCharge: 0, driftHeld: false, wallCd: 0, wrongT: 0,
-    balloons: 3, out: false, hits: 0, lapTimes: [],
+    balloons: 3, out: false, hits: 0, lapTimes: [], cannonT: -1, cannonLat: 0,
     skill: isPlayer ? 1 : rand(0.95, 1.0) * CLASSES[raceClass].ai, laneOff: rand(-30, 30), laneT: rand(1, 4), itemT: rand(1, 4),
     wander: null,
   };
@@ -1473,7 +1544,7 @@ function aiInput(k, dt) {
     if (fwd > 0 && fwd < 90 && Math.abs(dx * -Math.sin(k.angle) + dy * Math.cos(k.angle)) < 14 && Math.random() < 0.6) k.laneOff = latOf(e.x, e.y, k.idx) > 0 ? -30 : 30;
   }
   if (course.battle) return aiBattle(k, dt);
-  for (const o of course.cars.concat(course.obstacles)) {
+  for (const o of course.cars.concat(course.obstacles, course.boulders, course.thwomps)) {
     const dx = o.x - k.x, dy = o.y - k.y, fwd = dx * Math.cos(k.angle) + dy * Math.sin(k.angle);
     if (fwd > 0 && fwd < 130 && Math.abs(dx * -Math.sin(k.angle) + dy * Math.cos(k.angle)) < (o.r || 14) + 12) { const ol = latOf(o.x, o.y, k.idx); k.laneOff = clamp(ol > 0 ? ol - (o.r || 14) - 26 : ol + (o.r || 14) + 26, -44, 44); k.laneT = 1; }
   }
@@ -1713,6 +1784,7 @@ function updateKart(k, inp, dt) {
     k.steerSm += clamp(tgt - k.steerSm, -rate * dt, rate * dt);
     inp = Object.assign({}, inp, { steer: k.steerSm });
   }
+  if (k.cannonT >= 0) { updateCannon(k, dt); return; }
   k.wallCd -= dt; if (k.cheerT > 0) k.cheerT -= dt; if (k.lookBackT > 0) k.lookBackT -= dt; if (k.smallT > 0) k.smallT -= dt; if (k.squash > 0) k.squash -= dt;
   if (k.spinT > 0) {
     k.spinT -= dt; k.spinA += dt * 14;
@@ -1809,9 +1881,9 @@ function updateKart(k, inp, dt) {
       if (k.isPlayer && hit > 0.25) { Sound.noise(0.15, 0.3, 200); shakeT = 0.15; }
     }
   }
-  // obstacles
-  for (const o of course.obstacles) {
-    const dx = k.x - o.x, dy = k.y - o.y, dd = Math.hypot(dx, dy), r = o.r + 6;
+  // obstacles (thwomps are solid while they are low)
+  for (const o of course.obstacles.concat(course.thwomps.filter(t2 => t2.yOff < 26))) {
+    const dx = k.x - o.x, dy = k.y - o.y, dd = Math.hypot(dx, dy) || 1, r = o.r + 6;
     if (dd < r && !(k.air && k.h > trackH(o.x, o.y, k.idx) + 14)) {
       k.x = o.x + dx / dd * r; k.y = o.y + dy / dd * r;
       if (k.wallCd <= 0) { k.speed *= 0.35; k.wallCd = 0.4; k.hopT = 0.25; if (k.isPlayer) { Sound.noise(0.25, 0.35, 180); shakeT = 0.3; } for (let i = 0; i < 12; i++) spawn(o.x, k.h + 6, o.y, rand(-40, 40), rand(20, 60), rand(-40, 40), 0.5, fxColors().smoke, 5, 100); }
@@ -1822,7 +1894,9 @@ function updateKart(k, inp, dt) {
   const onCurb = Math.abs(k.lat) > ROADW / 2 && Math.abs(k.lat) < ROADW / 2 + CURB;
   const inGap = course.gap[k.idx] && Math.abs(k.lat) < WALL + 4;
   const ground = inGap ? course.hgt[k.idx] - 220 : Math.abs(k.lat) > WALL + 4 ? course.terrainH(k.x, k.y) + 1 : trackH(k.x, k.y, k.idx) + ramp + (onCurb ? 0.3 : 0);
-  if (!k.air && k.h > ground + 3) { k.air = true; k.airT = 0; k.vy = 0; k.trick = false; }
+  if (!k.air && k.h > ground + 3) { k.air = true; k.airT = 0; k.vy = Math.max(0, k.vyG || 0); k.trick = false; }
+  if (!k.air && (k.vyG || 0) > 30 && (ground - k.h) / dt < (k.vyG || 0) - GRAV * dt * 2.2 && k.speed > 200) { k.air = true; k.airT = 0; k.vy = k.vyG * 0.8; k.trick = false; k.aiTrick = Math.random() < 0.5; }
+  const hBefore = k.h;
   if (inGap && k.h < course.hgt[k.idx] - 50) respawnKart(k);
   if (k.air) {
     k.airT += dt; k.vy -= GRAV * (k.respawnT > 0 ? 0.25 : 1) * dt; k.h += k.vy * dt;
@@ -1841,7 +1915,20 @@ function updateKart(k, inp, dt) {
     } else k.h = lerp(k.h, ground, Math.min(1, dt * 22));
   }
   k.prevRamp = ramp;
+  if (!k.air) k.vyG = (k.h - hBefore) / Math.max(dt, 1e-3);
   if (!k.air) {
+    for (const sp of course.springs) if ((k.x - sp.x) ** 2 + (k.y - sp.y) ** 2 < 14 * 14) {
+      k.air = true; k.airT = 0; k.vy = 235; k.trick = false; k.aiTrick = true; k.boostT = Math.max(k.boostT, 0.6); sp.t = 0.3;
+      if (k.isPlayer) { Sound.beep(260, 0.4, 'sine', 0.22, 700); say('ジャンプ！', '#3ddc97', 0.8); }
+    }
+    for (const md2 of course.muds) if (k.starT <= 0 && k.boostT <= 0 && (k.x - md2.x) ** 2 + (k.y - md2.y) ** 2 < md2.r * md2.r) {
+      k.speed *= Math.pow(0.3, dt);
+      if (Math.random() < 0.6) spawn(k.x, k.h + 2, k.y, rand(-20, 20), rand(10, 30), rand(-20, 20), 0.4, '#5e4026', 4, 80);
+    }
+    if (course.cannon && k.cannonT < 0) {
+      let di = Math.abs(k.idx - course.cannon.a); di = Math.min(di, course.n - di);
+      if (di <= 2) { k.cannonT = 0; k.cannonLat = k.lat; if (k.isPlayer) { Sound.noise(0.8, 0.4, 150); Sound.beep(120, 0.6, 'sawtooth', 0.2, 400); shakeT = 0.4; say('たいほう発射！', '#ff4fd8', 1.2); } }
+    }
     for (const pd of course.pads) {
       let di = Math.abs(k.idx - pd.idx); di = Math.min(di, course.n - di);
       if (di <= 3 && Math.abs(k.lat - pd.lat) < 14) { if (k.boostT < 0.2 && k.isPlayer) Sound.noise(0.4, 0.22, 700); k.boostT = Math.max(k.boostT, 0.9); }
@@ -1892,6 +1979,18 @@ function updateKart(k, inp, dt) {
     const wrong = Math.abs(wrapAngle(md - course.ang[k.idx])) > 2.0 && Math.abs(k.speed) > 30;
     k.wrongT = wrong ? k.wrongT + dt : 0;
   }
+}
+function updateCannon(k, dt) {
+  const c = course.cannon, n = course.n, span = (c.b - c.a + n) % n, dur = 2.6;
+  k.cannonT += dt; const u = Math.min(1, k.cannonT / dur);
+  const i = Math.floor(c.a + span * u) % n, p = course.pts[i], a = course.ang[i];
+  const lat = lerp(k.cannonLat, 0, Math.min(1, u * 3));
+  k.x = p.x - Math.sin(a) * lat; k.y = p.y + Math.cos(a) * lat; k.angle = a; k.slip = 0; k.drifting = false; k.steerVis = 0;
+  k.h = lerp(course.hgt[c.a], course.hgt[c.b], u) + Math.sin(Math.PI * u) * 300;
+  let d = i - k.idx; if (d > n / 2) d -= n; else if (d < -n / 2) d += n; k.total += d * SP; k.idx = i; k.lat = lat;
+  k.speed = Math.max(k.speed, k.st.max * CLASSES[raceClass].mult); k.air = true; k.vy = 0; k.airT = 0;
+  if (Math.random() < 0.8) spawn(k.x, k.h + 4, k.y, rand(-10, 10), rand(-10, 10), rand(-10, 10), 0.6, Math.random() < 0.5 ? '#ff4fd8' : '#4cc9ff', 5, 0);
+  if (u >= 1) { k.cannonT = -1; k.vy = -30; k.boostT = Math.max(k.boostT, 1.0); if (k.isPlayer) say('ナイスショット！', '#ff4fd8', 1); }
 }
 function respawnKart(k) {
   const g = course.gaps.find(gp => ((k.idx - gp.s + course.n) % course.n) < gp.len + 4) || course.gaps[0];
@@ -1975,7 +2074,8 @@ function syncKart(k, dt) {
   const pitchAir = k.air ? clamp(-k.vy / 400, -0.35, 0.35) : 0;
   u.body.rotation.x = -Math.atan(slope) + pitchAir;
   const roll = k.trickT > 0 ? (1 - k.trickT / 0.45) * TAU : 0;
-  u.body.rotation.z = roll + lerp(u.body.rotation.z - (u.lastRoll || 0), -k.steerVis * 0.06 * clamp(k.speed / 200, 0, 1) - k.slip * 0.15, Math.min(1, dt * 8));
+  const bankRoll = course.bank && !k.air ? Math.atan(course.bank[k.idx]) * Math.cos(wrapAngle(k.angle - course.ang[k.idx])) : 0;
+  u.body.rotation.z = roll + lerp(u.body.rotation.z - (u.lastRoll || 0), bankRoll - k.steerVis * 0.06 * clamp(k.speed / 200, 0, 1) - k.slip * 0.15, Math.min(1, dt * 8));
   u.lastRoll = roll;
   const sq = k.squash > 0 ? 1 - Math.sin(k.squash / 0.18 * Math.PI) * 0.15 : 1;
   u.body.scale.set(2 - sq, sq, 2 - sq);
@@ -2014,6 +2114,33 @@ function simKarts(dt, demo) {
     const i = Math.floor(car.idx), p = course.pts[i], a = course.ang[i];
     car.x = p.x - Math.sin(a) * car.lat; car.y = p.y + Math.cos(a) * car.lat; car.h = course.hgt[i]; car.a = a;
     car.mesh.position.set(car.x, car.h, car.y); car.mesh.rotation.y = Math.PI / 2 - a;
+  }
+  for (const tw of course.thwomps) {
+    const cyc = (raceTime + tw.ph) % 3.2;
+    const y = cyc < 1.8 ? 60 : cyc < 2.2 ? 60 + Math.sin(cyc * 80) * 1.5 : cyc < 2.35 ? 60 * (1 - (cyc - 2.2) / 0.15) : cyc < 2.9 ? 0 : 60 * (cyc - 2.9) / 0.3;
+    const wasUp = tw.yOff > 1; tw.yOff = y; tw.mesh.position.y = tw.base + y;
+    tw.shadow.material.opacity = 0.12 + 0.35 * (1 - y / 60);
+    if (wasUp && y <= 0.01) {
+      for (let q = 0; q < 18; q++) spawn(tw.x + rand(-16, 16), tw.base + 2, tw.y + rand(-16, 16), rand(-60, 60), rand(10, 40), rand(-60, 60), 0.5, '#d8d2c4', 6, 80);
+      if (player && Math.hypot(player.x - tw.x, player.y - tw.y) < 260 && !demo) { shakeT = 0.3; Sound.noise(0.3, 0.35, 120); }
+      for (const k of karts) if (Math.abs(k.x - tw.x) < 19 && Math.abs(k.y - tw.y) < 19 && k.h < tw.base + 20) { spinOut(k); k.smallT = Math.max(k.smallT, 2.5); k.squash = 0.18; }
+    }
+  }
+  for (const bo of course.boulders) {
+    bo.pos = (bo.pos + 140 * dt / SP) % bo.len;
+    const i = Math.floor(bo.i0 + bo.len - bo.pos) % course.n, p = course.pts[i], a = course.ang[i];
+    const lat = bo.lat + Math.sin(raceTime * 0.7 + bo.i0) * 14;
+    bo.x = p.x - Math.sin(a) * lat; bo.y = p.y + Math.cos(a) * lat; bo.h = course.hgt[i] - lat * course.bank[i] + bo.r;
+    bo.roll -= 140 * dt / bo.r; bo.mesh.position.set(bo.x, bo.h, bo.y); bo.mesh.rotation.set(bo.roll, Math.PI / 2 - a, 0);
+    for (const k of karts) {
+      const dx = k.x - bo.x, dy = k.y - bo.y, d = Math.hypot(dx, dy) || 1;
+      if (d < bo.r + 8 && !(k.air && k.h > bo.h + bo.r * 0.6)) { k.x = bo.x + dx / d * (bo.r + 8); k.y = bo.y + dy / d * (bo.r + 8); spinOut(k); k.speed *= 0.4; if (k.isPlayer) { Sound.noise(0.3, 0.4, 120); shakeT = 0.3; } }
+    }
+  }
+  if (course.fireworks && state === 'race' && Math.random() < dt * 1.6) {
+    const f = player || karts[0], fx = f.x + rand(-500, 500), fz = f.y + rand(-500, 500), fy = f.h + rand(220, 380), col = `hsl(${Math.floor(rand(0, 360))},100%,65%)`;
+    for (let q = 0; q < 46; q++) { const a = rand(0, TAU), e = rand(-1, 1), sp = rand(60, 110); spawn(fx, fy, fz, Math.cos(a) * Math.sqrt(1 - e * e) * sp, e * sp, Math.sin(a) * Math.sqrt(1 - e * e) * sp, rand(1.0, 1.6), col, 7, 25); }
+    if (!demo) Sound.noise(0.25, 0.08, 400);
   }
   if (demo || !player) return;
   rankCd -= dt;
