@@ -164,8 +164,22 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .scare[data-kind="fall"] { background: #000; }
 .scare[data-kind="crush"] { background: radial-gradient(circle, rgba(60,50,40,.6), #000 70%); }
 .scare[data-kind="drown"] { background: radial-gradient(circle, rgba(10,60,70,.7), #000 75%); }
+.toast { position: absolute; top: 18px; left: 50%; transform: translate(-50%, -140%); background: rgba(8,9,11,.9); border: 1px solid rgba(230,192,63,.6); padding: 6px 18px 8px; text-align: center; pointer-events: none; transition: transform .5s cubic-bezier(.2,1.4,.4,1); }
+.toast.on { transform: translate(-50%, 0); }
+.toast small { display: block; font-size: .7rem; letter-spacing: .2em; color: var(--muted); }
+.toast b { font-weight: 400; color: var(--sign); letter-spacing: .14em; }
+.glitch { position: relative; animation: glitch 6s steps(1) infinite; }
+@keyframes glitch {
+  0%, 92%, 100% { text-shadow: 0 0 24px rgba(0,0,0,.9); transform: none; clip-path: none; }
+  93% { text-shadow: -3px 0 rgba(255,40,40,.7), 3px 0 rgba(40,220,255,.6); transform: translateX(2px); }
+  94% { clip-path: inset(30% 0 45% 0); transform: translateX(-6px); }
+  95% { clip-path: none; text-shadow: 2px 0 rgba(255,40,40,.7), -2px 0 rgba(40,220,255,.6); transform: none; }
+  96% { clip-path: inset(62% 0 8% 0); transform: translateX(5px); }
+}
+.floor-card.show b { animation: glitch 1.6s steps(1) 2; }
+.hud-num-scramble { color: var(--danger); }
 .fade.white { background: #efe9dc; transition: opacity 2.4s ease; }
-@media (prefers-reduced-motion: reduce) { .scare.on canvas { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .scare.on canvas, .glitch, .floor-card.show b { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .floor-card.show { animation-duration: .01s; opacity: 1; } .exit-sign b, .fade, .notebook, .hud, .subtitle { transition: none; } }
 </style>
 </head>
@@ -201,6 +215,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 
   <div class="floor-card" id="floor-card"><b id="fc-num">0 番</b><span id="fc-sub">異変は ありません</span></div>
   <div class="danger-vig" id="danger-vig"></div>
+  <div class="toast" id="toast" aria-live="polite"><small>異変図鑑に記録</small><b id="toast-name"></b></div>
   <div class="scare" id="scare"><canvas id="scare-face" width="64" height="64"></canvas></div>
   <div class="fade" id="fade"></div>
 
@@ -209,7 +224,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
   <div class="screen" id="ov-title" hidden>
     <div class="title-wrap">
       <div>
-        <h1>忘却<br>ダンジョン</h1>
+        <h1 class="glitch">忘却<br>ダンジョン</h1>
         <p class="tag">地図は消える。あなたも忘れる。</p>
         <nav class="menu" aria-label="タイトルメニュー">
           <button type="button" id="btn-continue" hidden>つづきから <span id="continue-info"></span></button>
@@ -227,7 +242,8 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
           <li>異変を見逃さないでください。</li>
           <li>異変を見つけたら、引き返してください。<br>（スタート地点の上り階段）</li>
           <li>異変が見つからなければ、先へ進んでください。<br>（迷宮の奥の下り階段）</li>
-          <li>途中の鉄扉には番号が要ります。番号は迷宮のどこかに刻まれています。</li>
+          <li>途中の鉄扉には番号が要ります。番号も、番号が刻まれた場所も、階ごとに変わります。</li>
+          <li>間違えたり捕まったりすると、迷宮は組み変わります。</li>
           <li>通った道は、時間とともに地図から消えます。あなたも忘れます。</li>
           <li>メモだけを信じてください。</li>
           <li>8番出口から、外へ出てください。</li>
@@ -517,19 +533,14 @@ function buildMaze() {
     if (reach[idx(x, y)] < 0 || onPath.has(idx(x, y))) continue;
     cand.push({ x, y, dead: wallCount(f, x, y) === 3, d: reach[idx(x, y)] });
   }
-  const deads = cand.filter(c => c.dead).sort((a, b) => b.d - a.d);
-  const plaqueCell = deads.length ? deads[rand(Math.min(2, deads.length))] : (cand.length ? pick(cand) : null);
-  if (plaqueCell) {
-    let side;
-    if (plaqueCell.dead) { const open = [0, 1, 2, 3].find(s => !hasWall(f, plaqueCell.x, plaqueCell.y, s)); side = (open + 2) % 4; }
-    else side = pick([0, 1, 2, 3].filter(s => hasWall(f, plaqueCell.x, plaqueCell.y, s)));
-    if (side == null) return null;
-    f.decos.push({ kind: 'code', x: plaqueCell.x, y: plaqueCell.y, side });
-  } else {
-    const ff = freeFaces(f, 1, di);
-    if (!ff.length) return null;
-    const c = pick(ff); f.decos.push({ kind: 'code', x: c.x, y: c.y, side: c.side });
-  }
+  // 番号の板が掛かりうる場所（扉より手前の脇道の壁）。どこに掛かるかは階ごとに変わる
+  f.codeSpots = [];
+  cand.forEach(c => {
+    if (c.dead) { const open = [0, 1, 2, 3].find(s => !hasWall(f, c.x, c.y, s)); f.codeSpots.push({ x: c.x, y: c.y, side: (open + 2) % 4 }); }
+    else [0, 1, 2, 3].filter(s => hasWall(f, c.x, c.y, s)).slice(0, 1).forEach(s => f.codeSpots.push({ x: c.x, y: c.y, side: s }));
+  });
+  if (f.codeSpots.length < 2) freeFaces(f, 1, di).forEach(c => f.codeSpots.push({ x: c.x, y: c.y, side: c.side }));
+  if (!f.codeSpots.length) return null;
 
   // 曲がり角の正面に貼り紙と肖像画
   const turns = [];
@@ -724,6 +735,27 @@ const ANOMS = [
     const L = f.path.length; if (L < 6) return false; f.danger = { type: 'ceiling', trig: clamp(Math.round(L * 0.4), 2, L - 3) }; return true; } },
   { id: 'water_rise', name: '満ちる水', desc: '床から黒い水が湧き、少しずつ満ちてくる。溺れる前に、引き返せ。', fn: f => {
     const L = f.path.length; if (L < 6) return false; f.danger = { type: 'water', trig: clamp(Math.round(L * 0.4), 2, L - 3) }; return true; } },
+  { id: 'painting_turn', name: 'こちらを向く肖像画', desc: '肖像画が、額ごとこちらへ向きを変える。', fn: f => {
+    const p = f.decos.find(d => d.kind === 'painting'); if (!p) return false; p.turn = true; return true; } },
+  { id: 'torch_wild', name: '暴れる炎', desc: '松明の炎が、狂ったように揺れて明滅している。', fn: f => {
+    const t = f.decos.filter(d => d.kind === 'torch' && d.lit); if (!t.length) return false; pick(t).wild = true; return true; } },
+  { id: 'wall_breath', name: '息をする壁', desc: 'ひと面の壁が、ゆっくりと膨らんでは縮む。', fn: f => {
+    const ff = freeFaces(f); if (!ff.length) return false; const c = pick(ff); f.breathWall = faceKey(c.x, c.y, c.side); return true; } },
+  { id: 'doll_turn', name: '振り向く人形', desc: '人形が、ずっとこちらを見ている。', fn: f => {
+    const cells = pathCells(f, 1, -1); if (!cells.length) return false;
+    const c = pick(cells), s = nearWallSpot(f, c.x, c.y); f.objs.push({ kind: 'doll', x: c.x, y: c.y, ox: s.ox, oy: s.oy, side: s.side, turn: true }); return true; } },
+  { id: 'vase_rattle', name: '震える壺', desc: '近づくと、壺がかたかたと震えている。', fn: f => {
+    const v = f.objs.filter(o => o.kind === 'vase' && !o.broken); if (!v.length) return false; pick(v).rattle = true; return true; } },
+  { id: 'ceiling_figure', name: '天井の人影', desc: '天井から、逆さまに誰かがぶら下がっている。', fn: f => {
+    const cells = pathCells(f, 2, -1); if (!cells.length) return false; const c = pick(cells); f.objs.push({ kind: 'hanger', x: c.x, y: c.y }); return true; } },
+  { id: 'door_knock', name: '叩かれる扉', desc: '見知らぬ木の扉が、内側から叩かれている。', fn: f => onFace(f, 'wdoor', { knock: true }) },
+  { id: 'peek', name: '覗く人影', desc: '脇道から誰かが覗いている。近づくと、消える。', fn: f => {
+    const onPath = new Set(f.path.map(p => idx(p.x, p.y))), c = [];
+    f.path.slice(2, -1).forEach(p => { for (let s = 0; s < 4; s++) { const nx = p.x + DX[s], ny = p.y + DY[s]; if (!hasWall(f, p.x, p.y, s) && inb(nx, ny) && !onPath.has(idx(nx, ny)) && !objsAt(f, nx, ny).length) c.push({ x: nx, y: ny, side: (s + 2) % 4 }); } });
+    if (!c.length) return false; const t = pick(c); f.objs.push({ kind: 'peek', x: t.x, y: t.y, side: t.side }); return true; } },
+  { id: 'floating_vase', name: '浮かぶ壺', desc: '壺が、床から浮かんでいる。', fn: f => {
+    const v = f.objs.filter(o => o.kind === 'vase' && !o.broken); if (!v.length) return false; pick(v).float = true; return true; } },
+  { id: 'lantern_flicker', name: '消えかける灯り', desc: '手もとの灯りが、ときどき消えかける。', fn: f => { f.lanternFlicker = true; return true; } },
   { id: 'steps_extra', name: '増えた段', desc: '上り階段の段が、ひとつ多い。', fn: f => {
     const u = f.objs.find(o => o.kind === 'up'); if (!u) return false; u.steps = 5; return true; } }
 ];
@@ -731,6 +763,7 @@ const ANOMS = [
 // 異変の見つけやすさ。番号が進むほど、見つけにくい異変が選ばれやすくなる
 const TIER = {
   statue: 1, follower: 1, chaser: 1, darkness: 1, rope: 1, ceiling_eyes: 1, blue_torches: 1, floor_hole: 1, ceiling_fall: 1, water_rise: 1,
+  torch_wild: 1, ceiling_figure: 1, door_knock: 1, painting_turn: 2, doll_turn: 2, peek: 2, floating_vase: 2, lantern_flicker: 2, wall_breath: 3, vase_rattle: 3,
   extra_painting: 2, poster_many: 2, torch_upside: 2, red_wall: 2, giant_vase: 2, far_light: 2, blood_trail: 2, note_rewritten: 3, eye: 1, writing: 1, hands: 1, red_light: 1, wall_block: 1, door: 1, crack: 1,
   torch_color: 2, torch_unlit: 2, poster_upside: 2, painting_face: 2, vase_missing: 2, vase_broken: 2, doll: 2, footprints: 2,
   puddle: 2, exit_moved: 2, mirror: 2, low_ceiling: 2, door_open: 2, note_missing: 2,
@@ -1129,7 +1162,8 @@ function woodTex() {
 // 3D
 // =====================================================================
 const canvas = $('view');
-let renderer, scene, camera, lantern, dust, floorGroup = null, chaserMesh = null, ceilMeshes = [], waterMesh = null, swingers = [], wisps = [];
+let renderer, scene, camera, lantern, dust, embers, floorGroup = null, chaserMesh = null, ceilMeshes = [], waterMesh = null, swingers = [], wisps = [];
+let turners = [], breathers = [], lookers = [], rattlers = [], floaters = [], knockers = [], peekers = [];
 const M = {}, G = {};
 let torches = [], figures = [], ironDoor = null;
 
@@ -1151,6 +1185,10 @@ function init3D() {
   const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dpos, 3));
   dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xd8c09a, size: 0.006, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }));
   dust.frustumCulled = false; scene.add(dust);
+  const EN = 90, epos = new Float32Array(EN * 3);
+  const eg = new THREE.BufferGeometry(); eg.setAttribute('position', new THREE.BufferAttribute(epos, 3));
+  embers = new THREE.Points(eg, new THREE.PointsMaterial({ color: 0xffa040, size: 0.022, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+  embers.frustumCulled = false; embers.userData.life = new Float32Array(EN).map(() => Math.random() * 1.6); embers.userData.vel = new Float32Array(EN * 3); scene.add(embers);
 
   const w0 = wallTextures(0), w1 = wallTextures(1), fl = floorTextures(), ce = ceilTextures();
   M.wall0 = new THREE.MeshStandardMaterial({ map: w0.map, bumpMap: w0.bump, bumpScale: 0.05, roughness: 0.95 });
@@ -1309,6 +1347,7 @@ function makeDoll() {
 function buildScene(f) {
   if (floorGroup) scene.remove(floorGroup);
   ceilMeshes = []; swingers = []; wisps = []; waterMesh = null;
+  turners = []; breathers = []; lookers = []; rattlers = []; floaters = []; knockers = []; peekers = [];
   floorGroup = new THREE.Group(); scene.add(floorGroup);
   torches = []; figures = []; ironDoor = null;
   const down = f.objs.find(o => o.kind === 'down'), low = f.lowCeil;
@@ -1320,7 +1359,10 @@ function buildScene(f) {
     const cm = new THREE.Mesh(G.cell, M.ceil); cm.rotation.x = Math.PI / 2; cm.position.set(cx, isLow ? 1.82 : 2.4, cz); floorGroup.add(cm);
     cm.userData.y0 = cm.position.y; ceilMeshes.push(cm);
     for (let s = 0; s < 4; s++) {
-      if (hasWall(f, x, y, s)) placeOnFace(new THREE.Mesh(G.wall, f.redWall === faceKey(x, y, s) ? M.wallRed : (x * 7 + y * 3 + s) % 3 ? M.wall0 : M.wall1), x, y, s, 1.2, 0);
+      if (hasWall(f, x, y, s)) {
+        const wm = placeOnFace(new THREE.Mesh(G.wall, f.redWall === faceKey(x, y, s) ? M.wallRed : (x * 7 + y * 3 + s) % 3 ? M.wall0 : M.wall1), x, y, s, 1.2, 0);
+        if (f.breathWall === faceKey(x, y, s)) breathers.push({ m: wm, base: wm.position.clone(), nx: -DX[s], nz: -DY[s] });
+      }
       else if (isLow) { const li = plane(2, 0.58, M.lintel); li.position.set(cx + DX[s], 2.11, cz + DY[s]); li.rotation.y = ROT[s]; floorGroup.add(li); }
     }
   }
@@ -1405,11 +1447,12 @@ function addDeco(f, d) {
       halo.position.set(0, 0.45, 0.24); halo.scale.set(0.9, 1.6, 1);
       const light = new THREE.PointLight(col, 1.5, 7.5, 2); light.position.set(0, 0.5, 0.45);
       g.add(flame, halo, light);
-      torches.push({ light, flame, base: d.color === 'warm' ? 1.5 : 1.8, ph: Math.random() * 100, x: d.x, y: d.y });
+      torches.push({ light, flame, base: d.color === 'warm' ? 1.5 : 1.8, ph: Math.random() * 100, x: d.x, y: d.y, wild: !!d.wild, col });
     } else {
       const ash = new THREE.Mesh(once('g-ash', () => new THREE.SphereGeometry(0.06, 8, 6)), M.black); ash.position.set(0, 0.36, 0.22); ash.scale.y = 0.5; g.add(ash);
     }
     placeOnFace(g, d.x, d.y, d.side, 1.42, 0);
+    if (d.lit) { g.updateMatrixWorld(true); torches[torches.length - 1].fw = g.children.find(o => o.isSprite).getWorldPosition(new THREE.Vector3()); }
     if (d.upside) { g.rotation.z = Math.PI; g.children.forEach(o => { if (o.isSprite) o.material.rotation = Math.PI; }); }
   } else if (d.kind === 'poster') {
     const m = plane(0.62, 0.83, once('pm' + d.text, () => new THREE.MeshStandardMaterial({ map: posterTex(d.text), roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -2 })));
@@ -1420,6 +1463,7 @@ function addDeco(f, d) {
     const pic = plane(0.64, 0.82, once('pt' + d.variant, () => new THREE.MeshStandardMaterial({ map: paintingTex(d.variant), roughness: 0.6 }))); pic.position.z = 0.062;
     g.add(fr, pic); placeOnFace(g, d.x, d.y, d.side, 1.45, 0);
     if (d.tilt) { fr.rotation.z = d.tilt; pic.rotation.z = d.tilt; }
+    if (d.turn) { g.position.add(new THREE.Vector3(-DX[d.side] * 0.06, 0, -DY[d.side] * 0.06)); turners.push({ g, base: ROT[d.side] }); }
   } else if (d.kind === 'eye') { g.add(plane(1.2, 0.6, decalMat(decalTex('eye')))); placeOnFace(g, d.x, d.y, d.side, 1.4, 0.012); }
   else if (d.kind === 'writing') { g.add(plane(1.7, 0.85, decalMat(decalTex('writing', d.text)))); placeOnFace(g, d.x, d.y, d.side, 1.25, 0.012); }
   else if (d.kind === 'hands') { g.add(plane(1.5, 1.5, decalMat(decalTex('hands')))); placeOnFace(g, d.x, d.y, d.side, 1.15, 0.012); }
@@ -1428,6 +1472,7 @@ function addDeco(f, d) {
     const slab = new THREE.Mesh(once('g-wdoor', () => new THREE.BoxGeometry(0.95, 1.95, 0.08)), M.woodDoor); slab.position.set(0, 0, 0.04);
     const knob = new THREE.Mesh(once('g-knob', () => new THREE.SphereGeometry(0.035, 10, 8)), M.brass); knob.position.set(0.34, 0, 0.1);
     g.add(slab, knob); placeOnFace(g, d.x, d.y, d.side, 0.975, 0);
+    if (d.knock) knockers.push({ slab, x: d.x, y: d.y, next: performance.now() + 1500 + Math.random() * 2000, t: 0 });
   } else if (d.kind === 'code') {
     g.add(plane(0.5, 0.31, once('cm' + f.door.code, () => new THREE.MeshStandardMaterial({ map: codeTex(f.door.code), roughness: 0.4, metalness: 0.55 }))));
     placeOnFace(g, d.x, d.y, d.side, 1.35, 0.012);
@@ -1445,11 +1490,16 @@ function addObj(f, o) {
     if (o.broken) {
       const b = new THREE.Mesh(G.vaseBase, M.vase); b.position.set(px, 0, pz); floorGroup.add(b);
       for (let k = 0; k < 9; k++) { const s = new THREE.Mesh(G.shard, M.vase); s.position.set(px + (Math.random() - 0.5) * 0.9, 0.03, pz + (Math.random() - 0.5) * 0.9); s.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3); s.scale.setScalar(0.6 + Math.random()); floorGroup.add(s); }
-    } else { const v = new THREE.Mesh(G.vase, M.vase); v.position.set(px, 0, pz); v.scale.setScalar(o.scale || 1); floorGroup.add(v); }
+    } else {
+      const v = new THREE.Mesh(G.vase, M.vase); v.position.set(px, 0, pz); v.scale.setScalar(o.scale || 1); floorGroup.add(v);
+      if (o.rattle) rattlers.push({ m: v, x: o.x, y: o.y });
+      if (o.float) floaters.push(v);
+    }
   } else if (o.kind === 'statue' || o.kind === 'follower') {
     const fig = makeFigure(); fig.position.set(cx, 0, cz); fig.visible = o.x >= 0; floorGroup.add(fig); figures.push({ mesh: fig, obj: o });
   } else if (o.kind === 'doll') {
     const d = makeDoll(); d.position.set(cx + o.ox * 2.4, 0, cz + o.oy * 2.4); d.rotation.y = Math.atan2(-DX[o.side], -DY[o.side]); floorGroup.add(d);
+    if (o.turn) lookers.push(d);
   } else if (o.kind === 'steps') {
     const fx = DX[o.dir], fz = DY[o.dir], sx = -fz, sz = fx, mat = decalMat(decalTex('foot'));
     for (let k = 0; k < 4; k++) {
@@ -1460,6 +1510,13 @@ function addObj(f, o) {
     }
   } else if (o.kind === 'puddle') {
     const m = new THREE.Mesh(G.puddle, M.puddle); m.rotation.x = -Math.PI / 2; m.scale.set(1.4, 1, 1); m.position.set(cx, 0.005, cz + 0.1); floorGroup.add(m);
+  } else if (o.kind === 'hanger') {
+    const outer = new THREE.Group(); outer.position.set(cx, 2.4, cz);
+    const fig = makeFigure(); fig.rotation.x = Math.PI; fig.position.y = 0.05; outer.add(fig);
+    floorGroup.add(outer); lookers.push(outer);
+  } else if (o.kind === 'peek') {
+    const fig = makeFigure(); fig.position.set(cx + DX[o.side] * 0.75, 0, cz + DY[o.side] * 0.75); fig.rotation.y = Math.atan2(DX[o.side], DY[o.side]);
+    floorGroup.add(fig); peekers.push({ m: fig, x: o.x, y: o.y, gone: false });
   } else if (o.kind === 'rope') {
     const g = new THREE.Group(); g.position.set(cx + 0.25, 2.4, cz - 0.15);
     const line = new THREE.Mesh(once('g-ropeL', () => new THREE.CylinderGeometry(0.014, 0.014, 0.95, 6)), M.rope); line.position.y = -0.475;
@@ -1516,15 +1573,32 @@ const blocked = (x, y, d) => hasWall(S.floor, x, y, d) || (!S.doorOpen && isDoor
 const START_LINES = ['……ここは、どこだっけ。', '階段を降りてきた、気がする。', '同じ場所に見える。本当に同じだろうか。', 'さっきまで何を考えていたんだろう。', '湿った石の匂いがする。', '何かを書き留めていた気がする。'];
 const FORGOT_LINES = ['……ここ、来たことがある気がする。', 'この角、見覚えがあるような、ないような。', '思い出せない。たしか、通ったはずだ。', '足跡は残らない。記憶も残らない。'];
 const IDLE_LINES = ['……何をしに来たんだっけ。', '立ち止まると、忘れていく気がする。', 'メモを見返そう。'];
-let sayTimer = null;
+let sayTimer = null, typeTimer = null;
 const say = t => {
-  const el = $('monologue'); el.textContent = t; el.classList.remove('dim');
-  clearTimeout(sayTimer); sayTimer = setTimeout(() => el.classList.add('dim'), 5500);
+  const el = $('monologue'); el.classList.remove('dim');
+  clearTimeout(sayTimer); clearInterval(typeTimer);
+  if (REDUCED) el.textContent = t;
+  else { let i = 0; el.textContent = ''; typeTimer = setInterval(() => { i++; el.textContent = t.slice(0, i); if (i >= t.length) clearInterval(typeTimer); }, 38); }
+  sayTimer = setTimeout(() => el.classList.add('dim'), 5500 + t.length * 38);
 };
+let toastTimer = null;
+function toast(name) {
+  if (S.phase !== 'play') return;
+  $('toast-name').textContent = name; $('toast').classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('on'), 3200);
+}
 
 function buildFloor() {
+  if (S.regen) { S.base = genBase(S.diff); S.regen = false; S.rebuilt = true; }
   N = S.base.N;
   const f = structuredClone(S.base);
+  // 鉄扉の番号と、番号の板の場所は階ごとに変わる
+  f.door.code = Array.from({ length: 4 }, () => rand(10)).join('');
+  if (f.codeSpots && f.codeSpots.length) {
+    f.decos = f.decos.filter(d => d.kind !== 'code');
+    const used = usedFaces(f), spots = f.codeSpots.filter(c => !used.has(faceKey(c.x, c.y, c.side)));
+    const c = pick(spots.length ? spots : f.codeSpots); f.decos.push({ kind: 'code', x: c.x, y: c.y, side: c.side });
+  }
   let anomaly = null;
   if (S.count > 0 && Math.random() < D().prob) {
     for (const a of anomalyOrder(S.count, S.lastAnom)) { if (a.fn(f)) { anomaly = a.id; break; } }
@@ -1548,16 +1622,23 @@ function buildFloor() {
 function showFloorCard() {
   const c = $('floor-card');
   $('fc-num').textContent = S.count + ' 番';
-  $('fc-sub').textContent = S.count === 0 ? '異変は ありません' : '異変を 見逃さないこと';
+  $('fc-sub').textContent = S.rebuilt ? '迷宮が 組み変わった' : S.count === 0 ? '異変は ありません' : '異変を 見逃さないこと';
   c.classList.remove('show'); void c.offsetWidth; c.classList.add('show');
   showNum();
-  say(S.stats.floors === 0 && S.count === 0 ? '……ここは、どこだろう。地図は、すぐに消えてしまうらしい。' : pick(START_LINES));
+  say(S.stats.floors === 0 && S.count === 0 ? '……ここは、どこだろう。地図は、すぐに消えてしまうらしい。' : S.rebuilt ? '……道が、変わっている。メモは、もう役に立たないかもしれない。' : pick(START_LINES));
+  S.rebuilt = false;
+  if (S.lastFound) { const name = S.lastFound; S.lastFound = null; setTimeout(() => toast(name), 3400); }
 }
 let numTimer = null;
 function showNum() {
   const el = $('hud-num'); el.textContent = S.count; el.style.opacity = 1;
   clearTimeout(numTimer);
-  numTimer = setTimeout(() => { el.style.opacity = 0; numTimer = setTimeout(() => { el.textContent = '?'; el.style.opacity = 1; }, 1200); }, 4000);
+  // 番号は崩れて、忘れられる
+  numTimer = setTimeout(() => {
+    let k = 0; el.classList.add('hud-num-scramble');
+    const tick = () => { k++; el.textContent = '0123456789#?%'[rand(13)]; if (k < 14) numTimer = setTimeout(tick, 50); else { el.classList.remove('hud-num-scramble'); el.textContent = '?'; } };
+    tick();
+  }, 4000);
 }
 function updateMeta() {
   $('facing').textContent = D().noCompass ? '向き ？' : '向き ' + DIRN[S.dir];
@@ -1637,8 +1718,8 @@ function judge(claimAnomaly) {
   if (claimAnomaly && S.count === 0 && !S.anomaly) S.upStreak++; else S.upStreak = 0;
   if (S.upStreak >= 5) S.pendingEnding = 'return';
   S.stats.floors++;
-  if (correct) { if (S.anomaly) { S.found.add(S.anomaly); addCatalog(S.anomaly); } S.count++; }
-  else { if (S.count > 0) S.stats.resets++; S.count = 0; }
+  if (correct) { if (S.anomaly) { S.found.add(S.anomaly); addCatalog(S.anomaly); S.lastFound = (ANOMS.find(a => a.id === S.anomaly) || {}).name; } S.count++; }
+  else { if (S.count > 0) S.stats.resets++; S.count = 0; S.regen = true; }
   sound.stairs(claimAnomaly);
   // 階段へ踏み出す
   let tx = W2(S.px), tz = W2(S.py), ty, face;
@@ -1835,7 +1916,7 @@ function caught(force) {
   if (S.phase === 'caught') return;
   const kind = force || (S.danger && S.danger.type);
   S.danger = null; S.anim = null; S.queued = null; S.confirm = null;
-  S.stats.floors++; if (S.count > 0) S.stats.resets++; S.stats.caught = (S.stats.caught || 0) + 1; S.count = 0;
+  S.stats.floors++; if (S.count > 0) S.stats.resets++; S.stats.caught = (S.stats.caught || 0) + 1; S.count = 0; S.regen = true;
   setPhase('caught');
   const sk = { fall: 'fall', ceiling: 'crush', water: 'drown' }[kind] || 'face';
   if (sk === 'face') sound.scream();
@@ -1888,7 +1969,7 @@ function kpPress(k) {
   if (k === 'ok') {
     if (kpVal === S.floor.door.code) {
       sound.beep(true); setTimeout(() => sound.door(), 200);
-      S.doorOpen = true; if (ironDoor) ironDoor.target = 1;
+      S.doorOpen = true; if (ironDoor) ironDoor.target = 1; S.shakeT = performance.now();
       setPhase('play'); say('ガコン、と重い音がして扉が上がった。'); canvas.focus({ preventScroll: true });
     } else { sound.beep(false); kpVal = ''; drawKp(true); say('……違う。'); }
     return;
@@ -2038,7 +2119,8 @@ function renderMap(now) {
   if (!S.floor || ['title', 'catalog', 'loading'].includes(S.phase)) return;
   const CS = Math.floor(144 / N), PAD = Math.floor((160 - CS * N) / 2);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    const a = memAlpha(x, y, now); if (a <= 0) continue;
+    let a = memAlpha(x, y, now); if (a <= 0) continue;
+    if (a < 0.45 && Math.random() < 0.25) a *= 0.25;
     const X = PAD + x * CS, Y = PAD + y * CS;
     mg.fillStyle = `rgba(230,192,63,${0.1 * a})`; mg.fillRect(X, Y, CS, CS);
     mg.strokeStyle = `rgba(217,213,201,${a})`; mg.lineWidth = 2; mg.beginPath();
@@ -2104,6 +2186,7 @@ function frame(now) {
     yaw += look.x; pitch += look.y;
     if (!REDUCED) { pitch += Math.sin(now / 1900) * 0.006; yaw += Math.sin(now / 2700) * 0.004; }
   }
+  if (S.shakeT && now - S.shakeT < 900) { const k = 1 - (now - S.shakeT) / 900; cy += (Math.random() - 0.5) * 0.05 * k; yaw += (Math.random() - 0.5) * 0.012 * k; }
   if (now - S.bumpT < 260) { const t = (now - S.bumpT) / 260; cy += Math.sin(t * Math.PI * 3) * 0.02 * (1 - t); pitch += Math.sin(t * Math.PI * 3) * 0.012 * (1 - t); }
   if (S.phase !== 'stairs' && !S.hold && !a) {
     if (objHere('down')) cy -= 0.25;
@@ -2123,6 +2206,7 @@ function frame(now) {
   }
   lantern.position.set(cx + Math.sin(now / 700) * 0.04, 1.2 + cy, cz);
   lantern.intensity = (0.88 + Math.sin(now / 310) * 0.04) * (0.25 + 0.75 * S.darkMul);
+  if (S.floor.lanternFlicker && now % 4300 < 520) lantern.intensity *= 0.05 + Math.random() * 0.25;
 
   let nearest = 99;
   torches.forEach(t => {
@@ -2130,6 +2214,7 @@ function frame(now) {
     // 迫る闇：遠くの松明から順に消える
     const fade = S.darkMul >= 1 ? 1 : clamp((S.darkMul - 1) * 3 + 1 + (1 - Math.hypot(W2(t.x) - cx, W2(t.y) - cz) / 14) * 0.6, 0, 1);
     t.light.intensity = t.base * (0.85 + n * 0.12) * fade;
+    if (t.wild) { const w = Math.random(); t.light.intensity = t.base * (0.2 + w * 2.6) * fade; t.flame.scale.set(0.2 + w * 0.25, 0.4 + w * 0.6, 1); }
     t.flame.visible = fade > 0.05;
     t.flame.scale.set(0.2 + n * 0.015, 0.36 + n * 0.05, 1);
     nearest = Math.min(nearest, Math.hypot(W2(t.x) - cx, W2(t.y) - cz));
@@ -2141,6 +2226,37 @@ function frame(now) {
     if (f.mesh.userData.head) f.mesh.userData.head.rotation.z = Math.sin(now / 2300 + f.mesh.id) * 0.06;
   });
   if (ironDoor) { ironDoor.open += (ironDoor.target - ironDoor.open) * Math.min(1, dt * 1.6); ironDoor.slab.position.y = 1.125 + ironDoor.open * 2.15; }
+  // 火の粉
+  if (embers) {
+    const arr = embers.geometry.attributes.position.array, life = embers.userData.life, vel = embers.userData.vel, lit = torches.filter(t => t.fw && t.flame.visible);
+    for (let i = 0; i < life.length; i++) {
+      life[i] += dt;
+      if (life[i] > 1.6 || !lit.length) {
+        if (!lit.length) { arr[i * 3 + 1] = -10; continue; }
+        const t = lit[i % lit.length]; life[i] = Math.random() * 0.3;
+        arr[i * 3] = t.fw.x + (Math.random() - 0.5) * 0.06; arr[i * 3 + 1] = t.fw.y; arr[i * 3 + 2] = t.fw.z + (Math.random() - 0.5) * 0.06;
+        vel[i * 3] = (Math.random() - 0.5) * 0.12; vel[i * 3 + 1] = 0.25 + Math.random() * 0.35; vel[i * 3 + 2] = (Math.random() - 0.5) * 0.12;
+      }
+      arr[i * 3] += vel[i * 3] * dt + Math.sin(now / 300 + i) * dt * 0.05; arr[i * 3 + 1] += vel[i * 3 + 1] * dt; arr[i * 3 + 2] += vel[i * 3 + 2] * dt;
+    }
+    embers.geometry.attributes.position.needsUpdate = true;
+  }
+  const camP = camera.position;
+  turners.forEach(t => {
+    let want = Math.atan2(camP.x - t.g.position.x, camP.z - t.g.position.z) - t.base;
+    while (want > Math.PI) want -= Math.PI * 2; while (want < -Math.PI) want += Math.PI * 2;
+    want = clamp(want, -0.8, 0.8);
+    t.g.rotation.y += (t.base + want - t.g.rotation.y) * Math.min(1, dt * 1.5);
+  });
+  breathers.forEach(b => { const k = (Math.sin(now / 1100) + 1) * 0.5; b.m.position.set(b.base.x + b.nx * k * 0.12, b.base.y, b.base.z + b.nz * k * 0.12); b.m.scale.set(1 + k * 0.02, 1 + k * 0.03, 1); });
+  lookers.forEach(m => { const want = Math.atan2(camP.x - m.position.x, camP.z - m.position.z); let d = want - m.rotation.y; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; m.rotation.y += d * Math.min(1, dt * 2.5); });
+  rattlers.forEach(r => { const near = Math.hypot(r.x - S.px, r.y - S.py) <= 1.5; r.m.rotation.z = near ? (Math.random() - 0.5) * 0.12 : 0; r.m.rotation.x = near ? (Math.random() - 0.5) * 0.08 : 0; if (near && Math.random() < dt * 6) sound.noise(0.03, 'highpass', 2500, 1, 0.12, 0.2); });
+  floaters.forEach((m, i) => { m.position.y = 0.55 + Math.sin(now / 800 + i) * 0.08; m.rotation.y += dt * 0.4; });
+  knockers.forEach(k => {
+    if (now > k.next) { k.next = now + 2800 + Math.random() * 2500; k.t = now; if (Math.hypot(k.x - S.px, k.y - S.py) < 4 && S.phase === 'play') for (let i = 0; i < 3; i++) sound.tone(90, 0.12, 0.5, 'sine', i * 0.22, 0.6, 60); }
+    const e = now - k.t; k.slab.position.z = 0.04 + (e < 700 ? Math.abs(Math.sin(e / 700 * Math.PI * 3)) * 0.03 : 0);
+  });
+  peekers.forEach(p => { if (!p.gone && Math.abs(p.x - S.px) + Math.abs(p.y - S.py) <= 1) { p.gone = true; p.m.visible = false; sound.noise(0.6, 'bandpass', 2400, 2, 0.15, 1.2); } if (!p.gone) p.m.rotation.z = Math.sin(now / 900) * 0.05; });
   swingers.forEach((g, i) => { g.rotation.z = Math.sin(now / 1300 + i) * 0.06; g.rotation.x = Math.sin(now / 1700 + i) * 0.04; });
   wisps.forEach((g, i) => { g.position.y = 1.45 + Math.sin(now / 700 + i) * 0.12; g.children[2].intensity = 1.1 + Math.sin(now / 90) * 0.2; });
   updateDanger(now);
