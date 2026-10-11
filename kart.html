@@ -133,6 +133,7 @@ table.res td.rk { font-weight: 900; text-align: right; font-style: italic; width
 table.res td.tm { font-variant-numeric: tabular-nums; text-align: right; opacity: .9; }
 .bigrank { font-size: clamp(40px, 8vw, 72px); font-weight: 900; font-style: italic; margin: 0; color: var(--gold); text-shadow: 0 5px 0 #1d1436, 0 0 30px rgba(255,200,60,.5); text-align: center; }
 @media (orientation: portrait) { #scrResult { align-items: center; } .respanel { max-height: 55%; } }
+@media (max-height: 520px) { .bigrank { font-size: 30px; } table.res td { padding: 1px 10px; font-size: 13px; } .respanel { padding: 8px 12px; } .respanel .row { margin-top: 6px; } .respanel .btn { font-size: 16px; padding: 8px 26px; } }
 
 .modes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; width: min(760px, 100%); }
 .mode { background: var(--panel); border: 3px solid transparent; border-radius: 18px; padding: 14px 8px; text-align: center; cursor: pointer; color: var(--text); font-family: var(--font); transition: transform .1s; }
