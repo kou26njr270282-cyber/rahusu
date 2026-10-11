@@ -5,7 +5,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
 <style>
-/* Layout: one narrow column like an old handheld screen — status window, play field, message window, pad. */
+/* Layout: one narrow column like an old handheld — status, guide, play field, message window, pad. */
 :root {
   --night: #0c0e1c;
   --window: #05060d;
@@ -21,25 +21,35 @@
 [hidden] { display: none !important; }
 html, body { background: var(--night); color: var(--text); }
 body { font-family: var(--font); font-size: 16px; line-height: 1.6; }
-.wrap { max-width: 560px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 32px; display: flex; flex-direction: column; gap: 12px; }
-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wrap { max-width: 560px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 32px; display: flex; flex-direction: column; gap: 10px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 h1 { margin: 0; font-size: 1.7rem; font-weight: 400; letter-spacing: .08em; color: var(--gold); text-wrap: balance; }
-.sub { margin: 0; color: var(--dim); font-size: .9rem; }
+.sub { margin: 0; color: var(--dim); font-size: .85rem; }
 .win { background: var(--window); border: 3px solid var(--line); border-radius: 8px; padding: 8px 12px; }
 .hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 12px; font-variant-numeric: tabular-nums; }
 .hud div { min-width: 0; }
 .hud .k { display: block; font-size: .72rem; color: var(--dim); letter-spacing: .06em; }
 .hud .v { font-size: 1.05rem; white-space: nowrap; }
 .hud .alarm { color: var(--alarm); }
+.guide { border-color: var(--gold); color: var(--gold); min-height: 3.4em; line-height: 1.5; }
+.guide b { font-weight: 400; color: var(--text); }
 .stage { position: relative; border: 3px solid var(--line); border-radius: 8px; overflow: hidden; background: #000; }
 canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; }
-.overlay { position: absolute; inset: 0; display: flex; align-items: safe center; overflow-y: auto; justify-content: center; padding: 12px; background: rgba(5, 6, 13, .78); }
-.overlay .win { max-width: 420px; width: 100%; margin-block: auto; }
-.overlay h2 { margin: 0 0 6px; font-size: 1.25rem; font-weight: 400; color: var(--gold); }
+.overlay { position: absolute; inset: 0; display: flex; align-items: safe center; overflow-y: auto; justify-content: center; padding: 10px; background: rgba(5, 6, 13, .82); }
+.stage.cover canvas { visibility: hidden; height: 0; }
+.stage.cover .overlay { position: static; }
+.overlay .win { max-width: 440px; width: 100%; margin-block: auto; }
+.overlay h2 { margin: 0 0 6px; font-size: 1.2rem; font-weight: 400; color: var(--gold); }
 .overlay p { margin: 0 0 8px; }
-.overlay ul { margin: 0 0 8px; padding-left: 1.2em; }
 .overlay .row { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
-.overlay .big { font-size: 1.4rem; color: var(--gold); }
+.overlay .big { font-size: 1.35rem; color: var(--gold); }
+.cast { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.cast div { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: .9rem; line-height: 1.4; }
+.cast img { width: 48px; height: 48px; image-rendering: pixelated; flex: none; }
+.cast .you { color: var(--gold); }
+.cast .foe { color: var(--alarm); }
+.rules { margin: 0 0 8px; padding-left: 1.3em; font-size: .9rem; line-height: 1.5; }
+.rules li + li { margin-top: 4px; }
 .msg { min-height: 6.6em; }
 .msg p { margin: 0; }
 .msg p:not(:last-child) { color: var(--dim); }
@@ -47,34 +57,56 @@ canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; 
 button { font-family: var(--font); font-size: 1rem; color: var(--text); background: var(--window); border: 2px solid var(--line); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
 button:hover { color: var(--gold); border-color: var(--gold); }
 button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.small { font-size: .8rem; padding: 4px 10px; }
 .controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; touch-action: none; user-select: none; -webkit-user-select: none; }
 .dpad button { padding: 0; font-size: 1.2rem; }
 .dpad .u { grid-area: 1 / 2; } .dpad .l { grid-area: 2 / 1; } .dpad .r { grid-area: 2 / 3; } .dpad .d { grid-area: 3 / 2; }
-.side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.btns { display: flex; gap: 10px; align-items: flex-end; }
 .abtn { width: 84px; height: 84px; border-radius: 50%; font-size: .95rem; white-space: nowrap; touch-action: none; user-select: none; -webkit-user-select: none; }
-.keys { color: var(--dim); font-size: .8rem; text-align: right; margin: 0; }
-details { color: var(--dim); font-size: .9rem; }
-details summary { cursor: pointer; color: var(--text); }
-details ul { padding-left: 1.2em; margin: 6px 0 0; }
+.treasure { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .85rem; padding-block: 6px; }
+.treasure .t { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.treasure img { width: 20px; height: 20px; image-rendering: pixelated; }
+.treasure .safe { color: #7be07b; }
+.treasure .lost { color: var(--alarm); }
+.treasure .lost img { opacity: .55; }
+.treasure .hand { color: var(--gold); }
+.treasure .k { color: var(--dim); }
+.tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.tool { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: .75rem; line-height: 1.2; border-color: var(--gold); touch-action: manipulation; user-select: none; -webkit-user-select: none; min-width: 0; }
+.tool img { width: 28px; height: 28px; image-rendering: pixelated; }
+.tool span { color: var(--gold); font-size: .85rem; }
+.tool:disabled { opacity: .35; cursor: default; }
+.tool b { font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.bbtn { width: 64px; height: 64px; border-radius: 50%; font-size: .8rem; line-height: 1.2; padding: 0; border-color: var(--gold); color: var(--gold); touch-action: none; user-select: none; -webkit-user-select: none; }
+.keys { color: var(--dim); font-size: .78rem; text-align: right; margin: 0; }
 @media (max-width: 420px) {
   .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dpad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); }
+  .cast { grid-template-columns: minmax(0, 1fr); }
 }
 </style>
 
 <div class="wrap">
   <header>
-    <h1>勇者おことわり</h1>
-    <p class="sub">村人Aの ながい 3日間</p>
+    <div>
+      <h1>勇者おことわり</h1>
+      <p class="sub">村人Aの ながい 3日間</p>
+    </div>
+    <button class="small" id="snd">おと: ON</button>
   </header>
 
-  <div class="win hud" id="hud">
+  <div class="win hud">
     <div><span class="k">ひにち</span><span class="v" id="hDay">1日目</span></div>
     <div><span class="k" id="hPhaseK">じょうきょう</span><span class="v" id="hPhase">-</span></div>
     <div><span class="k">てもち</span><span class="v" id="hCarry">なし</span></div>
     <div><span class="k">いえの ざいさん</span><span class="v" id="hAsset">0G</span></div>
   </div>
+
+  <div class="win guide" id="guide">…</div>
+
+  <div class="win treasure" id="treasure" aria-label="たからもの の ばしょ"></div>
 
   <div class="stage">
     <canvas id="cv" aria-label="村人Aの家"></canvas>
@@ -82,6 +114,8 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
   </div>
 
   <div class="win msg" id="msg" aria-live="polite"></div>
+
+  <div class="tools" id="tools" aria-label="どうぐ"></div>
 
   <div class="controls">
     <div class="dpad" id="dpad">
@@ -91,33 +125,23 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
       <button class="d" data-dir="down" aria-label="した">▼</button>
     </div>
     <div class="side">
-      <button id="skip" hidden>もう きていいよ</button>
+      <button class="small" id="skip" hidden>じゅんび OK！</button>
       <button class="abtn" id="abtn">しらべる</button>
-      <p class="keys">矢印 / WASD で いどう<br>スペース / Z で しらべる・しまう</p>
+      <p class="keys">矢印/WASD いどう<br>スペース/Z しらべる ・ 1〜4 どうぐ</p>
     </div>
   </div>
-
-  <details>
-    <summary>あそびかた</summary>
-    <ul>
-      <li>勇者が くるまでに、入れものの 中身を うごかして かくそう。もてるのは 1こずつ。</li>
-      <li>🔒きんこは 勇者に あけられない。でも 2こまでしか 入らない。</li>
-      <li>勇者が 一度しらべた 入れもの（済）は、その日は もう しらべない。あとから そこへ しまうのが コツ。</li>
-      <li>勇者に ぶつかると 話しかけられて しばらく うごけない。もっている物は「くれるの？」と もっていかれる。</li>
-      <li>われた🏺ツボは 1こ 15G の しゅうりだいが かかる。</li>
-    </ul>
-  </details>
 </div>
 
 <script>
 (() => {
+  // ================= map & data =================
   const MAP = [
     "###########",
     "#B..T....D#",
     "#.........#",
     "#P..##..P.#",
     "#...##....#",
-    "#K.......K#",
+    "#.........#",
     "#P.......P#",
     "#S..D.....#",
     "#####.#####",
@@ -125,39 +149,175 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
   const W = 11, H = 9, T = 48;
   const DOOR = { x: 5, y: 8 };
   const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-  const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
   const REPAIR = 15;
 
   const ITEMS = {
-    gem:   { e: "💎", n: "かほうの ほうせき", v: 200 },
-    gold:  { e: "💰", n: "50ゴールド", v: 50 },
-    herb:  { e: "🌿", n: "やくそう", v: 10 },
-    bread: { e: "🍞", n: "パン", v: 5 },
+    gem:   { n: "かほう", v: 200 },
+    gold:  { n: "おかね", v: 50 },
+    herb:  { n: "やくそう", v: 10 },
+    bread: { n: "パン", v: 5 },
+    medal: { n: "メダル", v: 100 },
+    stick: { n: "ひのきのぼう", v: 1 },
   };
+  const TOOLS = [
+    { id: "banana", n: "バナナ", key: "1", info: "ゆかに おく。ふんだ ゆうしゃは ころんで、とった ものを おとす" },
+    { id: "decoy", n: "キラキラいし", key: "2", info: "ゆかに おく。ゆうしゃは まっさきに ひろいに いく（ただの いし）" },
+    { id: "bell", n: "かあさんベル", key: "3", info: "かあさんが ゆうしゃを しかって しばらく うごけなくする" },
+    { id: "glue", n: "せっちゃくざい", key: "4", info: "となりの われた ツボを なおす" },
+  ];
   const KINDS = {
-    P: { type: "pot",    e: "🏺", name: "ツボ",   cap: 1, act: 0.8 },
-    D: { type: "drawer", e: "🗄️", name: "タンス", cap: 2, act: 1.4 },
-    K: { type: "barrel", e: "🛢️", name: "タル",   cap: 1, act: 1.0 },
-    S: { type: "safe",   e: "🔒", name: "きんこ", cap: 2, act: 1.0 },
-    B: { type: "bed",    e: "🛏️", name: "ベッド", cap: 0, act: 2.6 },
-    T: { type: "table",  e: "🍲", name: "テーブル", cap: 0, act: 0 },
+    P: { type: "pot",    name: "ツボ",   cap: 1, act: 0.8 },
+    D: { type: "drawer", name: "タンス", cap: 2, act: 1.4 },
+    K: { type: "barrel", name: "タル",   cap: 1, act: 1.0 },
+    S: { type: "safe",   name: "きんこ", cap: 2, act: 1.0 },
+    B: { type: "bed",    name: "ベッド", cap: 0, act: 2.6 },
+    T: { type: "table",  name: "テーブル", cap: 0, act: 0 },
   };
   const WAVES = [
-    { prep: 14, speed: 2.6, act: 1.0,  heroes: [["ゆうしゃ", "🦸"]], stock: ["gem", "gold", "gold", "herb", "bread"] },
-    { prep: 11, speed: 3.3, act: 0.85, heroes: [["ゆうしゃ", "🦸"]], stock: ["gold", "herb", "bread"] },
-    { prep: 11, speed: 3.3, act: 0.85, heroes: [["ゆうしゃ", "🦸"], ["まほうつかい", "🧙"]], stock: ["gold", "gold", "herb"] },
+    { prep: 12, speed: 2.4, act: 1.0,  heroes: [["ゆうしゃ", "hero"]], stock: ["gem", "medal", "gold"], tools: { banana: 2, decoy: 0, bell: 0, glue: 0 } },
+    { prep: 11, speed: 3.2, act: 0.85, heroes: [["ゆうしゃ", "hero"]], stock: ["gold", "medal"], tools: { banana: 2, decoy: 1, bell: 0, glue: 1 } },
+    { prep: 11, speed: 3.2, act: 0.85, heroes: [["ゆうしゃ", "hero"], ["まほうつかい", "mage"]], stock: ["gold", "gold"], tools: { banana: 2, decoy: 1, bell: 1, glue: 1 } },
   ];
-  const GREET = ["こんにちは！", "まおうって どこ？", "なにか いい ものない？", "この むらの なまえは？"];
+  const GREET = ["こんにちは！", "まおうって どこ？", "なにか いい もの ない？", "この むらの なまえは？", "レベル いくつ？", "ぼく ゆうしゃ！"];
+  const ACT_LINES = {
+    pot: ["ツボだ！ わらなきゃ！", "ツボは わる もの！", "いい おとが しそう"],
+    drawer: ["タンスは しらべる もの！", "おじゃましまーす", "なにか ないかな〜"],
+    barrel: ["タルの なか みせて〜", "タルだ！"],
+    safe: ["お、きんこ！", "あかないかな？"],
+    bed: ["ちょっと ねよ…"],
+  };
 
+  // ================= pixel sprites =================
+  const PAL = {
+    k: "#1a1020", s: "#f2c79b", h: "#6b3b1f", g: "#4f9a3a", n: "#6b4423", d: "#3a2a20",
+    y: "#f0c419", r: "#c8323c", R: "#962231", b: "#2f5fd0", w: "#c9d1d9", W: "#6a7284",
+    m: "#7a3fb0", z: "#4a2370", e: "#f4f4f4", o: "#c0703a", O: "#8a4a22", l: "#e8a466",
+    a: "#9a6434", A: "#5c3a1a", c: "#4fd1e8", C: "#2a8fb0",
+  };
+  const HALF = {
+    villager: [
+      "........", "....kkkk", "...khhhh", "..khhhhh", "..khssss", "..ksskss", "..ksssss", "...kssss",
+      "...kkggg", "..kggggg", ".kskgggg", ".kskgggg", "..knnnnn", "...kgggg", "...kddk.", "...kkkk.",
+    ],
+    hero: [
+      "........", "....kkkk", "...kyyyy", "..kyyyyy", "..kykkkk", "..ksskss", "..ksssss", "rr.kssss",
+      "rrkkbbbb", "rkbbbbbb", "rkskbbbb", "rkskbbbb", "r.knnnny", "rr.kbbbb", "...kddk.", "...kkkk.",
+    ],
+    mage: [
+      ".......k", "......km", ".....kmm", "....kmmm", "..kzzzzz", "...kskss", "...keeee", "...keeee",
+      "..kmkeee", ".kmmmkee", "..kmmmmm", ".ksmmmmm", "..kmmmmm", "..kmmmmm", "..kmmmmm", "..kkkkkk",
+    ],
+    pot: [
+      "........", "........", "....kkkk", "....kOOO", ".....kOO", "....kooo", "...koooo", "..kolooo",
+      "..kolooo", "..kooooo", "..kOOOOO", "..kooooo", "...koooo", "....kooo", ".....kkk", "........",
+    ],
+    potBroken: [
+      "........", "........", "........", "........", "........", "........", "........", "........",
+      "........", "........", "........", "..kok..k", "..kook.k", ".kooo.ko", ".kkkk.kk", "........",
+    ],
+    drawer: [
+      "........", ".kkkkkkk", ".kaaaaaa", ".kakkkkk", ".kakaaaa", ".kakaaay", ".kakkkkk", ".kaaaaaa",
+      ".kakkkkk", ".kakaaaa", ".kakaaay", ".kakkkkk", ".kaaaaaa", ".kkkkkkk", ".kk.....", "........",
+    ],
+    barrel: [
+      "........", "....kkkk", "...kaaaa", "..kwwwww", "..kaaaaa", ".kaaaaaa", ".kaaAaaa", ".kwwwwww",
+      ".kaaAaaa", ".kaaAaaa", ".kaaaaaa", "..kwwwww", "..kaaaaa", "...kaaaa", "....kkkk", "........",
+    ],
+    safe: [
+      "........", ".kkkkkkk", ".kwwwwww", ".kwWWWWW", ".kwWwwww", ".kwWwwkk", ".kwWwkyy", ".kwWwkyy",
+      ".kwWwwkk", ".kwWwwww", ".kwWwwww", ".kwWWWWW", ".kwwwwww", ".kkkkkkk", ".kk.....", "........",
+    ],
+    bed: [
+      "........", ".kkkkkkk", ".knnnnnn", ".keeeeee", ".keeeeee", ".krrrrrr", ".krrrrrr", ".kRRRRRR",
+      ".krrrrrr", ".krrrrrr", ".krrrrrr", ".krrrrrr", ".krrrrrr", ".knnnnnn", ".kkkkkkk", "........",
+    ],
+  };
+  const FULL = {
+    gold:   ["...kk...", "..knnk..", "..kyyk..", ".kyyyyk.", "kyyyyyyk", "kyyyyyyk", ".kyyyyk.", "..kkkk.."],
+    herb:   ["....kk..", "...kggk.", "..kggk..", ".kggk...", "..kk.kk.", "..kgkggk", "..kggk..", "...kk..."],
+    gem:    ["........", "..kkkk..", ".kccCCk.", "kccccCCk", ".kcccCk.", "..kcCk..", "...kk...", "........"],
+    bread:  ["........", "..kkkk..", ".klllak.", "kllllaak", "kaaaaaak", ".kkkkkk.", "........", "........"],
+    medal:  ["..kkkk..", ".kyyyyk.", "kyyyyyyk", "kyykkyyk", "kyykkyyk", "kyyyyyyk", ".kyyyyk.", "..kkkk.."],
+    stick:  ["......kk", ".....kak", "....kak.", "...kak..", "..kak...", ".kak....", "kak.....", "kk......"],
+    decoy:  ["...e....", "..eee...", "...e.kk.", "...kkwwk", "..kwwwWk", ".kwwwWWk", ".kWWWWWk", "..kkkkk."],
+    glue:   ["...kk...", "..kyyk..", "..kkkk..", ".kbbbbk.", ".kbeebk.", ".kbbbbk.", ".kbbbbk.", "..kkkk.."],
+    bell:   ["...kk...", "..kyyk..", ".kyyyyk.", ".kyyyyk.", ".kyyyyk.", "kyyyyyyk", "kkkkkkkk", "...kk..."],
+    banana: ["........", "......k.", ".....kyk", "....kyk.", "...kyyk.", "kkyyyk..", ".kkkk...", "........"],
+  };
+  const OVERLAY = {
+    hero: [[14, 3, "w"], [14, 4, "w"], [14, 5, "w"], [14, 6, "w"], [14, 7, "w"], [14, 8, "w"], [14, 9, "w"],
+           [13, 10, "y"], [14, 10, "y"], [15, 10, "y"], [14, 11, "n"]],
+    mage: [[1, 1, "y"], [0, 2, "y"], [1, 2, "y"], [2, 2, "y"], ...Array.from({ length: 12 }, (_, i) => [1, 3 + i, "n"])],
+  };
+  const SPR = {};
+  function buildSprite(rows) {
+    const c = document.createElement("canvas");
+    c.width = rows[0].length; c.height = rows.length;
+    const x = c.getContext("2d");
+    rows.forEach((r, j) => [...r].forEach((ch, i) => { if (PAL[ch]) { x.fillStyle = PAL[ch]; x.fillRect(i, j, 1, 1); } }));
+    return c;
+  }
+  for (const [name, half] of Object.entries(HALF)) {
+    const rows = half.map((r) => (r = r.padEnd(8, ".").slice(0, 8), [...(r + [...r].reverse().join(""))]));
+    (OVERLAY[name] || []).forEach(([x, y, ch]) => (rows[y][x] = ch));
+    SPR[name] = buildSprite(rows.map((r) => r.join("")));
+  }
+  for (const [name, rows] of Object.entries(FULL)) SPR[name] = buildSprite(rows);
+  const SPRURL = {};
+  function spriteURL(name, scale) {
+    const s = SPR[name], c = document.createElement("canvas");
+    c.width = s.width * scale; c.height = s.height * scale;
+    const x = c.getContext("2d"); x.imageSmoothingEnabled = false;
+    x.drawImage(s, 0, 0, c.width, c.height);
+    return c.toDataURL();
+  }
+
+  ["gem", "medal", "gold", "herb", "bread", "stick"].forEach((k) => (SPRURL[k] = spriteURL(k, 3)));
+
+  // ================= sound =================
+  let actx = null, soundOn = true;
+  function initAudio() {
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) { actx = null; }
+  }
+  function tone(f1, f2, dur, type = "square", vol = 0.06, delay = 0) {
+    if (!actx || !soundOn) return;
+    const t0 = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f1, t0); o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise(dur, vol = 0.12) {
+    if (!actx || !soundOn) return;
+    const b = actx.createBuffer(1, Math.floor(actx.sampleRate * dur), actx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const s = actx.createBufferSource(), g = actx.createGain();
+    s.buffer = b; g.gain.value = vol; s.connect(g).connect(actx.destination); s.start();
+  }
+  const SFX = {
+    pick: () => { tone(660, 990, 0.08); },
+    put: () => { tone(990, 520, 0.1); },
+    safe: () => { tone(520, 520, 0.06); tone(780, 780, 0.12, "square", 0.06, 0.07); },
+    crash: () => { noise(0.35, 0.18); tone(300, 80, 0.25, "sawtooth", 0.05); },
+    door: () => { tone(140, 90, 0.25, "square", 0.08); },
+    slip: () => { tone(900, 160, 0.45, "triangle", 0.1); },
+    talk: () => { for (let i = 0; i < 4; i++) tone(420 + (i % 2) * 120, 420 + (i % 2) * 120, 0.05, "square", 0.04, i * 0.08); },
+    steal: () => { tone(420, 140, 0.3, "sawtooth", 0.06); },
+    drop: () => { tone(500, 700, 0.06); tone(700, 1000, 0.08, "square", 0.05, 0.07); },
+    bell: () => { [1320, 1320, 1320].forEach((f, i) => tone(f, f * 0.98, 0.18, "triangle", 0.08, i * 0.12)); },
+    ok: () => { [523, 659, 784].forEach((f, i) => tone(f, f, 0.1, "square", 0.05, i * 0.09)); },
+  };
+
+  // ================= state =================
   const cv = document.getElementById("cv");
   const ctx = cv.getContext("2d");
   cv.width = W * T; cv.height = H * T;
   const $ = (id) => document.getElementById(id);
   const ov = $("ov");
-
-  let S, objects, objAt;
   const key = (x, y) => x + "," + y;
   const walkable = (x, y) => x >= 0 && y >= 0 && x < W && y < H && MAP[y][x] === ".";
+  const rand = (a) => a[Math.floor(Math.random() * a.length)];
+
+  let S, objects, objAt;
 
   function newGame() {
     objects = []; objAt = {};
@@ -168,17 +328,20 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
       }
     }));
     S = {
-      wave: 0, phase: "title", timer: 0,
-      player: { x: 5, y: 5, fx: 5, fy: 5, tx: 5, ty: 5, t: 1, moving: false, face: "down", carry: null, frozen: 0, say: "" },
+      wave: 0, phase: "title", timer: 0, clock: 0,
+      player: { x: 5, y: 5, fx: 5, fy: 5, tx: 5, ty: 5, t: 1, moving: false, face: "down", flip: false, carry: null, frozen: 0, say: "" },
       heroes: [], visited: new Set(), bedUsed: false,
-      stolen: [], waveStolen: [], repairCost: 0, waveRepair: 0, totalAdded: 0,
+      traps: new Set(), decoys: new Set(), floor: {}, tools: {}, unlocked: new Set(),
+      stolen: [], waveStolen: [], repairCost: 0, totalAdded: 0,
+      tut: 0, seenDone: false, seenBump: false,
+      fx: [], parts: [], shake: 0, momT: 0,
       log: [],
     };
     renderLog();
     showTitle();
   }
 
-  // ---------- messages ----------
+  // ================= messages =================
   function msg(text) {
     S.log.push(text);
     if (S.log.length > 3) S.log.shift();
@@ -187,71 +350,93 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
   function renderLog() {
     $("msg").innerHTML = S.log.map((l) => `<p>${l}</p>`).join("") || "<p>…</p>";
   }
+  function pop(text, x, y, color = "#ffd84a") { S.fx.push({ text, x, y, t: 0, color }); }
+  function shards(x, y) {
+    for (let i = 0; i < 12; i++) S.parts.push({ x, y, vx: (Math.random() - 0.5) * 6, vy: -Math.random() * 6 - 1, t: 0 });
+  }
 
-  // ---------- waves ----------
+  // ================= waves =================
   function restock(list) {
     for (const k of list) {
       const spots = objects.filter((o) => ["pot", "drawer", "barrel"].includes(o.type) && !o.broken && o.items.length < o.cap);
       if (!spots.length) break;
-      spots[Math.floor(Math.random() * spots.length)].items.push(k);
+      const o = k === "gem" ? objects.find((o) => o.type === "drawer" && o.y === 1) : rand(spots);
+      o.items.push(k);
       S.totalAdded += ITEMS[k].v;
     }
   }
   function startWave() {
+    initAudio();
     const cfg = WAVES[S.wave];
-    S.visited = new Set(); S.bedUsed = false; S.heroes = []; S.waveStolen = []; S.waveRepair = 0;
+    S.visited = new Set(); S.bedUsed = false; S.heroes = []; S.waveStolen = [];
+    S.traps = new Set(); S.decoys = new Set();
+    for (const t of TOOLS) S.tools[t.id] = (S.tools[t.id] || 0) + cfg.tools[t.id];
     restock(cfg.stock);
     S.phase = "prep"; S.timer = cfg.prep;
-    ov.hidden = true;
+    ov.hidden = true; ov.parentElement.classList.remove("cover");
     msg(S.wave === 0
-      ? "1日目の あさ。かあさんが いえの ものを あちこちに しまった。"
+      ? "1日目の あさ。かあさん「💎かほうは みぎうえの タンスに しまったよ」"
       : `${S.wave + 1}日目の あさ。かあさんが かいものから かえってきた。`);
-    msg(S.wave === 2 ? "とおくから 足音が ふたつ きこえる…！" : "とおくから 足音が きこえる…");
+    const fresh = TOOLS.filter((t) => cfg.tools[t.id] && !S.unlocked.has(t.id));
+    fresh.forEach((t) => S.unlocked.add(t.id));
+    if (fresh.length && S.wave > 0) msg(`あたらしい どうぐ：${fresh.map((t) => t.n).join("、")}！（${fresh.map((t) => t.info).join(" ／ ")}）`);
+    msg(S.wave === 2 ? "とおくから 足音が ふたつ きこえる…！ きょうは 2人だ！" : "とおくから 足音が きこえる…");
     $("skip").hidden = false;
   }
   function startHeroes() {
     const cfg = WAVES[S.wave];
     S.phase = "hero"; $("skip").hidden = true;
-    S.heroes = cfg.heroes.map(([name, e], i) => ({
-      name, e, x: DOOR.x, y: DOOR.y, fx: DOOR.x, fy: DOOR.y, tx: DOOR.x, ty: DOOR.y, t: 1, moving: false,
-      state: "wait", delay: i * 1.6, path: [], target: null, actT: 0, actMax: 1, pause: 0, talkCd: 0,
-      speed: cfg.speed, actMul: cfg.act,
+    S.heroes = cfg.heroes.map(([name, spr], i) => ({
+      name, spr, x: DOOR.x, y: DOOR.y, fx: DOOR.x, fy: DOOR.y, tx: DOOR.x, ty: DOOR.y, t: 1, moving: false, flip: false,
+      state: "wait", delay: i * 1.6, path: [], target: null, actT: 0, actMax: 1, pause: 0, slip: 0, talkCd: 0,
+      say: "", sayT: 0, bag: [], scold: 0, speed: cfg.speed, actMul: cfg.act,
     }));
   }
   function endWave() {
     const broken = objects.filter((o) => o.broken);
-    S.waveRepair = broken.length * REPAIR;
-    S.repairCost += S.waveRepair;
+    const repair = broken.length * REPAIR;
+    S.repairCost += repair;
     broken.forEach((o) => (o.broken = false));
     S.phase = "result";
     const last = S.wave === WAVES.length - 1;
     const lost = S.waveStolen.reduce((a, k) => a + ITEMS[k].v, 0);
+    const icons = S.waveStolen.map((k) => `<img src="${spriteURL(k, 3)}" alt="${ITEMS[k].n}" width="24" height="24" style="image-rendering:pixelated">`).join(" ");
     ov.innerHTML = `<div class="win">
       <h2>${S.wave + 1}日目の よる</h2>
-      <p>${S.waveStolen.length ? "きょう もっていかれた もの:" : "きょうは なにも とられなかった！"}</p>
-      ${S.waveStolen.length ? `<p class="big">${S.waveStolen.map((k) => ITEMS[k].e).join(" ")}</p>` : ""}
+      <p>${S.waveStolen.length ? "きょう もっていかれた もの:" : "きょうは なにも とられなかった！ すごい！"}</p>
+      ${S.waveStolen.length ? `<p>${icons}</p>` : ""}
       <div class="row"><span>とられた がく</span><span>${lost}G</span></div>
-      <div class="row"><span>ツボの しゅうりだい（${broken.length}こ）</span><span>${S.waveRepair}G</span></div>
+      <div class="row"><span>ツボの しゅうりだい（${broken.length}こ）</span><span>${repair}G</span></div>
       <div class="row"><span>いえの ざいさん</span><span>${assets()}G</span></div>
       <p style="margin-top:10px"><button id="next">${last ? "けっかを みる" : "ねる（つぎの日へ）"}</button></p>
     </div>`;
-    ov.hidden = false;
+    ov.hidden = false; ov.parentElement.classList.add("cover");
     $("next").onclick = () => { if (S.phase !== "result") return; if (last) showEnd(); else { S.wave++; startWave(); } };
     $("next").focus();
   }
   function assets() {
     let v = objects.reduce((a, o) => a + o.items.reduce((b, k) => b + ITEMS[k].v, 0), 0);
+    for (const list of Object.values(S.floor)) v += list.reduce((b, k) => b + ITEMS[k].v, 0);
     if (S.player.carry) v += ITEMS[S.player.carry].v;
     return v;
   }
   function showTitle() {
     ov.innerHTML = `<div class="win">
-      <h2>あなたは 村人A</h2>
-      <p>この いえには まいにち 勇者が かってに はいってきて、ツボを わり、タンスを あさっていく。</p>
-      <p>3日間、いえの ざいさんを まもりぬこう。とくに 💎かほうは ぜったいに わたすな。</p>
+      <div class="cast">
+        <div class="you"><img src="${spriteURL("villager", 3)}" alt="">これが あなた<br>（むらびとA）</div>
+        <div class="foe"><img src="${spriteURL("hero", 3)}" alt="">これが ゆうしゃ<br>（かってに はいってくる）</div>
+      </div>
+      <p>ゆうしゃは まいにち あなたの いえに はいってきて、ツボを わり、タンスの なかみを もっていく。</p>
+      <p>まもる たからは 3しゅるい：${["gem", "medal", "gold"].map((k) => `<img src="${spriteURL(k, 2)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated">${ITEMS[k].n}`).join(" ")}</p>
+      <ol class="rules">
+        <li>ゆうしゃが くるまえに、入れものの なかみを かくそう</li>
+        <li><img src="${spriteURL("safe", 1)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated"> きんこ は ぜったい あけられない（2こまで）</li>
+        <li><img src="${spriteURL("banana", 2)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated"> バナナを ふむと ゆうしゃは ころんで、とった ものを おとす！（どうぐは 日ごとに ふえる）</li>
+      </ol>
+      <p>1日目は ガイドが 光って おしえてくれるよ。</p>
       <p><button id="start">はじめる</button></p>
     </div>`;
-    ov.hidden = false;
+    ov.hidden = false; ov.parentElement.classList.add("cover");
     $("start").onclick = startWave;
   }
   function showEnd() {
@@ -260,7 +445,7 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
     const score = kept - S.repairCost;
     const ratio = score / S.totalAdded;
     const rank = ratio >= 0.8 ? "でんせつの むらびと" : ratio >= 0.55 ? "しっかりものの むらびと" : ratio >= 0.3 ? "ふつうの むらびと" : "ゆうしゃの おさいふ";
-    const gemSafe = objects.some((o) => o.items.includes("gem")) || S.player.carry === "gem";
+    const gemSafe = objects.some((o) => o.items.includes("gem")) || S.player.carry === "gem" || Object.values(S.floor).some((l) => l.includes("gem"));
     ov.innerHTML = `<div class="win">
       <h2>3日間 おつかれさま</h2>
       <div class="row"><span>のこった ざいさん</span><span>${kept}G</span></div>
@@ -268,15 +453,49 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
       <div class="row"><span>しゅうりだい</span><span>-${S.repairCost}G</span></div>
       <div class="row"><span>スコア</span><span class="big">${score}G</span></div>
       <p style="margin-top:8px">しょうごう：<span class="big">${rank}</span></p>
-      <p>${gemSafe ? "💎かほうは ぶじだった。かあさんも にっこり。" : "💎かほうは 勇者の ふくろの なか…。"}</p>
+      <p>${gemSafe ? "💎かほうは ぶじだった。かあさんも にっこり。" : "💎かほうは ゆうしゃの ふくろの なか…。"}</p>
       <p><button id="again">もういちど</button></p>
     </div>`;
-    ov.hidden = false;
+    ov.hidden = false; ov.parentElement.classList.add("cover");
+    SFX.ok();
     $("again").onclick = newGame;
     $("again").focus();
   }
 
-  // ---------- pathfinding ----------
+  // ================= guide =================
+  function guide() {
+    const gemObj = objects.find((o) => o.items.includes("gem"));
+    const safe = objects.find((o) => o.type === "safe");
+    if (S.phase === "prep" && S.wave === 0 && S.tut === 0) {
+      if (S.player.carry === "gem") S.tut = 1;
+      else if (gemObj && gemObj.type !== "safe") return { text: "① 光っている <b>タンス</b> の となりへ いって <b>『しらべる』</b>。💎かほうを とりだそう", target: gemObj };
+      else S.tut = 2;
+    }
+    if (S.phase === "prep" && S.wave === 0 && S.tut === 1) {
+      if (safe.items.includes("gem")) { S.tut = 2; SFX.ok(); msg("かほうを きんこに しまった！ これで ぜったい あんしん。"); }
+      else if (S.player.carry === "gem") return { text: "② こんどは 光っている <b>きんこ</b> の となりで <b>『しらべる』</b>。しまえば ぜったい とられない", target: safe };
+      else S.tut = 2;
+    }
+    if (S.phase === "prep") {
+      const pending = S.wave === 0 && S.tut < 2;
+      if (pending) return { text: "…", target: null };
+      return {
+        text: S.wave === 0
+          ? "③ のこりの たからも かくそう！ <b>バナナ</b> は ゆうしゃが とおりそうな ゆかに おこう"
+          : S.wave === 2 ? "きょうは 2人！ どうぐを ぜんぶ つかって まもれ！" : "ゆうしゃが くるまえに かくそう！ どうぐも わすれずに",
+        target: null,
+      };
+    }
+    if (S.phase === "hero") {
+      if (S.visited.size && !S.seenDone) S.seenDone = S.clock;
+      if (S.seenDone && S.clock - S.seenDone < 7)
+        return { text: "④ <b>『済』</b> が ついた 入れものは きょうは もう しらべられない。あとから そこに かくせ！", target: null, done: true };
+      return { text: S.tools.bell > 0 && S.heroes.some((h) => h.state === "act") ? "ピンチの ときは <b>かあさんベル</b>！ ゆうしゃが しかられて とまるよ" : "ゆうしゃに ぶつかると はなしかけられて、もっている ものを とられる！ よけろ！", target: null };
+    }
+    return null;
+  }
+
+  // ================= pathfinding =================
   function bfs(sx, sy) {
     const prev = new Map(), dist = new Map();
     const q = [[sx, sy]]; dist.set(key(sx, sy), 0);
@@ -296,65 +515,159 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
     return out;
   }
 
-  // ---------- movers ----------
+  // ================= movers =================
   function stepMover(m, dt, speed) {
-    if (!m.moving) return true;
+    if (!m.moving) return "idle";
     m.t += dt * speed;
-    if (m.t >= 1) { m.t = 1; m.moving = false; m.x = m.tx; m.y = m.ty; return true; }
-    return false;
+    if (m.t >= 1) { m.t = 1; m.moving = false; m.x = m.tx; m.y = m.ty; return "arrived"; }
+    return "moving";
   }
   function beginMove(m, nx, ny) {
+    if (nx !== m.x) m.flip = nx < m.x;
     m.fx = m.x; m.fy = m.y; m.tx = nx; m.ty = ny; m.t = 0; m.moving = true;
   }
   const rx = (m) => m.moving ? m.fx + (m.tx - m.fx) * m.t : m.x;
   const ry = (m) => m.moving ? m.fy + (m.ty - m.fy) * m.t : m.y;
 
-  // ---------- player ----------
+  // ================= player =================
   const held = [];
+  function pickFloor(p) {
+    const list = S.floor[key(p.x, p.y)];
+    if (p.carry || !list || !list.length || p.moving) return;
+    p.carry = list.pop();
+    if (!list.length) delete S.floor[key(p.x, p.y)];
+    SFX.pick();
+    msg(`ゆかの ${ITEMS[p.carry].n}を ひろった！ はやく かくそう。`);
+  }
   function updatePlayer(dt) {
     const p = S.player;
     if (p.frozen > 0) { p.frozen -= dt; if (p.frozen <= 0) p.say = ""; return; }
-    if (!stepMover(p, dt, 6.5)) return;
+    const st = stepMover(p, dt, 6.5);
+    if (st === "moving") return;
+    pickFloor(p);
     const d = held[held.length - 1];
     if (!d) return;
     p.face = d;
     const [dx, dy] = DIRS[d];
+    if (dx) p.flip = dx < 0;
     if (walkable(p.x + dx, p.y + dy)) beginMove(p, p.x + dx, p.y + dy);
   }
+  function playerTile() { const p = S.player; return [Math.round(rx(p)), Math.round(ry(p))]; }
   function action() {
     if (!["prep", "hero"].includes(S.phase)) return;
     const p = S.player;
     if (p.frozen > 0) return;
-    const x = Math.round(rx(p)), y = Math.round(ry(p));
+    const [x, y] = playerTile();
     const order = [p.face, ...Object.keys(DIRS).filter((d) => d !== p.face)];
     const near = order.map((d) => objAt[key(x + DIRS[d][0], y + DIRS[d][1])]).filter((o) => o && o.cap > 0);
-    if (!near.length) { msg("ちかくに 入れものが ない。"); return; }
+    if (!near.length) { msg("ちかくに 入れものが ない。ツボ・タンス・タル・きんこの となりで しらべよう。"); return; }
     if (!p.carry) {
       const o = near.find((o) => o.items.length);
       if (!o) { msg(`${near[0].broken ? "われた " : ""}${near[0].name}は からっぽだ。`); return; }
       p.carry = o.items.pop();
-      msg(`${o.name}から ${ITEMS[p.carry].e}${ITEMS[p.carry].n}を とりだした。`);
+      SFX.pick();
+      msg(`${o.name}から ${ITEMS[p.carry].n}を とりだした。どこに かくす？`);
     } else {
       const o = near.find((o) => !o.broken && o.items.length < o.cap);
       if (!o) { msg(near[0].broken ? "ツボは われていて しまえない！" : `${near[0].name}は いっぱいだ。`); return; }
       o.items.push(p.carry);
       const done = S.phase === "hero" && S.visited.has(o) && o.type !== "safe";
-      msg(`${ITEMS[p.carry].e}を ${o.name}に しまった。${o.type === "safe" ? "これで あんしん。" : done ? "（もう しらべられた ばしょだ）" : ""}`);
+      if (o.type === "safe") SFX.safe(); else SFX.put();
+      if (done) pop("かくした！", o.x + 0.5, o.y);
+      msg(`${ITEMS[p.carry].n}を ${o.name}に しまった。${o.type === "safe" ? "これで ぜったい あんしん。" : done ? "ゆうしゃは もう ここを しらべない！" : ""}`);
       p.carry = null;
     }
   }
+  function useTool(id) {
+    if (!playing() || S.player.frozen > 0) return;
+    const t = TOOLS.find((t) => t.id === id);
+    if (!S.tools[id]) { msg(`${t.n}は もう ない。`); return; }
+    const [x, y] = playerTile(), k = key(x, y);
+    const onFloor = id === "banana" || id === "decoy";
+    if (onFloor && (S.traps.has(k) || S.decoys.has(k))) { msg("そこには もう なにか おいてある。"); return; }
+    if (onFloor && x === DOOR.x && y === DOOR.y) { msg("いりぐちには おけない。"); return; }
+    if (id === "banana") {
+      S.traps.add(k); SFX.put();
+      msg("バナナの かわを ゆかに おいた。ゆうしゃが ふむと ころぶぞ。");
+    } else if (id === "decoy") {
+      S.decoys.add(k); SFX.put();
+      msg("キラキラいしを おいた。ゆうしゃは きっと ひろいに くる…");
+    } else if (id === "bell") {
+      const act = S.heroes.filter((h) => h.state !== "wait" && h.state !== "gone");
+      if (!act.length) { msg("まだ ゆうしゃが いない。かあさんは いそがしい。"); return; }
+      act.forEach((h) => { h.scold = 3.5; heroSay(h, "ご、ごめんなさい…", 3.5); });
+      S.momT = 3.5; S.shake = 0.15; SFX.bell();
+      msg("チリーン！ かあさん「くつ ぬぎなさい！！ ひとの いえで なにしてるの！」 ゆうしゃは せいざした。");
+    } else if (id === "glue") {
+      const pot = Object.values(DIRS).map(([dx, dy]) => objAt[key(x + dx, y + dy)]).find((o) => o && o.broken);
+      if (!pot) { msg("となりに われた ツボが ない。"); return; }
+      pot.broken = false; SFX.ok(); pop("なおった！", pot.x + 0.5, pot.y, "#7be07b");
+      msg("せっちゃくざいで ツボを なおした！ しゅうりだいが うく。");
+    }
+    S.tools[id]--;
+  }
 
-  // ---------- heroes ----------
+  // ================= heroes =================
+  function heroSay(h, text, t = 1.4) { h.say = text; h.sayT = t; }
+  function heroArrive(h) {
+    const k = key(h.x, h.y);
+    if (S.traps.has(k)) {
+      S.traps.delete(k);
+      h.slip = 2.6; h.path.unshift([h.x, h.y]); h.path.shift();
+      SFX.slip(); S.shake = 0.2;
+      heroSay(h, "うわあっ！？", 1.6);
+      if (h.bag.length) {
+        const item = h.bag.pop();
+        const i = S.waveStolen.lastIndexOf(item); if (i >= 0) S.waveStolen.splice(i, 1);
+        const j = S.stolen.lastIndexOf(item); if (j >= 0) S.stolen.splice(j, 1);
+        const nk = dropSpot(h.x, h.y);
+        (S.floor[nk] ||= []).push(item);
+        pop(`+${ITEMS[item].v}G`, h.x + 0.5, h.y, "#7be07b");
+        msg(`${h.name}は バナナで すべって ころんだ！ ${ITEMS[item].n}を おとした！ いまだ、ひろえ！`);
+      } else {
+        msg(`${h.name}は バナナで すべって ころんだ！ …はずかしそうに たちあがった。`);
+      }
+      return true;
+    }
+    if (S.decoys.has(k)) {
+      S.decoys.delete(k); h.pause = 1.5;
+      heroSay(h, "なんだ ただの いしか…", 1.5);
+      msg(`${h.name}は キラキラいしを ひろった！ …ただの いしだった。${h.name}は がっかりしている。`);
+      return true;
+    }
+    const list = S.floor[k];
+    if (list && list.length) {
+      const got = list.splice(0); delete S.floor[k];
+      h.bag.push(...got); S.stolen.push(...got); S.waveStolen.push(...got);
+      SFX.steal();
+      got.forEach((g) => pop(`-${ITEMS[g].v}G`, h.x + 0.5, h.y, "#ff6b6b"));
+      msg(`${h.name}は ゆかの ${got.map((g) => ITEMS[g].n).join("と ")}を ひろった！「おちてた！ ラッキー！」`);
+    }
+    return false;
+  }
+  function dropSpot(x, y) {
+    for (const [dx, dy] of [[0, 0], ...Object.values(DIRS)]) {
+      if (walkable(x + dx, y + dy) && !(x + dx === DOOR.x && y + dy === DOOR.y)) {
+        if (dx || dy) return key(x + dx, y + dy);
+      }
+    }
+    return key(x, y);
+  }
   function updateHero(h, dt) {
     if (h.state === "gone") return;
     if (h.state === "wait") {
       h.delay -= dt;
-      if (h.delay <= 0) { h.state = "walk"; msg(`ガチャ！ ${h.name}が かってに はいってきた！`); }
+      if (h.delay <= 0) { h.state = "walk"; SFX.door(); heroSay(h, "おじゃましまーす！"); msg(`ガチャ！ ${h.name}が かってに はいってきた！`); }
       return;
     }
     h.talkCd -= dt;
+    if (h.sayT > 0) { h.sayT -= dt; if (h.sayT <= 0) h.say = ""; }
+    if (h.slip > 0) { h.slip -= dt; return; }
+    if (h.scold > 0) { h.scold -= dt; return; }
     if (h.pause > 0) { h.pause -= dt; return; }
-    if (!stepMover(h, dt, h.speed)) return;
+    const st = stepMover(h, dt, h.speed);
+    if (st === "moving") return;
+    if (st === "arrived" && heroArrive(h)) return;
 
     if (h.state === "act") {
       h.actT -= dt;
@@ -362,14 +675,25 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
       return;
     }
     if (h.path.length) { const [nx, ny] = h.path.shift(); beginMove(h, nx, ny); return; }
-    if (h.state === "leave") { h.state = "gone"; msg(`${h.name}は でていった。「おじゃましました」は なかった。`); return; }
-    if (h.target) {
-      h.state = "act"; h.actMax = h.actT = h.target.act * h.actMul;
-      if (h.target.type === "bed") msg(`${h.name}「ふかふかの ベッドだ。ちょっと ひとやすみ…」`);
+    if (h.state === "leave") {
+      h.state = "gone";
+      msg(h.bag.length ? `${h.name}は まんぞくそうに でていった。「また くるね！」` : `${h.name}は しょんぼり でていった。「この いえ なにも ないや…」`);
       return;
     }
-    // pick the nearest container nobody has checked yet
+    if (h.target) {
+      h.state = "act"; h.actMax = h.actT = h.target.act * h.actMul;
+      h.flip = h.target.x < h.x;
+      heroSay(h, rand(ACT_LINES[h.target.type]), h.actMax);
+      return;
+    }
     const { prev, dist } = bfs(h.x, h.y);
+    let dk = null, dd0 = Infinity;
+    for (const k of S.decoys) { const d = dist.get(k); if (d !== undefined && d < dd0) { dd0 = d; dk = k; } }
+    if (dk) {
+      const [gx, gy] = dk.split(",").map(Number);
+      h.path = pathTo(prev, h.x, h.y, gx, gy) || [];
+      if (h.path.length) { heroSay(h, "ん？ なにか ひかってる！"); return; }
+    }
     let best = null, bestD = Infinity, bestTile = null;
     for (const o of objects) {
       if (o.type === "table" || S.visited.has(o) || (o.type === "bed" && S.bedUsed)) continue;
@@ -390,15 +714,19 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
     h.path = bestD === 0 ? [] : pathTo(prev, h.x, h.y, bestTile[0], bestTile[1]) || [];
   }
   function loot(h, o) {
-    if (o.type === "safe") { msg(`${h.name}は きんこを しらべた。カギが かかっている！ ${h.name}「ちっ。」`); return; }
-    if (o.type === "bed") { msg(`${h.name}は HPが ぜんかいふくした！（シーツは ぐちゃぐちゃだ）`); return; }
+    if (o.type === "safe") { heroSay(h, "ちっ。"); SFX.safe(); msg(`${h.name}は きんこを しらべた。カギが かかっている！`); return; }
+    if (o.type === "bed") { heroSay(h, "ふっかーつ！"); msg(`${h.name}は かってに ベッドで ねて、HPが ぜんかいふくした！`); return; }
     const verb = { pot: "ツボを もちあげて なげつけた！ パリーン！", drawer: "タンスを あけた！", barrel: "タルを のぞきこんだ！" }[o.type];
-    if (o.type === "pot") o.broken = true;
+    if (o.type === "pot") { o.broken = true; SFX.crash(); S.shake = 0.3; shards(o.x + 0.5, o.y + 0.5); }
     if (o.items.length) {
       const got = o.items.splice(0);
-      S.stolen.push(...got); S.waveStolen.push(...got);
-      msg(`${h.name}は ${verb} ${got.map((k) => ITEMS[k].e + ITEMS[k].n).join("と ")}を てにいれた！`);
+      h.bag.push(...got); S.stolen.push(...got); S.waveStolen.push(...got);
+      if (o.type !== "pot") SFX.steal();
+      got.forEach((g, i) => pop(`-${ITEMS[g].v}G`, o.x + 0.5, o.y - i * 0.4, "#ff6b6b"));
+      heroSay(h, got.includes("stick") ? "ひのきのぼうだ！ さいきょう！" : got.includes("medal") ? "ちいさなメダル！ あつめてるんだ！" : "やったー！");
+      msg(`${h.name}は ${verb} ${got.map((k) => ITEMS[k].n).join("と ")}を てにいれた！`);
     } else {
+      heroSay(h, "なにも ない…");
       msg(`${h.name}は ${verb} …なにも なかった。`);
     }
   }
@@ -406,43 +734,49 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
     const p = S.player;
     if (p.frozen > 0) return;
     for (const h of S.heroes) {
-      if (h.state === "wait" || h.state === "gone" || h.talkCd > 0) continue;
+      if (h.state === "wait" || h.state === "gone" || h.talkCd > 0 || h.slip > 0 || h.scold > 0) continue;
       if (Math.hypot(rx(h) - rx(p), ry(h) - ry(p)) > 0.7) continue;
       h.talkCd = 4; h.pause = 1.2; p.frozen = 1.7;
       p.say = "ここは ハジメの むら です。";
-      msg(`${h.name}「${GREET[Math.floor(Math.random() * GREET.length)]}」 むらびとA「ここは ハジメの むら です。」`);
+      heroSay(h, rand(GREET), 1.7);
+      SFX.talk();
+      msg(`${h.name}に はなしかけられた！ むらびとAは 「ここは ハジメの むら です。」と しか いえない！`);
       if (p.carry) {
         const k = p.carry; p.carry = null;
-        S.stolen.push(k); S.waveStolen.push(k);
-        msg(`${h.name}「お、それ くれるの？ ありがとう！」 ${ITEMS[k].e}${ITEMS[k].n}を もっていかれた！`);
+        h.bag.push(k); S.stolen.push(k); S.waveStolen.push(k);
+        SFX.steal(); pop(`-${ITEMS[k].v}G`, rx(p) + 0.5, ry(p), "#ff6b6b");
+        msg(`${h.name}「お、それ くれるの？ ありがとう！」 ${ITEMS[k].n}を もっていかれた！`);
       }
       return;
     }
   }
 
-  // ---------- drawing ----------
-  function emoji(ch, x, y, size, alpha = 1) {
+  // ================= drawing =================
+  ctx.imageSmoothingEnabled = false;
+  function spr(name, x, y, size, flip = false, alpha = 1) {
+    const s = SPR[name];
+    ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.font = `${size}px ${EMOJI_FONT}`;
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(ch, x, y);
-    ctx.globalAlpha = 1;
+    if (flip) { ctx.translate(x + size, y); ctx.scale(-1, 1); ctx.drawImage(s, 0, 0, size, size); }
+    else ctx.drawImage(s, x, y, size, size);
+    ctx.restore();
   }
-  function label(text, x, y, color = "#f2f2f2") {
+  function label(text, x, y, color) {
     ctx.font = `12px "DotGothic16", monospace`;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const w = ctx.measureText(text).width + 8;
     ctx.fillStyle = "rgba(5,6,13,.85)"; ctx.fillRect(x - w / 2, y - 8, w, 16);
     ctx.fillStyle = color; ctx.fillText(text, x, y + 1);
   }
-  function bubble(text, x, y) {
+  function bubble(text, x, y, border = "#f2f2f2") {
     ctx.font = `13px "DotGothic16", monospace`;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const w = ctx.measureText(text).width + 14;
     const bx = Math.max(4, Math.min(cv.width - w - 4, x - w / 2));
-    ctx.fillStyle = "#05060d"; ctx.strokeStyle = "#f2f2f2"; ctx.lineWidth = 2;
-    ctx.fillRect(bx, y - 13, w, 26); ctx.strokeRect(bx, y - 13, w, 26);
-    ctx.fillStyle = "#f2f2f2"; ctx.fillText(text, bx + w / 2, y + 1);
+    const by = Math.max(4, y - 13);
+    ctx.fillStyle = "#05060d"; ctx.strokeStyle = border; ctx.lineWidth = 2;
+    ctx.fillRect(bx, by, w, 26); ctx.strokeRect(bx, by, w, 26);
+    ctx.fillStyle = "#f2f2f2"; ctx.fillText(text, bx + w / 2, by + 14);
   }
   function drawTiles() {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -459,82 +793,170 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
         for (let i = 1; i < 3; i++) ctx.fillRect(px, py + (T / 3) * i, T, 2);
       }
     }
-    // door
     ctx.fillStyle = "#2a1a0e"; ctx.fillRect(DOOR.x * T + 6, DOOR.y * T, T - 12, T);
     ctx.fillStyle = "#6b4423"; ctx.fillRect(DOOR.x * T + 6, DOOR.y * T, T - 12, 6);
+    if (S.phase === "prep") {
+      ctx.fillStyle = `rgba(255,107,107,${0.2 + 0.15 * Math.sin(S.clock * 6)})`;
+      ctx.fillRect(DOOR.x * T, DOOR.y * T, T, T);
+    }
   }
-  function drawObjects() {
+  function drawObjects(g) {
     for (const o of objects) {
-      const cx = o.x * T + T / 2, cy = o.y * T + T / 2;
+      const px = o.x * T, py = o.y * T;
+      if (g && g.target === o) {
+        const a = 0.5 + 0.5 * Math.sin(S.clock * 8);
+        ctx.fillStyle = `rgba(255,216,74,${0.25 + 0.25 * a})`; ctx.fillRect(px, py, T, T);
+        ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 3; ctx.strokeRect(px + 2, py + 2, T - 4, T - 4);
+      }
       if (o.type === "table") {
-        ctx.fillStyle = "#6b4423"; ctx.fillRect(o.x * T + 4, o.y * T + 10, T - 8, T - 16);
-        emoji(o.e, cx, cy, 24);
+        ctx.fillStyle = "#6b4423"; ctx.fillRect(px + 4, py + 12, T - 8, T - 18);
+        ctx.fillStyle = "#4a2e16"; ctx.fillRect(px + 4, py + T - 10, T - 8, 4);
+        ctx.fillStyle = "#e8e2d0"; ctx.beginPath(); ctx.ellipse(px + T / 2, py + 22, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
         continue;
       }
-      if (o.type === "safe") { ctx.fillStyle = "#5c6378"; ctx.fillRect(o.x * T + 5, o.y * T + 5, T - 10, T - 10); }
-      if (o.broken) {
-        emoji(o.e, cx, cy + 6, 26, 0.35);
-        ctx.strokeStyle = "#1a1a1a"; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(cx - 10, cy - 4); ctx.lineTo(cx + 2, cy + 6); ctx.lineTo(cx - 4, cy + 14); ctx.stroke();
-      } else {
-        emoji(o.e, cx, cy + 2, o.type === "safe" ? 26 : 32);
+      if (o.broken) spr("potBroken", px, py, T);
+      else spr(o.type, px, py, T);
+      if (o.items.length && o.type !== "safe") {
+        ctx.strokeStyle = `rgba(255,216,74,${0.55 + 0.35 * Math.sin(S.clock * 5)})`; ctx.lineWidth = 2; ctx.strokeRect(px + 3, py + 3, T - 6, T - 6);
       }
-      if (o.items.length) {
-        o.items.forEach((k, i) => emoji(ITEMS[k].e, o.x * T + 10 + i * 14, o.y * T + 9, 13));
+      o.items.forEach((k, i) => spr(k, px + 4 + i * 20, py - 2, 22));
+      if (S.phase === "hero" && S.visited.has(o) && o.type !== "bed") {
+        const pulse = g && g.done ? 1 + 0.2 * Math.sin(S.clock * 8) : 1;
+        ctx.save(); ctx.translate(px + T - 11, py + T - 10); ctx.scale(pulse, pulse);
+        label("済", 0, 0, "#ffd84a"); ctx.restore();
       }
-      if (S.phase === "hero" && S.visited.has(o) && o.type !== "bed") label("済", o.x * T + T - 10, o.y * T + T - 9, "#ffd84a");
+    }
+    if (g && g.target) {
+      const bob = Math.sin(S.clock * 6) * 4;
+      const cx = g.target.x * T + T / 2, cy = g.target.y * T - 10 + bob;
+      ctx.fillStyle = "#ffd84a"; ctx.strokeStyle = "#1a1020"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(cx - 10, cy - 10); ctx.lineTo(cx + 10, cy - 10); ctx.lineTo(cx, cy + 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+  }
+  function drawFloor() {
+    for (const k of S.traps) { const [x, y] = k.split(",").map(Number); spr("banana", x * T + 10, y * T + 14, 28); }
+    for (const k of S.decoys) {
+      const [x, y] = k.split(",").map(Number); spr("decoy", x * T + 10, y * T + 12, 28);
+      if (Math.sin(S.clock * 9 + x) > 0.4) { ctx.fillStyle = "#fff"; ctx.fillRect(x * T + 34, y * T + 10, 4, 4); }
+    }
+    for (const [k, list] of Object.entries(S.floor)) {
+      const [x, y] = k.split(",").map(Number);
+      list.forEach((it, i) => spr(it, x * T + 12 + i * 6, y * T + 12 + Math.sin(S.clock * 5) * 2, 24));
     }
   }
   function drawHero(h) {
     if (h.state === "wait" || h.state === "gone") return;
-    const cx = rx(h) * T + T / 2, cy = ry(h) * T + T / 2;
-    emoji(h.e, cx, cy, 32);
-    label(h.name, cx, cy + 22, "#ff6b6b");
+    const cx = rx(h) * T, cy = ry(h) * T;
+    const bob = h.moving ? Math.abs(Math.sin(S.clock * 14)) * -3 : 0;
+    if (h.slip > 0) {
+      ctx.save(); ctx.translate(cx + T / 2, cy + T / 2 + 8); ctx.rotate(Math.PI / 2 * (h.flip ? -1 : 1));
+      ctx.drawImage(SPR[h.spr], -T / 2, -T / 2, T, T); ctx.restore();
+      ctx.fillStyle = "#ffd84a"; ctx.font = `14px "DotGothic16", monospace`; ctx.textAlign = "center";
+      for (let i = 0; i < 3; i++) { const a = S.clock * 5 + i * 2.1; ctx.fillText("★", cx + T / 2 + Math.cos(a) * 16, cy + 8 + Math.sin(a) * 6); }
+    } else {
+      spr(h.spr, cx, cy + bob + (h.scold > 0 ? 6 : 0), T, h.flip);
+      if (h.scold > 0) { ctx.fillStyle = "#8ab4ff"; ctx.fillRect(cx + T - 10, cy + 6 + (S.clock * 20) % 10, 3, 6); }
+    }
+    label(h.name, cx + T / 2, cy + T + 2, "#ff6b6b");
     if (h.state === "act" && h.target) {
       const w = 36, f = 1 - Math.max(0, h.actT) / h.actMax;
-      ctx.fillStyle = "#05060d"; ctx.fillRect(cx - w / 2, cy - 30, w, 7);
-      ctx.fillStyle = "#ff6b6b"; ctx.fillRect(cx - w / 2 + 1, cy - 29, (w - 2) * f, 5);
-      if (h.target.type === "bed") emoji("💤", cx + 14, cy - 18, 16);
+      ctx.fillStyle = "#05060d"; ctx.fillRect(cx + T / 2 - w / 2, cy - 6, w, 7);
+      ctx.fillStyle = "#ff6b6b"; ctx.fillRect(cx + T / 2 - w / 2 + 1, cy - 5, (w - 2) * f, 5);
     }
+    if (h.say) bubble(h.say, cx + T / 2, cy - 20, "#ff6b6b");
   }
   function drawPlayer() {
     const p = S.player;
-    const cx = rx(p) * T + T / 2, cy = ry(p) * T + T / 2;
-    emoji("🧑", cx, cy, 30);
-    label("むらびとA", cx, cy + 22);
-    if (p.carry) emoji(ITEMS[p.carry].e, cx, cy - 24, 18);
-    if (p.say) bubble(p.say, cx, cy - 38);
-  }
-  function draw() {
-    drawTiles();
-    drawObjects();
-    S.heroes.forEach(drawHero);
-    drawPlayer();
-    if (S.phase === "prep") {
-      ctx.fillStyle = "rgba(255,107,107,.18)";
-      ctx.fillRect(DOOR.x * T, DOOR.y * T, T, T);
+    const cx = rx(p) * T, cy = ry(p) * T;
+    const bob = p.moving ? Math.abs(Math.sin(S.clock * 16)) * -3 : 0;
+    const shake = p.frozen > 0 ? Math.sin(S.clock * 40) * 1.5 : 0;
+    spr("villager", cx + shake, cy + bob, T, p.flip);
+    label("あなた", cx + T / 2, cy + T + 2, "#ffd84a");
+    if (p.carry) spr(p.carry, cx + 12, cy - 18 + bob, 24);
+    if (p.say) bubble(p.say, cx + T / 2, cy - 30);
+    else if (S.phase === "prep" && S.timer > WAVES[S.wave].prep - 3) {
+      const b = Math.sin(S.clock * 6) * 3;
+      ctx.fillStyle = "#ffd84a"; ctx.beginPath();
+      ctx.moveTo(cx + T / 2 - 8, cy - 14 + b); ctx.lineTo(cx + T / 2 + 8, cy - 14 + b); ctx.lineTo(cx + T / 2, cy - 4 + b); ctx.fill();
     }
   }
-
-  // ---------- HUD ----------
-  function hud() {
-    $("hDay").textContent = `${Math.min(S.wave + 1, 3)}日目`;
-    const ph = $("hPhase");
-    ph.classList.toggle("alarm", S.phase === "hero" || (S.phase === "prep" && S.timer < 4));
-    if (S.phase === "prep") { $("hPhaseK").textContent = "勇者 とうちゃくまで"; ph.textContent = `${Math.ceil(S.timer)}びょう`; }
-    else if (S.phase === "hero") { $("hPhaseK").textContent = "じょうきょう"; ph.textContent = "勇者 しんにゅう中"; }
-    else { $("hPhaseK").textContent = "じょうきょう"; ph.textContent = S.phase === "result" ? "よる" : "-"; }
-    const c = S.player.carry;
-    $("hCarry").textContent = c ? `${ITEMS[c].e} ${ITEMS[c].v}G` : "なし";
-    $("hAsset").textContent = `${assets()}G`;
+  function drawFx(dt) {
+    S.parts = S.parts.filter((q) => (q.t += dt) < 0.7);
+    for (const q of S.parts) {
+      q.x += q.vx * dt; q.y += q.vy * dt; q.vy += 14 * dt;
+      ctx.fillStyle = "#c0703a"; ctx.fillRect(q.x * T - 3, q.y * T - 3, 6, 6);
+    }
+    S.fx = S.fx.filter((f) => (f.t += dt) < 1.2);
+    for (const f of S.fx) {
+      ctx.globalAlpha = 1 - f.t / 1.2;
+      ctx.font = `bold 18px "DotGothic16", monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 4; ctx.strokeStyle = "#05060d"; ctx.strokeText(f.text, f.x * T, f.y * T - f.t * 30);
+      ctx.fillStyle = f.color; ctx.fillText(f.text, f.x * T, f.y * T - f.t * 30);
+      ctx.globalAlpha = 1;
+    }
+  }
+  function draw(dt, g) {
+    ctx.save();
+    if (S.shake > 0) { S.shake -= dt; ctx.translate((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8); }
+    drawTiles();
+    drawFloor();
+    drawObjects(g);
+    S.heroes.forEach(drawHero);
+    drawPlayer();
+    drawFx(dt);
+    if (S.momT > 0) {
+      S.momT -= dt;
+      bubble("かあさん「くつ ぬぎなさい！！」", cv.width / 2, 30, "#ffd84a");
+    }
+    ctx.restore();
   }
 
-  // ---------- loop ----------
+  // ================= HUD =================
+  let lastGuide = "";
+  function hud(g) {
+    $("hDay").textContent = `${Math.min(S.wave + 1, 3)}日目`;
+    const ph = $("hPhase");
+    const tutWait = S.phase === "prep" && S.wave === 0 && S.tut < 2;
+    ph.classList.toggle("alarm", S.phase === "hero" || (S.phase === "prep" && S.timer < 4 && !tutWait));
+    if (S.phase === "prep") { $("hPhaseK").textContent = "ゆうしゃ とうちゃくまで"; ph.textContent = tutWait ? "まってくれてる" : `${Math.ceil(S.timer)}びょう`; }
+    else if (S.phase === "hero") { $("hPhaseK").textContent = "じょうきょう"; ph.textContent = "しんにゅう中！"; }
+    else { $("hPhaseK").textContent = "じょうきょう"; ph.textContent = S.phase === "result" ? "よる" : "-"; }
+    const c = S.player.carry;
+    $("hCarry").textContent = c ? `${ITEMS[c].n.length > 6 ? "💎かほう" : ITEMS[c].n}` : "なし";
+    $("hAsset").textContent = `${assets()}G`;
+    const text = g ? g.text : S.phase === "title" ? "「はじめる」を おしてね" : "ゆっくり やすもう";
+    if (text !== lastGuide) { $("guide").innerHTML = text; lastGuide = text; }
+    renderTreasure();
+    TOOLS.forEach((t) => {
+      const b0 = $("tool-" + t.id); b0.hidden = !S.unlocked.has(t.id);
+      const b = $("tool-" + t.id), n = S.tools[t.id] || 0;
+      if (b.dataset.n !== String(n)) { b.dataset.n = n; b.querySelector("span").textContent = `×${n}`; b.disabled = n === 0; }
+    });
+  }
+
+  let lastTreasure = "";
+  function renderTreasure() {
+    const g = { safe: [], house: [], hand: [], lost: [...S.stolen] };
+    for (const o of objects) for (const k of o.items) g[o.type === "safe" ? "safe" : "house"].push(k);
+    if (S.player.carry) g.hand.push(S.player.carry);
+    for (const list of Object.values(S.floor)) g.hand.push(...list);
+    const icons = (list) => list.sort((a, b) => ITEMS[b].v - ITEMS[a].v).map((k) => `<img src="${SPRURL[k]}" alt="${ITEMS[k].n}">`).join("");
+    const parts = [
+      ["safe", "きんこ（あんぜん）"], ["house", "いえの 入れもの"], ["hand", "てもち・ゆか"], ["lost", "とられた"],
+    ].filter(([k]) => g[k].length).map(([k, label]) => `<span class="t ${k === "house" ? "" : k}">${label}${icons(g[k])}</span>`);
+    const html = parts.length ? parts.join("") : `<span class="k">たから：まだ なし</span>`;
+    if (html !== lastTreasure) { $("treasure").innerHTML = html; lastTreasure = html; }
+  }
+
+  // ================= loop =================
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    S.clock += dt;
+    const g = guide();
     if (S.phase === "prep") {
-      S.timer -= dt; updatePlayer(dt);
+      if (!(S.wave === 0 && S.tut < 2)) S.timer -= dt;
+      updatePlayer(dt);
       if (S.timer <= 0) startHeroes();
     } else if (S.phase === "hero") {
       updatePlayer(dt);
@@ -542,17 +964,19 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
       checkBump();
       if (S.heroes.every((h) => h.state === "gone")) endWave();
     }
-    draw(); hud();
+    draw(dt, g); hud(g);
     requestAnimationFrame(frame);
   }
 
-  // ---------- input ----------
+  // ================= input =================
   const KEYMAP = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", w: "up", s: "down", a: "left", d: "right", W: "up", S: "down", A: "left", D: "right" };
   const press = (d) => { if (!held.includes(d)) held.push(d); };
   const release = (d) => { const i = held.indexOf(d); if (i >= 0) held.splice(i, 1); };
+  const playing = () => ["prep", "hero"].includes(S.phase);
   addEventListener("keydown", (e) => {
     if (KEYMAP[e.key]) { e.preventDefault(); press(KEYMAP[e.key]); }
-    else if ((e.key === " " || e.key === "z" || e.key === "Z" || e.key === "Enter") && ["prep", "hero"].includes(S.phase)) { e.preventDefault(); if (!e.repeat) action(); }
+    else if ((e.key === " " || e.key === "z" || e.key === "Z" || e.key === "Enter") && playing()) { e.preventDefault(); if (!e.repeat) action(); }
+    else if (/^[1-4]$/.test(e.key) && playing()) { e.preventDefault(); if (!e.repeat) useTool(TOOLS[+e.key - 1].id); }
   });
   addEventListener("keyup", (e) => { if (KEYMAP[e.key]) release(KEYMAP[e.key]); });
   addEventListener("blur", () => (held.length = 0));
@@ -562,7 +986,10 @@ details ul { padding-left: 1.2em; margin: 6px 0 0; }
     ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) => b.addEventListener(ev, () => release(d)));
   });
   $("abtn").addEventListener("pointerdown", (e) => { e.preventDefault(); action(); });
-  $("skip").addEventListener("click", () => { if (S.phase === "prep") S.timer = 0; });
+  $("tools").innerHTML = TOOLS.map((t) => `<button class="tool" id="tool-${t.id}" title="${t.info}"><img src="${spriteURL(t.id, 4)}" alt=""><b>${t.n}</b><span>×0</span></button>`).join("");
+  TOOLS.forEach((t) => $("tool-" + t.id).addEventListener("pointerdown", (e) => { e.preventDefault(); useTool(t.id); }));
+  $("skip").addEventListener("click", () => { if (S.phase === "prep") { S.tut = Math.max(S.tut, 2); S.timer = 0; } });
+  $("snd").addEventListener("click", () => { soundOn = !soundOn; $("snd").textContent = `おと: ${soundOn ? "ON" : "OFF"}`; if (soundOn) initAudio(); });
 
   newGame();
   requestAnimationFrame(frame);
