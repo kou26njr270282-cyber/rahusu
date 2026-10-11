@@ -25,6 +25,7 @@
   --m-happy: #FF7BAC;
   --m-clean: #3EC1D3;
   --m-energy: #6BCB77;
+  --m-water: #5B9BEA;
   --line: #EADFD3;
   --font-ui: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
   --font-dot: "DotGothic16", "MS Gothic", "Osaka-Mono", monospace;
@@ -70,7 +71,9 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 @keyframes bump { 40% { transform: scale(1.25); } }
 
 /* meters */
-.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; padding-inline: 4px; }
+.meters { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 14px; padding-inline: 4px; }
+.body-chip { justify-self: start; font-size: .72rem; font-weight: 800; border: 2px solid var(--ink); border-radius: 999px; padding: 0 8px; background: var(--wall); }
+.body-chip.warn { background: var(--honey); }
 .meter { display: grid; grid-template-columns: 4.2em 1fr; align-items: center; gap: 6px; font-size: .8rem; }
 .meter .bar { height: 12px; border: 2px solid var(--ink); border-radius: 8px; background: var(--shell); overflow: hidden; }
 .meter .fill { height: 100%; width: 50%; border-radius: 4px; transition: width .6s ease; }
@@ -216,6 +219,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 .album .card { border: 2px solid var(--ink); border-radius: 12px; padding: 4px; text-align: center; font-size: .7rem; line-height: 1.3; background: var(--wall); min-width: 0; }
 .album .card b { display: block; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .album svg { width: 100%; max-width: 64px; height: auto; }
+.bones { display: block; width: 100%; height: auto; }
 
 /* sheets (menus) */
 .sheet { position: absolute; inset: 0; z-index: 15; background: rgba(58,46,57,.35); display: flex; align-items: flex-end; }
@@ -291,6 +295,14 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 #endPic .pet-img { max-width: 100%; }
 .hint3d { position: absolute; right: 8px; bottom: 6px; z-index: 5; font-family: var(--font-dot); font-size: .7rem; color: var(--ink-soft); background: rgba(255,253,248,.8); border-radius: 8px; padding: 1px 6px; pointer-events: none; transition: opacity 1s; }
 
+/* toilet corner */
+.toilet { position: absolute; right: 3%; bottom: 4%; width: 23%; height: 12%; z-index: 2; background: #FFF6E0; border: 2.5px solid var(--ink); border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 1px; font-size: 1rem; line-height: 1; }
+.toilet small { position: absolute; top: -1.3em; left: 50%; transform: translateX(-50%); font-family: var(--font-dot); font-size: .6rem; color: var(--ink-soft); background: rgba(255,253,248,.85); border-radius: 6px; padding: 0 4px; white-space: nowrap; }
+.praise { position: absolute; right: 3%; bottom: 19%; z-index: 9; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--coral); color: #fff; font-weight: 800; font-size: .85rem; padding: 4px 12px; box-shadow: 0 3px 0 var(--ink); cursor: pointer; animation: nudge .8s ease-in-out infinite; }
+.diary { display: flex; flex-direction: column; gap: 6px; }
+.diary div { border-left: 4px solid var(--m-happy); padding: 2px 10px; font-size: .82rem; line-height: 1.6; }
+.diary b { display: block; font-size: .85rem; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
 }
@@ -318,9 +330,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 
     <section class="meters" aria-label="ステータス">
       <div class="meter" id="m-hunger"><span>おなか</span><div class="bar"><div class="fill" style="background:var(--m-hunger)"></div></div></div>
-      <div class="meter" id="m-happy"><span>ごきげん</span><div class="bar"><div class="fill" style="background:var(--m-happy)"></div></div></div>
+      <div class="meter" id="m-water"><span>みず</span><div class="bar"><div class="fill" style="background:var(--m-water)"></div></div></div>
+      <div class="meter" id="m-happy"><span>きぶん</span><div class="bar"><div class="fill" style="background:var(--m-happy)"></div></div></div>
       <div class="meter" id="m-clean"><span>せいけつ</span><div class="bar"><div class="fill" style="background:var(--m-clean)"></div></div></div>
       <div class="meter" id="m-energy"><span>げんき</span><div class="bar"><div class="fill" style="background:var(--m-energy)"></div></div></div>
+      <div class="meter"><span>たいけい</span><span class="body-chip ok" id="bodyLbl">ちょうどいい</span></div>
     </section>
 
     <div class="room" id="room">
@@ -329,6 +343,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
       <div class="rug"></div>
       <div id="furn"></div>
       <div id="poops"></div>
+      <div class="toilet" id="toilet" aria-label="トイレ"><small>トイレ</small><span id="tpoop"></span></div>
+      <button class="praise" id="praise" hidden>🙌 ほめる</button>
       <button class="gift" id="gift" aria-label="プレゼントを あける" hidden>🎁</button>
       <div class="petpos" id="petpos" role="button" tabindex="0" aria-label="なでる">
         <div class="petflip" id="petflip"><div class="petbob" id="petbob"></div></div>
@@ -343,7 +359,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
       <button class="act" data-act="play"><span class="ic">🎾</span>あそぶ</button>
       <button class="act" data-act="bath"><span class="ic" id="bathIc">🛁</span><span id="bathLbl">おふろ</span></button>
       <button class="act" data-act="clean"><span class="ic">🧹</span>そうじ</button>
-      <button class="act" data-act="med"><span class="ic">💊</span>くすり</button>
+      <button class="act" data-act="vet"><span class="ic">🏥</span>びょういん</button>
       <button class="act" data-act="light"><span class="ic" id="lightIc">💡</span><span id="lightLbl">でんき</span></button>
       <button class="act" data-act="shop"><span class="ic">🏪</span>ショップ</button>
       <button class="act" data-act="info"><span class="ic">📒</span>きろく</button>
@@ -381,6 +397,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
       <h2 id="infoTitle">きろく</h2>
       <dl class="rows" id="infoRows"></dl>
       <p id="infoTip"></p>
+      <h3>にっき</h3>
+      <div class="diary" id="diary"></div>
       <h3>ずかん</h3>
       <div class="album" id="album"></div>
       <button class="big ghost" id="closeInfo">とじる</button>
@@ -393,7 +411,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 
     <section class="overlay" id="ending" hidden>
       <h2 id="endTitle"></h2>
-      <div id="endPic" style="width:60%;margin:0 auto;opacity:.75"></div>
+      <div id="endPic" style="width:60%;margin:0 auto"></div>
       <p id="endText"></p>
       <button class="big" id="againBtn">あたらしい子を むかえる</button>
     </section>
@@ -507,8 +525,11 @@ const PERSONALITIES = {
   'のんびり': { all: 0.85, tip: 'なにごとも ゆっくり' },
   'きれいずき': { clean: 1.3, tip: 'おふろが だいすき' },
 };
-const MIN_PER_YEAR = 30;          // 30 real minutes = 1さい
-const STAGE_AT = [0, 30, 120];     // minutes: baby → child → adult
+// Real-time raising: a day in the game is a real day.
+const STAGE_AT = [0, 24 * 60, 72 * 60];     // minutes: baby (day 1) → child (days 2–3) → adult (day 4+)
+const NEGLECT_MS = 10 * 3600 * 1000;        // left alone this long, the pet turns to bones
+const ADULT_KG = { dog: 8, cat: 4, rabbit: 2, hamster: 0.13, penguin: 10, panda: 100 };
+const HAS_NAILS = { dog: 1, cat: 1, rabbit: 1, hamster: 1 };
 
 /* ---------- shop ---------- */
 const FOODS = {
@@ -549,10 +570,10 @@ function newPet(species, color, name) {
   const ps = Object.keys(PERSONALITIES);
   return { v: 2, species, color, name, born: t, last: t,
     hunger: 80, happy: 80, clean: 100, energy: 90, health: 100,
-    weight: { dog: 1.2, cat: 0.8, rabbit: 0.6, hamster: 0.1, penguin: 2.0, panda: 3.0 }[species],
-    poop: 0, poopClock: 3, sick: false, asleep: false, neglect: 0, stage: 0, variant: null, alive: true,
+    bcs: 50, water: 90, nails: 10, vaccinated: false, toilet: 0, tpoop: 0, lastCare: t, diary: {}, death: null,
+    poop: 0, poopClock: 120, sick: false, asleep: false, neglect: 0, stage: 0, variant: null, alive: true,
     snacks: [], fed: 0, played: 0, wins: 0, best: 0, personality: ps[Math.floor(Math.random() * ps.length)],
-    gift: false, giftAt: t + 4 * 60000, giftX: 30, archived: false, walkAt: t, xp: 0, lv: 1 };
+    gift: false, giftAt: t + 15 * 60000, giftX: 30, archived: false, walkAt: t, xp: 0, lv: 1 };
 }
 function save() {
   try { if (S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); localStorage.setItem(META_KEY, JSON.stringify(M)); } catch (e) {}
@@ -567,16 +588,32 @@ function normalize(s) {
 }
 const clamp = (v) => Math.max(0, Math.min(100, v));
 const ageMin = () => (Date.now() - S.born) / 60000;
+const ageDay = (m) => Math.floor(m / 1440) + 1;
+const weightKg = () => ADULT_KG[S.species] * Math.min(1, 0.15 + 0.85 * ageMin() / STAGE_AT[2]) * (0.75 + S.bcs / 200);
+const bodyLabel = () => S.bcs < 25 ? 'やせすぎ' : S.bcs < 38 ? 'やせぎみ' : S.bcs <= 64 ? 'ちょうどいい' : S.bcs <= 78 ? 'ぽっちゃり' : 'ひまん';
+const fmtKg = (kg) => kg < 1 ? Math.round(kg * 1000) + 'g' : kg.toFixed(1) + 'kg';
+function addBcs(n) { S.bcs = clamp((S.bcs ?? 50) + n); }
+function cared() { if (S) S.lastCare = Date.now(); }
+function diary(k, v) {
+  if (!S) return;
+  S.diary = S.diary || {};
+  const d = S.diary[today()] || (S.diary[today()] = { feed: 0, water: 0, walk: 0, play: 0, pet: 0, toilet: 0, saw: [] });
+  if (k === 'saw') { if (!d.saw.includes(v) && d.saw.length < 6) d.saw.push(v); }
+  else d[k] = (d[k] || 0) + 1;
+  const keys = Object.keys(S.diary);
+  if (keys.length > 14) delete S.diary[keys[0]];
+}
 const stageOf = (m) => (m >= STAGE_AT[2] ? 2 : m >= STAGE_AT[1] ? 1 : 0);
 const pers = () => PERSONALITIES[S.personality] || {};
 const has = (f) => M.furn.includes(f);
 const isNight = () => { const h = new Date().getHours(); return h >= 19 || h < 6; };
-const walkOverdue = () => S.species === 'dog' && Date.now() - (S.walkAt || 0) > 45 * 60000;
+const walkOverdue = () => S.species === 'dog' && Date.now() - (S.walkAt || 0) > 8 * 3600 * 1000;
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 
+// Rates are per minute and tuned to a real day: meals 2–3 times a day, a few hours of sleep, a walk or two.
 function simulate(dt, offline, events) {
   const P = pers(), all = P.all || 1;
-  const d = dt * (offline ? 0.5 : 1) * all;
+  const d = dt * all;
   const L = SPECIES[S.species];
   // species habits: dogs miss their walks, cats keep their own mood, hamsters live at night, pandas doze a lot
   let happyRate = (P.happy || 1) * (has('ball') ? 0.8 : 1);
@@ -585,27 +622,42 @@ function simulate(dt, offline, events) {
   if (S.species === 'cat') happyRate *= 0.85;
   if (L.nocturnal) { if (isNight()) happyRate *= 0.8; else energyRate *= 1.4; }
   if (L.sleepy) energyRate *= 1.3;
-  if (S.asleep) { S.energy += 5 * d / all * (has('bed') ? 1.5 : 1); S.hunger -= 0.5 * d; S.happy -= 0.2 * d; }
-  else { S.hunger -= 1.6 * d * (P.hunger || 1); S.happy -= 1.2 * d * happyRate; S.energy -= 0.8 * d * energyRate; }
-  S.clean -= (0.5 * (P.clean || 1) + S.poop * 0.7) * d * (has('plant') ? 0.85 : 1);
+  if (S.bcs > 78) energyRate *= 1.3;
+  if (HAS_NAILS[S.species] && S.nails > 70) happyRate *= 1.2;
+  if (S.asleep) { S.energy += 0.25 * d / all * (has('bed') ? 1.5 : 1); S.hunger -= 0.05 * d; S.water -= 0.06 * d; S.happy -= 0.02 * d; }
+  else { S.hunger -= 0.17 * d * (P.hunger || 1); S.water -= 0.2 * d; S.happy -= 0.13 * d * happyRate; S.energy -= 0.1 * d * energyRate; }
+  S.clean -= (0.05 * (P.clean || 1) + S.poop * 0.1 + (S.tpoop || 0) * 0.015) * d * (has('plant') ? 0.85 : 1);
+  if (HAS_NAILS[S.species]) S.nails = Math.min(100, (S.nails || 0) + 0.007 * dt);
+  addBcs(-0.005 * dt);   // everyday metabolism
   if (!S.asleep) {
-    S.poopClock += d;
-    if (S.poopClock >= 8) { S.poopClock = 0; if (S.poop < 4) { S.poop++; events.push('poop'); } }
+    S.poopClock -= d;
+    if (S.poopClock <= 0) {
+      S.poopClock = 200 + Math.random() * 120;
+      // toilet training: the better it learned, the more often it uses the toilet
+      if (Math.random() < 0.15 + (S.toilet || 0) * 0.17 && (S.tpoop || 0) < 4) { S.tpoop = (S.tpoop || 0) + 1; events.push('toiletok'); }
+      else if (S.poop < 4) { S.poop++; events.push('poop'); }
+    }
   }
-  const risk = (S.clean < 25) + (S.poop >= 3) + (S.hunger < 10) + (S.energy < 5);
-  if (!S.sick && risk > 0 && Math.random() < 1 - Math.pow(1 - 0.05 * risk, d)) { S.sick = true; events.push('sick'); }
+  let risk = (S.clean < 25) + (S.poop >= 3) + (S.hunger < 10) + (S.water < 10) + (S.energy < 5) + (S.bcs > 78) + (S.bcs < 25);
+  if (!S.vaccinated && ageMin() > STAGE_AT[2]) risk *= 1.5;
+  if (S.vaccinated) risk *= 0.5;
+  if (!S.sick && risk > 0 && Math.random() < 1 - Math.pow(1 - 0.004 * risk, d)) { S.sick = true; events.push('sick'); }
   let dh = 0;
-  if (S.sick) dh -= 1.8;
-  if (S.hunger <= 0) dh -= 1.5;
-  if (S.happy <= 0) dh -= 0.6;
-  if (dh === 0 && S.hunger > 40 && S.clean > 35) dh = 0.6;
+  if (S.sick) dh -= 0.2;
+  if (S.hunger <= 0) dh -= 0.25;
+  if (S.water <= 0) dh -= 0.33;
+  if (S.happy <= 0) dh -= 0.08;
+  if (dh === 0 && S.hunger > 40 && S.water > 30 && S.clean > 35 && S.bcs >= 25) dh = 0.1;
   S.health += dh * d;
-  if (S.hunger <= 0 || S.happy <= 0) S.neglect += dt;
-  for (const k of ['hunger', 'happy', 'clean', 'energy', 'health']) S[k] = clamp(S[k]);
+  if (S.hunger <= 0 || S.happy <= 0 || S.water <= 0) S.neglect += dt;
+  for (const k of ['hunger', 'water', 'happy', 'clean', 'energy', 'health']) S[k] = clamp(S[k]);
   if (offline) S.health = Math.max(S.health, 10);
   if (S.asleep && S.energy >= 100) { S.asleep = false; events.push('wake'); }
-  if (!S.gift && !S.asleep && Date.now() > S.giftAt) { S.gift = true; S.giftX = [8, 74, 22, 62][Math.floor(Math.random() * 4)]; events.push('gift'); }
+  if (!S.gift && !S.asleep && Date.now() > S.giftAt) { S.gift = true; S.giftX = [8, 22, 34, 62][Math.floor(Math.random() * 4)]; events.push('gift'); }
   if (S.health <= 0) S.alive = false;
+}
+function checkBones() {
+  if (S && S.alive && Date.now() - (S.lastCare || Date.now()) >= NEGLECT_MS) { S.alive = false; S.death = 'bones'; }
 }
 function catchUp() {
   const mins = Math.min((Date.now() - S.last) / 60000, 600);
@@ -1397,11 +1449,13 @@ function render() {
   const m = ageMin(), st = stageOf(m);
   $('petName').textContent = S.name;
   $('stageLbl').textContent = [sp().kid + '(あかちゃん)', sp().kid, sp().adult][st];
-  $('ageLbl').textContent = Math.floor(m / MIN_PER_YEAR) + 'さい';
-  $('wtLbl').textContent = S.weight.toFixed(1) + 'kg';
+  $('ageLbl').textContent = ageDay(m) + 'にちめ';
+  $('wtLbl').textContent = fmtKg(weightKg());
+  $('bodyLbl').textContent = bodyLabel();
+  $('bodyLbl').className = 'body-chip ' + (S.bcs < 38 || S.bcs > 64 ? 'warn' : 'ok');
   $('persLbl').textContent = S.personality;
   $('coins').textContent = '🪙 ' + M.coins;
-  for (const k of ['hunger', 'happy', 'clean', 'energy']) {
+  for (const k of ['hunger', 'water', 'happy', 'clean', 'energy']) {
     const el = $('m-' + k);
     el.querySelector('.fill').style.width = S[k] + '%';
     el.classList.toggle('low', S[k] < 25);
@@ -1412,7 +1466,7 @@ function render() {
   const poops = $('poops');
   if (poops.children.length !== S.poop) {
     poops.innerHTML = '';
-    const slots = [4, 82, 16, 70];
+    const slots = [5, 18, 31, 60];
     for (let i = 0; i < S.poop; i++) {
       const d = document.createElement('div');
       d.className = 'poop'; d.textContent = '💩'; d.style.left = slots[i] + '%';
@@ -1420,6 +1474,7 @@ function render() {
     }
   }
   if (P3.ok) P3.setFurn(M.furn);
+  $('tpoop').textContent = '💩'.repeat(S.tpoop || 0);
   const fk = M.furn.join(',');
   if (fk !== furnKey) {
     furnKey = fk;
@@ -1429,7 +1484,7 @@ function render() {
   g.hidden = !S.gift || busy;
   g.style.left = S.giftX + '%';
   $('bathIc').textContent = sp().bath.icon; $('bathLbl').textContent = sp().bath.label;
-  const need = { food: S.hunger < 30, play: (S.happy < 30 || walkOverdue()) && !S.asleep, bath: S.clean < 30, clean: S.poop > 0, med: S.sick, light: !S.asleep && S.energy < 20 };
+  const need = { food: S.hunger < 30 || S.water < 30, play: (S.happy < 30 || walkOverdue()) && !S.asleep, bath: S.clean < 30, clean: S.poop > 0 || (S.tpoop || 0) >= 2, vet: S.sick || (HAS_NAILS[S.species] && S.nails > 70) || (!S.vaccinated && stageOf(ageMin()) >= 1), light: !S.asleep && S.energy < 20 };
   document.querySelectorAll('.act').forEach(b => b.classList.toggle('need', !!need[b.dataset.act]));
   $('room').classList.toggle('lights-off', S.asleep);
   $('petpos').classList.toggle('asleep', S.asleep);
@@ -1443,7 +1498,7 @@ function render() {
   renderTop();
   const days = Math.floor(m / (60 * 24));
   $('frame').innerHTML = days > 0 ? `${S.name}<br>${days}にちめ` : `${S.name}<br>${Math.floor(m)}ふん`;
-  if (P3.ok) P3.setFrame(days > 0 ? `${S.name}\n${days}にちめ` : `${S.name}\n${Math.floor(m)}ふん`);
+  if (P3.ok) P3.setFrame(`${S.name}\n${ageDay(m)}にちめ`);
 }
 
 function renderSky() {
@@ -1498,21 +1553,53 @@ function eat(food, done) {
 function feedBasic() {
   if (S.hunger >= 95) { setAnim('normal', 1500); return say('もう おなか いっぱい'); }
   eat(sp().meal.icon, () => {
-    S.hunger = clamp(S.hunger + 28); S.weight += 0.1; S.poopClock += 1.5; S.fed++; afterEat();
+    S.hunger = clamp(S.hunger + 30); addBcs(2.5); S.fed++; afterEat();
     lcd(`${S.name}は ${sp().meal.name}を たべた`);
   });
 }
+function drinkWater() {
+  if (S.asleep) return say('…Zzz');
+  eat('💧', () => { S.water = 100; diary('water'); lcd(`${S.name}は ごくごく おみずを のんだ`); });
+}
+function vetAction(k) {
+  if (k === 'med') { closeSheet(); return actions.med(); }
+  if (k === 'vac') {
+    if (M.coins < 20) return;
+    M.coins -= 20; S.vaccinated = true; S.happy = clamp(S.happy - 8);
+    closeSheet(); setAnim('sad', 1500); say('チクッ…'); lcd('ワクチンを うった。これで びょうきに なりにくい');
+    toastOnce('vac', '💉 ワクチン', 'ほんものの ペットも こどもの ころに ワクチンを うって、こわい びょうきを ふせぐよ。');
+    render(); return save();
+  }
+  if (k === 'nails') {
+    S.nails = 0; S.happy = clamp(S.happy - 3);
+    closeSheet(); setAnim('surprise', 900); lcd('つめを きった。あるきやすく なったね');
+    toastOnce('nails', '✂️ つめきり', 'へやで くらす どうぶつは つめが けずれにくいので、ときどき きってあげよう。');
+    render(); return save();
+  }
+  if (k === 'check') {
+    const tips = [];
+    tips.push(`たいじゅう ${fmtKg(weightKg())}（${bodyLabel()}）。` + (S.bcs > 64 ? 'おやつを へらして うんどうさせよう。' : S.bcs < 38 ? 'ごはんを しっかり あげよう。' : 'この ちょうしで！'));
+    if (S.water < 40) tips.push('すこし みずが たりない。');
+    if (HAS_NAILS[S.species] && S.nails > 60) tips.push('つめが のびてるよ。');
+    if (!S.vaccinated) tips.push(stageOf(ageMin()) >= 1 ? 'ワクチンを うとう。' : 'こどもに なったら ワクチンを。');
+    if ((S.toilet || 0) < 3) tips.push('トイレで できたら すぐ ほめてあげて。');
+    if (S.sick) tips.push('いまは びょうき。くすりを もらおう。');
+    closeSheet();
+    toast('🩺 じゅういさんより', tips.join(''));
+    return;
+  }
+}
 function afterEat() {
-  mission('feed'); gainXP(4);
+  mission('feed'); gainXP(4); diary('feed');
   if (S.species === 'hamster') setTimeout(() => playBehavior(findBehavior('pouch')), 1700);
   if (S.species === 'panda') SND.play('munch');
 }
 function feedSnack() {
   const t = Date.now();
-  S.snacks = (S.snacks || []).filter(x => t - x < 10 * 60000);
+  S.snacks = (S.snacks || []).filter(x => t - x < 60 * 60000);
   eat('🍪', () => {
     S.snacks.push(t);
-    S.happy = clamp(S.happy + 15); S.hunger = clamp(S.hunger + 5); S.weight += 0.2; afterEat();
+    S.happy = clamp(S.happy + 15); S.hunger = clamp(S.hunger + 5); addBcs(4); afterEat();
     if (S.snacks.length > 3) { S.health = clamp(S.health - 8); lcd('おやつの たべすぎ…ちょっと ぐあいが わるそう'); say('うっぷ…'); }
     else { lcd(`${S.name}は おやつで ごきげん！`); setAnim('joy', 1400); }
   });
@@ -1524,7 +1611,7 @@ function feedItem(key) {
   M.inv[key]--;
   eat(f.icon, () => {
     S.hunger = clamp(S.hunger + (f.hunger || 0)); S.energy = clamp(S.energy + (f.energy || 0));
-    S.health = clamp(S.health + (f.health || 0)); S.weight += f.w || 0; S.fed++; S.poopClock += 1; afterEat();
+    S.health = clamp(S.health + (f.health || 0)); addBcs((f.w || 0) * 20); S.fed++; afterEat();
     let happy = f.happy || 0;
     if (key === 'fav' && S.personality === 'くいしんぼう') happy += 10;
     S.happy = clamp(S.happy + happy);
@@ -1576,11 +1663,12 @@ const actions = {
     }, 1800);
   },
   clean() {
-    if (S.poop === 0) return lcd('へやは きれいだよ');
-    S.poop = 0; S.clean = clamp(S.clean + 10);
+    if (S.poop === 0 && !S.tpoop) return lcd('へやも トイレも きれいだよ');
+    S.poop = 0; S.tpoop = 0; S.clean = clamp(S.clean + 10);
     lcd('うんちを かたづけた'); say(bark('♪')); setAnim('smile', 1200); mission('clean'); gainXP(3);
     render(); save();
   },
+  vet() { openSheet('vet'); },
   med() {
     if (!S.sick) { say('げんきだよ？'); return lcd('いまは くすりは いらない'); }
     S.sick = false; S.health = clamp(S.health + 10); S.happy = clamp(S.happy - 5);
@@ -1625,7 +1713,8 @@ function renderSheet() {
   tabs.innerHTML = '';
   if (sheetMode === 'food') {
     $('sheetTitle').textContent = 'なにを あげる？';
-    let html = row(sp().meal.icon, sp().meal.name, 'いつもの ごはん・おなか+28', 'あげる', 'data-feed="basic"') +
+    let html = row('💧', 'おみずを かえる', 'しんせんな みず。のどが かわくと けんこうに わるい', 'かえる', 'data-drink="1"') +
+      row(sp().meal.icon, sp().meal.name, 'いつもの ごはん・おなか+28', 'あげる', 'data-feed="basic"') +
                row('🍪', 'おやつ', 'ごきげん+15（たべすぎ ちゅうい）', 'あげる', 'data-feed="snack"');
     for (const k of Object.keys(FOODS)) {
       const n = M.inv[k] || 0; if (!n) continue;
@@ -1644,6 +1733,14 @@ function renderSheet() {
       row('📣', 'なまえを よぶ', `「${S.name}！」と よんでみよう。どうぶつに よって はんのうが ちがう`, 'よぶ', 'data-call="1"') +
       row('↔️', 'どっちむくかな？', `${S.name}が むく ほうこうを あてよう（5かい）`, tired ? 'つかれてる' : 'あそぶ', 'data-game="dir"', tired) +
       row('🧺', 'おやつキャッチ', `ゆびで うごかして キャッチ！ 🌶️は さけてね（ベスト ${S.best || 0}）`, tired ? 'つかれてる' : 'あそぶ', 'data-game="catch"', tired);
+  } else if (sheetMode === 'vet') {
+    $('sheetTitle').textContent = 'どうぶつびょういん';
+    const st = stageOf(ageMin());
+    let html = row('🩺', 'けんこうしんだん', 'からだの ようすを みてもらう（むりょう）', 'みてもらう', 'data-vet="check"');
+    html += row('💊', 'くすり', S.sick ? 'びょうきを なおす' : 'いまは びょうきじゃ ないよ', 'もらう', 'data-vet="med"', !S.sick);
+    html += row('💉', 'ワクチン（20🪙）', S.vaccinated ? 'うった。びょうきに なりにくい' : st >= 1 ? 'こどもに なったら うとう。びょうきに なりにくくなる' : 'こどもに なってから うてるよ', 'うつ', 'data-vet="vac"', S.vaccinated || st < 1 || M.coins < 20);
+    if (HAS_NAILS[S.species]) html += row('✂️', 'つめきり', `つめの のび ${Math.round(S.nails)}%。のびすぎると あるきにくくて いやがる`, 'きる', 'data-vet="nails"', S.nails < 20);
+    list.innerHTML = html;
   } else if (sheetMode === 'train') {
     $('sheetTitle').textContent = 'しつけ';
     const sk = S.skills || {};
@@ -1688,10 +1785,13 @@ function onSheetClick(e) {
     const k = t.dataset.feed;
     return k === 'basic' ? feedBasic() : k === 'snack' ? feedSnack() : feedItem(k);
   }
+  cared();
+  if (t.dataset.drink) { closeSheet(); return drinkWater(); }
+  if (t.dataset.vet) return vetAction(t.dataset.vet);
   if (t.dataset.trainMenu) { sheetMode = 'train'; return renderSheet(); }
   if (t.dataset.train) { closeSheet(); return practice(t.dataset.train); }
   if (t.dataset.call) { closeSheet(); return callPet(); }
-  if (t.dataset.special) { closeSheet(); mission('special'); mission('play'); gainXP(10); return doSpecial(); }
+  if (t.dataset.special) { closeSheet(); mission('special'); mission('play'); gainXP(10); if (S.species !== 'dog') diary('play'); return doSpecial(); }
   if (t.dataset.game) { closeSheet(); return t.dataset.game === 'dir' ? startDir() : startCatch(); }
   if (t.dataset.wear) {
     M.hat = M.hat === t.dataset.wear ? null : t.dataset.wear;
@@ -1758,7 +1858,7 @@ function doSpecial() {
     case 'walk':
       lcd(`${S.name}と さんぽに でかけた…`); say('さんぽ！ さんぽ！');
       goOut(2600, () => {
-        S.walkAt = Date.now(); S.clean = clamp(S.clean - 12); S.weight = Math.max(0.05, S.weight - 0.1);
+        S.walkAt = Date.now(); S.clean = clamp(S.clean - 12); addBcs(-4); S.water = clamp(S.water - 12); diary('walk');
         const f = findSomething('こうえん');
         end(28, f || 'さんぽ たのしかった！ ちょっと よごれたかも', 'ただいま！');
         setTimeout(() => setAnim('pant', 3500), 1700);
@@ -1792,7 +1892,7 @@ function doSpecial() {
       const it = prop('🎡', 'left:50%;bottom:14%;font-size:5rem;transform:translateX(-50%);z-index:2;animation:wheel 1.2s linear infinite');
       $('petpos').classList.add('walking');
       lcd('くるくる くるくる…');
-      setTimeout(() => { it.remove(); S.weight = Math.max(0.05, S.weight - 0.05); end(night ? 30 : 18, night ? 'よるの まわしぐるまは さいこう！' : 'いっぱい はしった！'); }, 3200);
+      setTimeout(() => { it.remove(); addBcs(-3); S.water = clamp(S.water - 8); end(night ? 30 : 18, night ? 'よるの まわしぐるまは さいこう！' : 'いっぱい はしった！'); }, 3200);
       break;
     }
     case 'roll': {
@@ -1834,7 +1934,7 @@ function startDir() {
 function endDir(g, wins) {
   g.remove(); busy = false;
   S.happy = clamp(S.happy + 8 + wins * 6); S.energy = clamp(S.energy - 12); S.hunger = clamp(S.hunger - 5);
-  S.weight = Math.max(0.05, S.weight - 0.1); S.played++; S.wins += wins; mission('play'); gainXP(8 + wins * 2);
+  addBcs(-1.5); S.water = clamp(S.water - 5); diary('play'); S.played++; S.wins += wins; mission('play'); gainXP(8 + wins * 2);
   const coins = Math.round((2 + wins * 3) * (S.personality === 'やんちゃ' ? 1.5 : 1));
   addCoins(coins);
   if (wins === 5) { setAnim('joy', 2000); say('ぜんぶ あたり！'); lcd(`パーフェクト！ ${coins}コイン ゲット`); }
@@ -1913,7 +2013,7 @@ function startCatch() {
     if (newBest) S.best = score;
     S.played++; mission('play'); gainXP(8 + Math.min(20, score));
     S.happy = clamp(S.happy + 6 + Math.min(30, score * 2)); S.energy = clamp(S.energy - 15);
-    S.hunger = clamp(S.hunger + Math.min(15, score)); S.weight += 0.05;
+    S.hunger = clamp(S.hunger + Math.min(15, score)); addBcs(Math.min(4, score * 0.2) - 2); S.water = clamp(S.water - 8); diary('play');
     const coins = Math.round(score * (S.personality === 'やんちゃ' ? 1.5 : 1));
     addCoins(coins);
     setAnim(burnt ? 'sad' : 'joy', 1800);
@@ -1926,9 +2026,10 @@ function startCatch() {
 
 /* ---------- gift ---------- */
 function openGift() {
+  cared();
   if (!S.gift || busy) return;
   S.gift = false;
-  S.giftAt = Date.now() + (8 + Math.random() * 10) * 60000;
+  S.giftAt = Date.now() + (40 + Math.random() * 80) * 60000;
   const r = Math.random();
   if (r < 0.55) {
     const n = 5 + Math.floor(Math.random() * 16);
@@ -1986,13 +2087,14 @@ function archive(reason) {
   if (!S || S.archived) return;
   S.archived = true;
   M.album.unshift({ name: S.name, species: S.species, color: S.color, variant: S.variant, stage: stageOf(ageMin()),
-    age: Math.floor(ageMin() / MIN_PER_YEAR), reason, date: Date.now() });
+    age: ageDay(ageMin()), reason, date: Date.now() });
   M.album = M.album.slice(0, 40);
 }
 function albumCard(a, now) {
   const d = new Date(a.date);
-  const note = now ? 'いっしょに くらしてる' : a.reason === 'trip' ? 'たびに でた' : 'おわかれ';
-  return `<div class="card">${petPic(a.species, a.color, a.stage, now ? 'smile' : 'normal', a.variant)}<b>${a.name}</b>${a.age}さい・${now ? note : `${d.getMonth() + 1}/${d.getDate()} ${note}`}</div>`;
+  const note = now ? 'いっしょに くらしてる' : a.reason === 'trip' ? 'たびに でた' : a.reason === 'bones' ? 'ほねに なった' : 'おわかれ';
+  const pic = a.reason === 'bones' ? bonesSVG() : petPic(a.species, a.color, a.stage, now ? 'smile' : 'normal', a.variant);
+  return `<div class="card">${pic}<b>${a.name}</b>${a.age}にちめ・${now ? note : `${d.getMonth() + 1}/${d.getDate()} ${note}`}</div>`;
 }
 function openInfo() {
   closeSheet();
@@ -2001,8 +2103,10 @@ function openInfo() {
   const rows = [
     ['しゅるい', sp().label + '・' + getPal(S.species, S.color).label],
     ['せいかく', S.personality],
-    ['ねんれい', `${Math.floor(m / MIN_PER_YEAR)}さい（${Math.floor(m)}ふん）`],
-    ['たいじゅう', S.weight.toFixed(1) + 'kg'],
+    ['ねんれい', `${ageDay(m)}にちめ（${Math.floor(m / 60)}じかん）`],
+    ['たいじゅう', `${fmtKg(weightKg())}（${bodyLabel()}）`],
+    ['トイレ', ['まだ おぼえてない', 'すこし', 'ときどき できる', 'だいたい できる', 'ほぼ かんぺき', 'かんぺき'][Math.min(5, S.toilet || 0)]],
+    ['ワクチン', S.vaccinated ? 'すみ' : 'まだ'],
     ['うまれた日', `${born.getMonth() + 1}/${born.getDate()} ${born.getHours()}:${String(born.getMinutes()).padStart(2, '0')}`],
     ['ごはんの かいすう', S.fed + 'かい'],
     ['あそんだ かいすう', S.played + 'かい'],
@@ -2013,22 +2117,55 @@ function openInfo() {
   $('infoRows').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
   const st = stageOf(m);
   $('infoTip').textContent = sp().life + '。' + (PERSONALITIES[S.personality]?.tip || '') + '。' + (st < 2
-    ? `あと ${Math.ceil(STAGE_AT[st + 1] - m)}ふんで おおきくなるよ。おせわミスが すくないと とくべつな すがたに…？`
+    ? `あと やく${Math.ceil((STAGE_AT[st + 1] - m) / 60)}じかんで おおきくなるよ。おせわミスが すくないと とくべつな すがたに…？`
     : (S.variant === 'star' ? 'おせわ ばっちり！ キラキラの おうかんを もらったよ。' : 'りっぱな おとなに なったね。'));
-  const cur = { name: S.name, species: S.species, color: S.color, variant: S.variant, stage: st, age: Math.floor(m / MIN_PER_YEAR) };
+  const cur = { name: S.name, species: S.species, color: S.color, variant: S.variant, stage: st, age: ageDay(m) };
   const seen = new Set([S.species, ...M.album.map(a => a.species)]);
   const kinds = Object.keys(SPECIES).length;
   $('album').innerHTML = albumCard(cur, true) + M.album.map(a => albumCard(a)).join('') +
     `<div class="card" style="display:grid;place-items:center;background:var(--shell)">あった どうぶつ<b style="font-size:1.2rem">${seen.size} / ${kinds}</b></div>`;
+  const days = Object.entries(S.diary || {}).slice(-7).reverse();
+  $('diary').innerHTML = days.length ? days.map(([k, d]) => {
+    const [, mo, da] = k.split('-');
+    const parts = [];
+    if (d.feed) parts.push(`ごはん ${d.feed}かい`);
+    if (d.water) parts.push(`おみず ${d.water}かい`);
+    if (d.walk) parts.push(`さんぽ ${d.walk}かい`);
+    if (d.play) parts.push(`あそび ${d.play}かい`);
+    if (d.pet) parts.push(`なでなで ${d.pet}かい`);
+    if (d.toilet) parts.push(`トイレ せいこう ${d.toilet}かい`);
+    const saw = d.saw && d.saw.length ? `<br>見せてくれた こうどう：${d.saw.join('、')}` : '';
+    return `<div><b>${mo}/${da}</b>${parts.join('・') || 'あまり いっしょに すごせなかった'}${saw}</div>`;
+  }).join('') : '<div>まだ にっきは ないよ</div>';
   $('resetBox').hidden = true;
   $('info').hidden = false;
 }
+function bonesSVG() {
+  const c = '#F3EEE4', l = '#7A6E66';
+  const bone = (x1, y1, x2, y2) => `<g stroke="${l}" stroke-width="2.5"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${l}" stroke-width="13" stroke-linecap="round"/><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="8" stroke-linecap="round"/></g>` +
+    [[x1, y1], [x2, y2]].map(([x, y]) => `<circle cx="${x - 4}" cy="${y - 4}" r="7" fill="${c}" stroke="${l}" stroke-width="2.5"/><circle cx="${x + 4}" cy="${y + 4}" r="7" fill="${c}" stroke="${l}" stroke-width="2.5"/>`).join('');
+  return `<svg viewBox="0 0 200 160" class="bones" aria-label="ほね">
+    <ellipse cx="100" cy="140" rx="80" ry="12" fill="#B9A58C" opacity=".5"/>
+    ${bone(40, 128, 150, 104)}${bone(52, 100, 160, 132)}
+    <path d="M70 70 a30 28 0 1 1 60 0 v14 h-8 v8 h-12 v-8 h-4 v8 h-12 v-8 h-4 v8 h-12 v-8 h-8 z" fill="${c}" stroke="${l}" stroke-width="3" stroke-linejoin="round"/>
+    <ellipse cx="88" cy="70" rx="8" ry="9" fill="${l}"/><ellipse cx="112" cy="70" rx="8" ry="9" fill="${l}"/>
+    <path d="M100 78 l-4 7 h8 z" fill="${l}"/>
+    <path d="M150 54 q6 -10 0 -16 q-6 6 0 16" fill="#F49AA6"/><path d="M150 54 v20" stroke="#6BAF5A" stroke-width="2.5"/>
+  </svg>`;
+}
 function showEnding() {
   const m = ageMin();
-  archive('trip');
-  $('endTitle').textContent = `${S.name}は たびに でました`;
-  $('endPic').innerHTML = petPic(S.species, S.color, stageOf(m), 'sad', S.variant);
-  $('endText').textContent = `おせわが たりなくて、${S.name}は あたらしい おうちを さがしに いきました。${Math.floor(m / MIN_PER_YEAR)}さいまで いっしょに すごしたよ。ずかんに のこしておくね。コインや かった ものは つぎの子に ひきつがれます。`;
+  const bones = S.death === 'bones';
+  archive(bones ? 'bones' : 'trip');
+  if (bones) {
+    $('endTitle').textContent = `${S.name}は ほねに なってしまいました`;
+    $('endPic').innerHTML = bonesSVG();
+    $('endText').textContent = `10じかん いじょう だれも おせわを しなかったので、${S.name}は ほねに なってしまいました。${ageDay(m)}にちめ でした。どうぶつは まいにちの ごはん・おみず・そうじが ないと いきていけません。つぎの子は こまめに ようすを 見てあげてね。`;
+  } else {
+    $('endTitle').textContent = `${S.name}は たびに でました`;
+    $('endPic').innerHTML = petPic(S.species, S.color, stageOf(m), 'sad', S.variant);
+    $('endText').textContent = `おせわが たりなくて、${S.name}は あたらしい おうちを さがしに いきました。${ageDay(m)}にちめ まで いっしょに すごしたよ。ずかんに のこしておくね。コインや かった ものは つぎの子に ひきつがれます。`;
+  }
   $('ending').hidden = false;
   save();
 }
@@ -2178,6 +2315,7 @@ function playBehavior(b) {
   if (b.special === 'roll') { trick(); }
   if (b.after) setTimeout(() => setAnim(b.after, 2500), b.dur || 1500);
   discover(b);
+  diary('saw', b.name);
   mission('behav');
   return true;
 }
@@ -2371,7 +2509,12 @@ function toastOnce(key, title, body) { M.tips = M.tips || {}; if (M.tips[key]) r
 /* ---------- loop ---------- */
 function handleEvents(evts) {
   for (const e of evts) {
-    if (e === 'poop') lcd(`${S.name}が うんちを した`);
+    if (e === 'poop') lcd(`${S.name}が ゆかに うんちを しちゃった… トイレを おぼえさせよう`);
+    if (e === 'toiletok') {
+      lcd(`${S.name}が トイレで できた！ すぐ ほめてあげよう`);
+      const pr = $('praise'); pr.hidden = false;
+      clearTimeout(pr._t); pr._t = setTimeout(() => { pr.hidden = true; }, 40000);
+    }
     if (e === 'sick') { lcd(`${S.name}の ようすが へん…くすりを あげよう`); say('うぅ…'); }
     if (e === 'wake') { lcd(`${S.name}が めを さました`); say('おはよう！'); }
     if (e === 'gift') {
@@ -2388,6 +2531,10 @@ function dailyBonus() {
 }
 function tick() {
   if (!S || !S.alive) return;
+  checkBones();
+  if (!S.alive) { render(); return showEnding(); }
+  const idleH = (Date.now() - S.lastCare) / 3600000;
+  if (idleH > 8 && !warned8) { warned8 = true; lcd(`${S.name}が ずっと まってる…（あと ${Math.max(0, 10 - idleH).toFixed(1)}じかんで たいへんな ことに）`); }
   const dt = (Date.now() - S.last) / 60000;
   const evts = [];
   if (dt > 2) handleEvents(catchUp());
@@ -2397,7 +2544,7 @@ function tick() {
     S.stage = st;
     let extra = '';
     if (st === 2) {
-      S.variant = S.neglect < 15 ? 'star' : 'normal';
+      S.variant = S.neglect < 60 ? 'star' : 'normal';
       if (!M.unlocked.panda) { M.unlocked.panda = true; extra = '・ひみつの どうぶつが ずかんに あらわれた！'; }
       addCoins(50);
     }
@@ -2430,6 +2577,7 @@ function tick() {
   if (Date.now() - lastSave > 5000) { lastSave = Date.now(); save(); }
 }
 
+let warned8 = false;
 function start(data) {
   M = (data && data.M) || loadJSON(META_KEY) || newMeta();
   M = Object.assign(newMeta(), M);
@@ -2439,7 +2587,10 @@ function start(data) {
   if (!P3.ok && !P3.tried) { P3.tried = true; if (P3.init) P3.init($('room')); if (P3.ok) addHint(); }
   wire();
   if (!S) { openSetup(); return; }
+  checkBones();
   if (!S.alive) { render(); return showEnding(); }
+  const awayH = (Date.now() - S.lastCare) / 3600000;
+  if (awayH >= 5) setTimeout(() => toast(`⚠️ ${Math.floor(awayH)}じかん ぶりだね`, `${S.name}は さみしかったみたい。10じかん いじょう ほうっておくと ほねに なってしまうよ。`), 2500);
   ensureMissions(); renderTop();
   setTimeout(() => { if (!S || !S.alive || S.asleep) return; const g = { dog: 'wag', cat: 'tailup', rabbit: 'periscope', penguin: 'ecstatic' }[S.species]; if (g) playBehavior(findBehavior(g)); }, 1800);
   const evts = catchUp();
@@ -2472,15 +2623,23 @@ function wire() {
   if (wired) return; wired = true;
   $('pad').addEventListener('click', (e) => {
     const b = e.target.closest('.act'); if (!b || !S || !S.alive) return;
+    cared();
     if (busy && b.dataset.act !== 'info') return;
     if (b.dataset.act === 'bath' && sp().bath.style !== 'brush') SND.play('splash');
     actions[b.dataset.act]();
   });
   const pet = () => {
     if (!S || busy) return;
+    cared();
     if (S.asleep) return say('…Zzz');
     const t = Date.now();
     if (S.species === 'cat' && S.personality !== 'あまえんぼう' && Math.random() < 0.25) { setAnim('normal', 900); if (P3.ok) P3.act('groom', 900); return say('…プイッ', 1200); }
+    if ((S.lv || 1) < 2 && ageMin() < 360 && Math.random() < 0.35) {
+      setAnim('surprise', 900); if (P3.ok) P3.act('freeze', 900); say('ビクッ', 1000);
+      toastOnce('shy', '🏠 まだ なれていない', 'あたらしい おうちに きたばかりの どうぶつは きんちょうしている。むりせず やさしく せっして、なれるのを まとう。');
+      return;
+    }
+    if (t - (S.lastPet || 0) > 1500) diary('pet');
     if (t - (S.lastPet || 0) > 1500) { S.lastPet = t; S.happy = clamp(S.happy + (S.personality === 'あまえんぼう' ? 6 : 3)); mission('pet'); gainXP(2); }
     const c = petCenterPct();
     floatAt('💗', c.x - 4, c.y);
@@ -2495,6 +2654,18 @@ function wire() {
   $('petpos').addEventListener('click', pet);
   $('petpos').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pet(); } });
   $('gift').addEventListener('click', openGift);
+  $('praise').addEventListener('click', () => {
+    if (!S) return;
+    cared(); $('praise').hidden = true;
+    const before = S.toilet || 0;
+    S.toilet = Math.min(5, before + 1); S.happy = clamp(S.happy + 6); diary('toilet'); gainXP(5);
+    setAnim('joy', 1500); say(bark('♪'));
+    SND.play('coin');
+    if (S.toilet >= 5 && before < 5) { confetti(); toast('🚽 トイレを かんぺきに おぼえた！', 'もう ゆかに しないよ'); }
+    else lcd(`いいこ！ トイレの おぼえ ${S.toilet}/5`);
+    toastOnce('toilet', '🚽 トイレの しつけ', 'できた しゅんかんに ほめると「ここで すると いいこと が ある」と おぼえやすい。');
+    render(); save();
+  });
   $('sheetList').addEventListener('click', onSheetClick);
   $('sheetTabs').addEventListener('click', onSheetClick);
   $('sheetClose').onclick = closeSheet;
@@ -2510,7 +2681,7 @@ function wire() {
   $('closeInfo').onclick = () => { $('info').hidden = true; };
   $('resetAsk').onclick = () => { $('resetBox').hidden = false; };
   $('resetNo').onclick = () => { $('resetBox').hidden = true; };
-  $('resetYes').onclick = () => { archive('bye'); save(); $('info').hidden = true; openSetup(); };
+  $('resetYes').onclick = () => { archive('bye'); save(); try { localStorage.removeItem(SAVE_KEY); } catch (e) {} S = null; $('info').hidden = true; openSetup(); };
   $('againBtn').onclick = () => { $('ending').hidden = true; openSetup(); };
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S && S.alive) { handleEvents(catchUp()); render(); } });
   setInterval(tick, 1000);
