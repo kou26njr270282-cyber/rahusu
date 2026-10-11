@@ -543,7 +543,7 @@ let bubbleTimer = 0, chatterAt = 0, lastSave = 0;
 const sp = () => SPECIES[S.species];
 
 /* ---------- state ---------- */
-function newMeta() { return { coins: 30, inv: {}, hats: [], hat: null, furn: [], album: [], unlocked: {}, bonusDay: '', seen: {}, sound: true, missions: [], mDay: '', mBonus: false, tips: {} }; }
+function newMeta() { return { coins: 30, inv: {}, hats: [], hat: null, furn: [], album: [], unlocked: {}, bonusDay: '', seen: {}, sound: false, soundV: 2, missions: [], mDay: '', mBonus: false, tips: {} }; }
 function newPet(species, color, name) {
   const t = Date.now();
   const ps = Object.keys(PERSONALITIES);
@@ -758,10 +758,16 @@ const P3 = (() => {
   if (!T) return api;
   try { const c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) return api; } catch (e) { return api; }
 
-  const SPH = new T.SphereGeometry(1, 32, 24);
+  const SPH = new T.SphereGeometry(1, 40, 28);
   const V = (x, y, z) => new T.Vector3(x, y, z);
   const mat = (c, o = {}) => new T.MeshStandardMaterial({ color: c, roughness: o.r ?? 0.5, metalness: 0, transparent: o.op != null, opacity: o.op ?? 1, emissive: o.em || 0x000000, emissiveIntensity: o.ei ?? 0 });
   const basic = (c, o = {}) => new T.MeshBasicMaterial({ color: c, transparent: o.op != null, opacity: o.op ?? 1 });
+  // Cel shading: a few flat bands of light, like an anime figure.
+  const ramp = new T.DataTexture(new Uint8Array([170, 215, 245, 255]), 4, 1, T.RedFormat);
+  ramp.minFilter = ramp.magFilter = T.NearestFilter; ramp.needsUpdate = true;
+  const toon = (c) => new T.MeshToonMaterial({ color: c, gradientMap: ramp });
+  const outlineMats = {};
+  const outlineMat = (c) => outlineMats[c] || (outlineMats[c] = new T.MeshBasicMaterial({ color: c, side: T.BackSide }));
   function ell(m, r, pos, sc = [1, 1, 1], rot) {
     const me = new T.Mesh(SPH, m);
     me.scale.set(r * sc[0], r * sc[1], r * sc[2]);
@@ -776,6 +782,15 @@ const P3 = (() => {
     if (rot) me.rotation.set(...rot);
     me.castShadow = true;
     return me;
+  }
+  // Inverted-hull outline: a slightly larger back-facing copy drawn in a dark line color.
+  function lined(mesh, color, w = 0.035) {
+    const o = new T.Mesh(mesh.geometry, outlineMat(color));
+    const sx = mesh.scale.x || 1, sy = mesh.scale.y || 1, sz = mesh.scale.z || 1;
+    o.scale.set(1 + w / sx, 1 + w / sy, 1 + w / sz);
+    o.castShadow = false;
+    mesh.add(o);
+    return mesh;
   }
   const emojiTex = {};
   function emojiSprite(ch, size) {
@@ -792,200 +807,226 @@ const P3 = (() => {
     return s;
   }
 
+  /* ----- face: drawn like an illustration onto the front of the head ----- */
+  const FACE_W = 2.0, FACE_T0 = 0.72, FACE_TL = 1.5;      // patch: 2 rad wide, theta 0.72..2.22
+  const KY = (512 / FACE_TL) / (512 / FACE_W);             // keeps circles round on the sphere
+  function drawFace(g, f) {
+    const { species, p, expr, blink, chomp } = f;
+    const INKC = '#2B2230';
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, 512, 512);
+    // draw in "sphere space" (512 wide, 512/KY tall), features enlarged by FK around the center line
+    const FK = 1.32, cx = 256, ey = 214, ex = 86, my = 272;
+    g.setTransform(FK, 0, 0, KY * FK, cx * (1 - FK), -86 * KY);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    const ellipse = (x, y, rx, ry, fill, rot = 0) => { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+    const stroke = (w, c, fn) => { g.beginPath(); fn(); g.lineWidth = w; g.strokeStyle = c; g.stroke(); };
+    const darkFace = species === 'panda' || p.faceDark;
+    const lineC = p.faceDark ? '#EDE9F2' : INKC;
+    // markings first
+    if (species === 'penguin') {
+      g.fillStyle = '#FFFFFF';
+      g.beginPath(); g.arc(cx - 70, ey - 6, 78, 0, Math.PI * 2); g.arc(cx + 70, ey - 6, 78, 0, Math.PI * 2); g.fill();
+      ellipse(cx, ey + 60, 132, 88, '#FFFFFF');
+    }
+    if (species === 'dog') ellipse(cx, my - 18, 66, 44, p.light);
+    if (species === 'cat' && f.color === 'tora') { for (const dx of [-26, 0, 26]) stroke(12, p.dark, () => { g.moveTo(cx + dx, 40); g.lineTo(cx + dx, 92); }); }
+    if (species === 'hamster') stroke(14, p.dark, () => { g.moveTo(cx, 30); g.lineTo(cx, 110); });
+    if (species === 'panda') for (const s of [-1, 1]) ellipse(cx + s * ex, ey + 6, 44, 56, p.dark, s * -0.55);
+    // blush
+    for (const s of [-1, 1]) {
+      const bx = cx + s * 132, by = ey + 52;
+      const gr = g.createRadialGradient(bx, by, 4, bx, by, 38);
+      gr.addColorStop(0, expr === 'sick' ? 'rgba(150,190,230,.55)' : 'rgba(255,120,150,.6)'); gr.addColorStop(1, 'rgba(255,120,150,0)');
+      g.fillStyle = gr; g.beginPath(); g.ellipse(bx, by, 40, 26, 0, 0, Math.PI * 2); g.fill();
+    }
+    // eyes
+    const closed = blink || expr === 'sleep' || expr === 'yawn';
+    const happy = expr === 'smile' || expr === 'joy' || expr === 'pant';
+    const eyeLine = darkFace ? '#FFFFFF' : INKC;
+    for (const s of [-1, 1]) {
+      const x = cx + s * ex;
+      if (expr === 'sick') {
+        stroke(9, eyeLine, () => { g.moveTo(x - 20, ey - 14); g.lineTo(x + 16, ey); g.lineTo(x - 20, ey + 14); });
+      } else if (closed) {
+        stroke(9, eyeLine, () => { g.moveTo(x - 24, ey); g.quadraticCurveTo(x, ey + 18, x + 24, ey); });
+      } else if (happy) {
+        stroke(10, eyeLine, () => { g.moveTo(x - 25, ey + 8); g.quadraticCurveTo(x, ey - 22, x + 25, ey + 8); });
+      } else {
+        const big = expr === 'surprise' ? 1.18 : expr === 'sad' ? 0.88 : 1;
+        const rx = 25 * big, ry = 31 * big;
+        if (p.pupil) {
+          ellipse(x, ey, rx + 2, ry + 2, species === 'panda' ? '#FFFFFF' : p.eye);
+          ellipse(x, ey + 2, rx * 0.62, ry * 0.8, INKC);
+        } else {
+          const gr = g.createLinearGradient(0, ey - ry, 0, ey + ry);
+          gr.addColorStop(0, '#1E1622'); gr.addColorStop(1, '#6E4F84');
+          ellipse(x, ey, rx, ry, gr);
+        }
+        ellipse(x + 9 * big, ey - 12 * big, 9.5 * big, 9.5 * big, '#FFFFFF');
+        ellipse(x - 9 * big, ey + 12 * big, 4.5 * big, 4.5 * big, 'rgba(255,255,255,.9)');
+        if (expr === 'sad') stroke(7, lineC, () => { g.moveTo(x - s * 30, ey - 46); g.lineTo(x + s * 4, ey - 36); });
+      }
+    }
+    if (expr === 'sad' && !closed) {   // a small tear
+      g.fillStyle = '#8FD3F5'; g.beginPath(); g.moveTo(cx + ex + 22, ey + 22); g.quadraticCurveTo(cx + ex + 34, ey + 44, cx + ex + 22, ey + 48); g.quadraticCurveTo(cx + ex + 10, ey + 44, cx + ex + 22, ey + 22); g.fill();
+    }
+    // nose
+    if (species === 'dog' || species === 'panda') {
+      g.fillStyle = INKC; g.beginPath(); g.moveTo(cx - 17, my - 34); g.quadraticCurveTo(cx, my - 40, cx + 17, my - 34); g.quadraticCurveTo(cx + 12, my - 18, cx, my - 16); g.quadraticCurveTo(cx - 12, my - 18, cx - 17, my - 34); g.fill();
+      ellipse(cx + 5, my - 32, 5, 3, 'rgba(255,255,255,.85)');
+    } else if (species === 'cat' || species === 'rabbit') {
+      g.fillStyle = '#F27C8E'; g.beginPath(); g.moveTo(cx - 10, my - 30); g.lineTo(cx + 10, my - 30); g.lineTo(cx, my - 20); g.closePath(); g.fill();
+    } else if (species === 'hamster') {
+      ellipse(cx, my - 26, 7, 5, '#F27C8E');
+    }
+    if (species === 'cat' || species === 'rabbit' || species === 'hamster') {
+      const L = species === 'cat' ? 92 : 60;
+      g.globalAlpha = 0.55;
+      for (const s of [-1, 1]) for (const k of [-1, 1]) stroke(3, lineC, () => { g.moveTo(cx + s * 70, my - 20 + k * 8); g.lineTo(cx + s * (70 + L), my - 24 + k * 16); });
+      g.globalAlpha = 1;
+    }
+    // mouth
+    if (species === 'penguin' && !['joy', 'pant', 'eat', 'yawn', 'surprise'].includes(expr)) return;
+    const mY = species === 'penguin' ? my + 24 : my;
+    const red = '#D9505F';
+    const openMouth = (w, h) => { g.beginPath(); g.moveTo(cx - w, mY - 6); g.quadraticCurveTo(cx, mY - 12, cx + w, mY - 6); g.quadraticCurveTo(cx + w * 0.8, mY + h, cx, mY + h); g.quadraticCurveTo(cx - w * 0.8, mY + h, cx - w, mY - 6); g.fillStyle = red; g.fill(); g.lineWidth = 5; g.strokeStyle = INKC; g.stroke(); };
+    if (expr === 'joy' || expr === 'pant') {
+      openMouth(24, 34);
+      ellipse(cx, mY + 18, 13, 9, '#FF9CB0');
+      if (expr === 'pant' && species === 'dog') { ellipse(cx, mY + 34, 14, 20, '#FF8FA3'); stroke(3, '#E0607A', () => { g.moveTo(cx, mY + 22); g.lineTo(cx, mY + 44); }); }
+    } else if (expr === 'eat') {
+      if (chomp) openMouth(18, 24); else stroke(6, lineC, () => { g.moveTo(cx - 18, mY - 2); g.lineTo(cx + 18, mY - 2); });
+    } else if (expr === 'yawn') {
+      ellipse(cx, mY + 10, 22, 30, red); g.lineWidth = 5; g.strokeStyle = INKC; g.stroke();
+    } else if (expr === 'surprise') {
+      ellipse(cx, mY + 4, 11, 14, red); g.lineWidth = 5; g.strokeStyle = INKC; g.stroke();
+    } else if (expr === 'sad' || expr === 'sick') {
+      stroke(6, lineC, () => { g.moveTo(cx - 18, mY + 6); g.quadraticCurveTo(cx, mY - 8, cx + 18, mY + 6); });
+    } else if (expr === 'sleep') {
+      ellipse(cx, mY, 6, 5, lineC);
+    } else {   // ω
+      stroke(6, lineC, () => { g.moveTo(cx - 24, mY - 6); g.quadraticCurveTo(cx - 12, mY + 12, cx, mY - 4); g.quadraticCurveTo(cx + 12, mY + 12, cx + 24, mY - 6); });
+    }
+  }
+
   /* ----- pet model ----- */
-  // Head ellipsoid radii; faces sit on its front surface.
-  const HA = 0.67, HB = 0.59, HC = 0.59;
-  const onHead = (x, y, inset = 0) => HC * Math.sqrt(Math.max(0.02, 1 - (x / HA) ** 2 - (y / HB) ** 2)) - inset;
+  const HA = 0.74, HB = 0.66, HC = 0.66;
 
   function buildPet(species, colorKey, stage, variant, hatKey) {
     const p = getPal(species, colorKey);
-    const S3 = [0.62, 0.8, 1][stage];
+    const S3 = [0.66, 0.82, 1][stage];
     const root = new T.Group();
     const inner = new T.Group(); root.add(inner);
-    const mBase = mat(p.base), mDark = mat(p.dark), mLight = mat(p.light);
-    const mFeet = mat(p.feet || p.base);
-    const mInk = mat('#1E1622', { r: 0.15 }), mWhite = basic('#FFFFFF');
-    const mPink = mat('#F7A9B8'), mNose = mat('#F07C8C', { r: 0.3 });
-    const mCheek = mat('#FF7F9A', { op: 0.55, r: 0.9 });
-    const lidColor = species === 'panda' || p.faceDark ? '#FFFFFF' : '#2B2230';
-    const mLid = basic(lidColor);
-    const parts = { root, inner, species, S3, eyes: { open: [], happy: [], closed: [], x: [], sad: [] }, mouth: {} };
+    const line = mix(p.base, '#2B2230', 0.62), lineDark = mix(p.dark, '#2B2230', 0.55);
+    const cBase = toon(p.base), cDark = toon(p.dark), cLight = toon(p.light), cFeet = toon(p.feet || p.base);
+    const cPink = toon('#F9AFC0');
+    const parts = { root, inner, species, S3 };
+    const L = (m, c = line, w) => lined(m, c, w);
 
-    // body
+    // body: small and round under a big head (chibi proportions)
     const hamster = species === 'hamster';
-    const bodyR = hamster ? 0.62 : 0.55;
-    inner.add(ell(mBase, bodyR, [0, 0.52, 0], [1, 0.86, 0.9]));
-    inner.add(ell(mLight, 0.38, [0, 0.48, 0.3], [1, 0.95, 0.55]));
-    parts.feet = [ell(mFeet, 0.17, [-0.25, 0.08, 0.26], [1, 0.62, 1.35]), ell(mFeet, 0.17, [0.25, 0.08, 0.26], [1, 0.62, 1.35])];
+    inner.add(L(ell(cBase, 0.47, [0, 0.47, 0], hamster ? [1.15, 1, 1.05] : [1, 0.98, 0.92])));
+    inner.add(ell(cLight, 0.34, [0, 0.43, 0.2], [0.95, 0.95, 0.7]));
+    parts.feet = [L(ell(cFeet, 0.15, [-0.2, 0.08, 0.22], [1, 0.7, 1.3]), p.feet ? mix(p.feet, '#2B2230', 0.5) : line), L(ell(cFeet, 0.15, [0.2, 0.08, 0.22], [1, 0.7, 1.3]), p.feet ? mix(p.feet, '#2B2230', 0.5) : line)];
     parts.feet.forEach(f => inner.add(f));
+    if (species !== 'penguin' && species !== 'panda') for (const sx of [-1, 1]) inner.add(L(ell(cBase, 0.12, [sx * 0.36, 0.55, 0.22], [0.85, 1.1, 0.85])));
 
     // head
     const head = new T.Group();
-    head.position.set(0, hamster ? 1.08 : 1.25, 0.04);
-    if (stage === 0) head.scale.setScalar(1.1);
+    head.position.set(0, hamster ? 1.08 : 1.18, 0.02);
+    if (stage === 0) head.scale.setScalar(1.08);
     inner.add(head); parts.head = head;
-    head.add(ell(mBase, 1, [0, 0, 0], [HA, HB, HC]));
-    // soft rim highlight
-    head.add(ell(mat('#FFFFFF', { op: 0.18, r: 1 }), 0.2, [-0.22, 0.3, 0.42], [1.2, 0.6, 0.4]));
+    head.add(L(ell(cBase, 1, [0, 0, 0], [HA, HB, HC]), line, 0.03));
 
-    // eyes
-    const ex = 0.24, ey = 0.02;
-    const pupilEye = !!p.pupil;
-    for (const sx of [-1, 1]) {
-      const x = sx * ex, z = onHead(x, ey, 0.03);
-      const open = new T.Group(); open.position.set(x, ey, z);
-      const R = 0.1;
-      if (pupilEye) {
-        open.add(ell(mat(p.eye, { r: 0.25 }), R, [0, 0, 0], [1, 1.2, 0.5]));
-        open.add(ell(mInk, R * 0.55, [0, -0.005, 0.03], [0.85, 1.4, 0.5]));
-      } else {
-        open.add(ell(mInk, R, [0, 0, 0], [1, 1.25, 0.55]));
-      }
-      open.add(ell(mWhite, 0.036, [0.035, 0.05, 0.05]));
-      open.add(ell(mWhite, 0.018, [-0.032, -0.045, 0.05]));
-      head.add(open); parts.eyes.open.push(open);
-      const arc = new T.TorusGeometry(0.075, 0.02, 8, 20, Math.PI);
-      const happy = geoMesh(arc, mLid, [x, ey - 0.02, z + 0.03]);
-      head.add(happy); parts.eyes.happy.push(happy);
-      const closed = geoMesh(arc, mLid, [x, ey + 0.03, z + 0.03], [0, 0, Math.PI]);
-      head.add(closed); parts.eyes.closed.push(closed);
-      const xg = new T.Group(); xg.position.set(x, ey, z + 0.03);
-      const bar = new T.BoxGeometry(0.16, 0.028, 0.02);
-      xg.add(geoMesh(bar, mLid, [0, 0, 0], [0, 0, Math.PI / 4]));
-      xg.add(geoMesh(bar, mLid, [0, 0, 0], [0, 0, -Math.PI / 4]));
-      head.add(xg); parts.eyes.x.push(xg);
-      const brow = geoMesh(new T.BoxGeometry(0.13, 0.022, 0.02), mLid, [x, ey + 0.17, onHead(x, ey + 0.17, 0) + 0.01], [0, 0, sx * -0.35]);
-      head.add(brow); parts.eyes.sad.push(brow);
-    }
-    // cheeks
-    for (const sx of [-1, 1]) { const x = sx * 0.4, y = -0.13; head.add(ell(mCheek, 0.1, [x, y, onHead(x, y, 0.02)], [1, 0.6, 0.3])); }
+    // face texture on a thin shell in front of the head
+    const fc = document.createElement('canvas'); fc.width = fc.height = 512;
+    const ftex = new T.CanvasTexture(fc);
+    ftex.anisotropy = 4;
+    const shell = new T.Mesh(new T.SphereGeometry(1, 48, 32, Math.PI / 2 - FACE_W / 2, FACE_W, FACE_T0, FACE_TL),
+      new T.MeshBasicMaterial({ map: ftex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+    shell.scale.set(HA * 1.004, HB * 1.004, HC * 1.004);
+    head.add(shell);
+    parts.face = { g: fc.getContext('2d'), tex: ftex, key: '', species, p, color: colorKey };
 
-    // mouth (penguins talk from under the beak)
-    const my = species === 'penguin' ? -0.3 : species === 'dog' ? -0.29 : -0.21;
-    const mz = species === 'dog' ? 0.6 : onHead(0, my, 0) + 0.01;
-    const mMouthLine = basic(p.faceDark ? '#d8d6de' : '#2B2230');
-    const small = new T.TorusGeometry(0.035, 0.011, 8, 12, Math.PI);
-    const w = new T.Group(); w.position.set(0, my, mz);
-    w.add(geoMesh(small, mMouthLine, [-0.035, 0, 0], [0, 0, Math.PI]));
-    w.add(geoMesh(small, mMouthLine, [0.035, 0, 0], [0, 0, Math.PI]));
-    head.add(w); parts.mouth.normal = w;
-    const mRed = mat('#D9505F', { r: 0.4 });
-    const joy = ell(mRed, 0.075, [0, my - 0.02, mz], [1.1, 0.9, 0.4]); head.add(joy); parts.mouth.joy = joy;
-    const eat = ell(mRed, 0.07, [0, my - 0.02, mz], [1, 1, 0.4]); head.add(eat); parts.mouth.eat = eat;
-    const sad = geoMesh(new T.TorusGeometry(0.05, 0.012, 8, 12, Math.PI), mMouthLine, [0, my - 0.04, mz]); head.add(sad); parts.mouth.sad = sad;
-    const sleep = ell(mMouthLine, 0.025, [0, my, mz], [1, 0.7, 0.4]); head.add(sleep); parts.mouth.sleep = sleep;
-    const oMouth = geoMesh(new T.TorusGeometry(0.045, 0.016, 8, 20), mRed, [0, my - 0.02, mz]); head.add(oMouth); parts.mouth.o = oMouth;
-    const yawn = ell(mRed, 0.09, [0, my - 0.04, mz], [1, 1.3, 0.4]); head.add(yawn); parts.mouth.yawn = yawn;
-    const tongue = ell(mat('#FF8FA3', { r: 0.4 }), 0.06, [0, my - 0.08, mz + 0.02], [0.9, 1.4, 0.4]); head.add(tongue); parts.mouth.tongue = tongue;
-    if (species === 'penguin') parts.mouth.normal.visible = false, parts.mouth.normalHidden = true;
-
-    const whiskers = (len) => {
-      const g = new T.CylinderGeometry(0.006, 0.006, len, 6);
-      const m = basic(p.faceDark ? '#cfcdd6' : '#2B2230', { op: 0.55 });
-      for (const sx of [-1, 1]) for (const k of [0, 1]) head.add(geoMesh(g, m, [sx * (0.42 + len / 2 - 0.05), -0.11 - k * 0.06, 0.4], [0, sx * 0.35, Math.PI / 2 + sx * (k ? -0.12 : 0.12)]));
-    };
-    const neckBow = (c) => {
-      const m = mat(c), g = new T.ConeGeometry(0.09, 0.16, 16);
-      inner.add(geoMesh(g, m, [-0.09, 0.95, 0.4], [0, 0, Math.PI / 2]));
-      inner.add(geoMesh(g, m, [0.09, 0.95, 0.4], [0, 0, -Math.PI / 2]));
-      inner.add(ell(m, 0.05, [0, 0.95, 0.42]));
-    };
     const adult = stage === 2;
-    const tailPivot = new T.Group(); tailPivot.position.set(0, 0.5, -0.42); inner.add(tailPivot);
+    const tailPivot = new T.Group(); tailPivot.position.set(0, 0.45, -0.38); inner.add(tailPivot);
+    const bowAt = (c, x, y, z, parent) => {
+      const m = toon(c), ln = mix(c, '#2B2230', 0.5), g = new T.ConeGeometry(0.08, 0.15, 20);
+      const b = new T.Group(); b.position.set(x, y, z);
+      b.add(L(geoMesh(g, m, [-0.08, 0, 0], [0, 0, Math.PI / 2]), ln, 0.02)); b.add(L(geoMesh(g, m, [0.08, 0, 0], [0, 0, -Math.PI / 2]), ln, 0.02));
+      b.add(L(ell(m, 0.045, [0, 0, 0.01]), ln, 0.02));
+      (parent || inner).add(b);
+    };
 
     switch (species) {
       case 'dog': {
         for (const sx of [-1, 1]) {
-          const ear = new T.Group(); ear.position.set(sx * 0.55, 0.22, 0); ear.rotation.z = sx * 0.3;
-          ear.add(ell(mDark, 0.2, [0, -0.2, 0], [0.75, 1.5, 0.42]));
+          const ear = new T.Group(); ear.position.set(sx * 0.64, 0.24, 0); ear.rotation.z = sx * 0.3;
+          ear.add(L(ell(cDark, 0.17, [0, -0.17, 0], [0.75, 1.4, 0.45]), lineDark));
           head.add(ear); (parts.ears = parts.ears || []).push(ear);
         }
-        head.add(ell(mLight, 1, [0, -0.17, 0.46], [0.25, 0.17, 0.17]));
-        head.add(ell(mat('#2B2230', { r: 0.2 }), 1, [0, -0.08, 0.62], [0.075, 0.058, 0.05]));
-        head.add(ell(mWhite, 0.018, [0.02, -0.06, 0.668]));
-        const tail = ell(mBase, 0.1, [0, 0.2, -0.05], [1, 2.4, 1], [-0.6, 0, 0]);
-        tailPivot.add(tail); parts.tail = tailPivot; parts.tailSpeed = 14;
-        if (adult) {
-          inner.add(geoMesh(new T.TorusGeometry(0.34, 0.05, 12, 32), mat('#E2453C'), [0, 0.98, 0.04], [Math.PI / 2 - 0.15, 0, 0]));
-          inner.add(ell(mat('#F5C842', { r: 0.25 }), 0.075, [0, 0.9, 0.4]));
-        }
+        tailPivot.add(L(ell(cBase, 0.1, [0, 0.18, -0.04], [1, 2.2, 1], [-0.6, 0, 0])));
+        parts.tail = tailPivot; parts.tailSpeed = 14;
+        if (adult) { inner.add(L(geoMesh(new T.TorusGeometry(0.3, 0.045, 12, 32), toon('#E2453C'), [0, 0.86, 0.03], [Math.PI / 2 - 0.15, 0, 0]), '#7A1F1A', 0.015)); inner.add(L(ell(toon('#F5C842'), 0.07, [0, 0.79, 0.34]), '#8A6A10', 0.02)); }
         break;
       }
       case 'cat': {
-        const cone = new T.ConeGeometry(0.19, 0.36, 24), coneIn = new T.ConeGeometry(0.11, 0.24, 24);
+        const cone = new T.ConeGeometry(0.21, 0.38, 28), coneIn = new T.ConeGeometry(0.12, 0.24, 28);
         for (const sx of [-1, 1]) {
-          const ear = new T.Group(); ear.position.set(sx * 0.36, 0.5, -0.02); ear.rotation.z = sx * -0.38;
-          ear.add(geoMesh(cone, mBase, [0, 0, 0]));
-          ear.add(geoMesh(coneIn, mPink, [0, -0.03, 0.08]));
+          const ear = new T.Group(); ear.position.set(sx * 0.4, 0.55, -0.02); ear.rotation.z = sx * -0.38;
+          ear.add(L(geoMesh(cone, cBase, [0, 0, 0]), line, 0.03));
+          ear.add(geoMesh(coneIn, cPink, [0, -0.03, 0.09]));
           head.add(ear); (parts.ears = parts.ears || []).push(ear);
         }
-        head.add(ell(mNose, 1, [0, -0.11, onHead(0, -0.11, 0) + 0.01], [0.05, 0.035, 0.03]));
-        whiskers(0.3);
-        if (colorKey === 'tora') for (const dx of [-0.1, 0, 0.1]) head.add(ell(mDark, 1, [dx, 0.4, onHead(dx, 0.4, 0.01)], [0.025, 0.08, 0.02]));
-        for (let i = 0; i < 6; i++) {
-          const a = i * 0.32;
-          tailPivot.add(ell(mBase, 0.1 - i * 0.008, [0, Math.sin(a) * 0.55, -0.05 - (1 - Math.cos(a)) * 0.55 - i * 0.04]));
-        }
+        for (let i = 0; i < 6; i++) { const a = i * 0.32; tailPivot.add(L(ell(cBase, 0.095 - i * 0.006, [0, Math.sin(a) * 0.5, -0.04 - (1 - Math.cos(a)) * 0.5 - i * 0.04]), line, 0.025)); }
         parts.tail = tailPivot; parts.tailSpeed = 3;
-        if (adult) {
-          const m = mat('#FF6F9E'), g = new T.ConeGeometry(0.08, 0.15, 16);
-          const bow = new T.Group(); bow.position.set(0.32, 0.42, 0.2);
-          bow.add(geoMesh(g, m, [-0.08, 0, 0], [0, 0, Math.PI / 2])); bow.add(geoMesh(g, m, [0.08, 0, 0], [0, 0, -Math.PI / 2])); bow.add(ell(m, 0.045, [0, 0, 0.01]));
-          head.add(bow);
-        }
+        if (adult) bowAt('#FF6F9E', 0.36, 0.48, 0.2, head);
         break;
       }
       case 'rabbit': {
         for (const sx of [-1, 1]) {
-          const ear = new T.Group(); ear.position.set(sx * 0.2, 0.5, -0.05);
+          const ear = new T.Group(); ear.position.set(sx * 0.22, 0.55, -0.05);
           ear.rotation.z = sx * -0.12;
-          if (adult && sx === 1) { ear.rotation.z = -1.1; ear.position.set(0.3, 0.42, -0.05); }
-          ear.add(ell(mBase, 0.13, [0, 0.38, 0], [1, 3, 0.6]));
-          ear.add(ell(mPink, 0.13, [0, 0.36, 0.05], [0.55, 2.4, 0.3]));
+          if (adult && sx === 1) { ear.rotation.z = -1.1; ear.position.set(0.32, 0.46, -0.05); }
+          ear.add(L(ell(cBase, 0.14, [0, 0.38, 0], [1, 2.9, 0.6])));
+          ear.add(ell(cPink, 0.14, [0, 0.36, 0.05], [0.55, 2.3, 0.3]));
           head.add(ear); (parts.ears = parts.ears || []).push(ear);
         }
-        parts.nose = ell(mNose, 1, [0, -0.1, onHead(0, -0.1, 0) + 0.01], [0.045, 0.032, 0.03]); head.add(parts.nose);
-        whiskers(0.22);
-        tailPivot.add(ell(mLight, 0.15, [0, -0.05, -0.05]));
-        if (adult) inner.add(geoMesh(new T.TorusGeometry(0.34, 0.06, 12, 32), mat('#FF8FB1'), [0, 0.98, 0.04], [Math.PI / 2 - 0.15, 0, 0]));
+        tailPivot.add(L(ell(cLight, 0.15, [0, -0.04, -0.04])));
+        if (adult) bowAt('#FF8FB1', 0, 0.84, 0.32);
         break;
       }
       case 'hamster': {
         for (const sx of [-1, 1]) {
-          const ear = new T.Group(); ear.position.set(sx * 0.4, 0.44, 0.02);
-          ear.add(ell(mBase, 0.14, [0, 0, 0], [1, 1, 0.5]));
-          ear.add(ell(mPink, 0.08, [0, 0, 0.05], [1, 1, 0.4]));
+          const ear = new T.Group(); ear.position.set(sx * 0.45, 0.47, 0.02);
+          ear.add(L(ell(cBase, 0.15, [0, 0, 0], [1, 1, 0.5])));
+          ear.add(ell(cPink, 0.09, [0, 0, 0.05], [1, 1, 0.4]));
           head.add(ear); (parts.ears = parts.ears || []).push(ear);
         }
         parts.pouches = [];
-        for (const sx of [-1, 1]) { const pch = ell(mLight, 1, [sx * 0.3, -0.17, 0.38], [0.22, 0.18, 0.17]); head.add(pch); parts.pouches.push(pch); }
-        head.add(ell(mDark, 1, [0, 0.42, onHead(0, 0.42, 0.01)], [0.035, 0.12, 0.025]));
-        head.add(ell(mNose, 0.035, [0, -0.08, onHead(0, -0.08, 0) + 0.01]));
-        whiskers(0.2);
-        if (adult) neckBow('#5BB4E5');
+        for (const sx of [-1, 1]) { const pch = L(ell(cLight, 1, [sx * 0.36, -0.2, 0.36], [0.22, 0.18, 0.17]), line, 0.025); head.add(pch); parts.pouches.push(pch); }
+        if (adult) bowAt('#5BB4E5', 0, 0.82, 0.38);
         break;
       }
       case 'penguin': {
-        head.add(ell(mat('#FFFFFF'), 1, [0, -0.05, 0.27], [0.5, 0.44, 0.36]));
-        head.add(geoMesh(new T.ConeGeometry(0.08, 0.2, 20), mat('#F5A623', { r: 0.35 }), [0, -0.15, 0.68], [Math.PI / 2, 0, 0]));
+        head.add(L(geoMesh(new T.ConeGeometry(0.08, 0.2, 24), toon('#F5A623'), [0, -0.12, 0.72], [Math.PI / 2, 0, 0]), '#8A5A10', 0.02));
         parts.flips = [];
         for (const sx of [-1, 1]) {
-          const f = new T.Group(); f.position.set(sx * 0.5, 0.7, 0);
-          f.add(ell(mBase, 0.13, [sx * 0.04, -0.22, 0], [1, 2.5, 0.6]));
+          const f = new T.Group(); f.position.set(sx * 0.42, 0.62, 0);
+          f.add(L(ell(cBase, 0.12, [sx * 0.04, -0.2, 0], [1, 2.3, 0.6])));
           f.rotation.z = sx * 0.3;
           inner.add(f); parts.flips.push(f);
         }
-        if (adult) neckBow('#E2453C');
+        if (adult) bowAt('#E2453C', 0, 0.84, 0.36);
         break;
       }
       case 'panda': {
-        for (const sx of [-1, 1]) head.add(ell(mDark, 0.17, [sx * 0.42, 0.45, 0], [1, 1, 0.6]));
-        for (const sx of [-1, 1]) { const x = sx * ex; head.add(ell(mDark, 1, [x, ey - 0.02, onHead(x, ey, 0.05)], [0.15, 0.19, 0.08], [0, 0, sx * 0.6])); }
-        head.add(ell(mat('#2B2230', { r: 0.2 }), 1, [0, -0.12, onHead(0, -0.12, 0) + 0.01], [0.065, 0.045, 0.04]));
+        for (const sx of [-1, 1]) head.add(L(ell(cDark, 0.19, [sx * 0.48, 0.48, 0], [1, 1, 0.6]), lineDark));
         parts.flips = [];
         for (const sx of [-1, 1]) {
-          const f = new T.Group(); f.position.set(sx * 0.48, 0.72, 0.05);
-          f.add(ell(mDark, 0.15, [0, -0.18, 0.05], [1, 1.9, 0.9]));
+          const f = new T.Group(); f.position.set(sx * 0.4, 0.66, 0.05);
+          f.add(L(ell(cDark, 0.14, [0, -0.16, 0.05], [1, 1.8, 0.9]), lineDark));
           f.rotation.z = sx * 0.4;
           inner.add(f); parts.flips.push(f);
         }
@@ -994,7 +1035,7 @@ const P3 = (() => {
     }
     if (variant === 'star') {
       const g = new T.Group(); g.position.set(0, HB - 0.02, 0);
-      const gold = mat('#F5C842', { r: 0.25, em: '#7a5a00', ei: 0.15 });
+      const gold = toon('#F5C842');
       g.add(geoMesh(new T.CylinderGeometry(0.2, 0.23, 0.13, 20, 1, true), gold));
       for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; g.add(geoMesh(new T.ConeGeometry(0.05, 0.13, 10), gold, [Math.sin(a) * 0.2, 0.12, Math.cos(a) * 0.2])); }
       g.rotation.z = 0.15;
@@ -1003,35 +1044,29 @@ const P3 = (() => {
     const hat = hatKey && HATS[hatKey];
     if (hat) {
       const sp3 = emojiSprite(hat.icon, hat.eyes ? 0.62 : 0.55);
-      sp3.position.set(0, hat.eyes ? 0.03 : HB + 0.12, hat.eyes ? 0.66 : 0);
+      sp3.position.set(0, hat.eyes ? 0.0 : HB + 0.12, hat.eyes ? 0.74 : 0);
       head.add(sp3);
     }
     root.scale.setScalar(S3);
     return parts;
   }
+  function updateFace(parts, blink, chomp) {
+    const F = parts.face, expr = parts.faceOverride || parts.expr || 'normal';
+    const key = expr + (blink ? 'b' : '') + (chomp ? 'c' : '');
+    if (key === F.key) return;
+    F.key = key;
+    drawFace(F.g, { species: F.species, p: F.p, color: F.color, expr, blink, chomp });
+    F.tex.needsUpdate = true;
+  }
   function setExpr(parts, expr) {
-    const E = parts.eyes, Mo = parts.mouth;
-    const openEyes = expr === 'normal' || expr === 'sad' || expr === 'eat' || expr === 'surprise';
-    E.open.forEach(e => { e.visible = openEyes; e.scale.setScalar(expr === 'sad' ? 0.8 : expr === 'surprise' ? 1.25 : 1); });
-    E.happy.forEach(e => e.visible = expr === 'smile' || expr === 'joy' || expr === 'pant');
-    E.closed.forEach(e => e.visible = expr === 'sleep' || expr === 'yawn');
-    E.x.forEach(e => e.visible = expr === 'sick');
-    E.sad.forEach(e => e.visible = expr === 'sad' || expr === 'sick');
-    Mo.normal.visible = !Mo.normalHidden && (expr === 'normal' || expr === 'smile');
-    Mo.joy.visible = expr === 'joy' || expr === 'pant';
-    Mo.o.visible = expr === 'surprise';
-    Mo.yawn.visible = expr === 'yawn';
-    Mo.tongue.visible = expr === 'pant' && parts.species === 'dog';
-    Mo.eat.visible = expr === 'eat';
-    Mo.sad.visible = expr === 'sad' || expr === 'sick';
-    Mo.sleep.visible = expr === 'sleep';
-    if (parts.pouches) parts.pouches.forEach(p => p.scale.set(expr === 'eat' ? 0.29 : 0.22, expr === 'eat' ? 0.23 : 0.18, 0.17));
     parts.expr = expr;
+    if (parts.pouches) parts.pouches.forEach(p => p.scale.set(expr === 'eat' ? 0.29 : 0.22, expr === 'eat' ? 0.23 : 0.18, 0.17));
+    updateFace(parts, false, false);
   }
   function dispose(obj) {
     obj.traverse(o => {
       if (o.geometry && o.geometry !== SPH) o.geometry.dispose();
-      if (o.material && !(o.material.map && Object.values(emojiTex).includes(o.material.map) && false)) o.material.dispose();
+      if (o.material && !Object.values(outlineMats).includes(o.material)) { if (o.material.map && !Object.values(emojiTex).includes(o.material.map)) o.material.map.dispose(); o.material.dispose(); }
     });
   }
   function addLights(scene, shadows) {
@@ -1202,20 +1237,18 @@ const P3 = (() => {
       if (pet.tail && pet.species === 'dog') pet.tail.rotation.x = low ? 0.95 : alert ? -0.35 : 0;
       if (pet.tail && pet.species === 'cat') pet.tail.scale.setScalar(alert ? 1.35 : 1);
       if (pet.flips) { const fl = moving || pet.expr === 'joy' ? Math.sin(t * 14) * 0.35 : Math.sin(t * 2) * 0.05; pet.flips.forEach((f, i) => f.rotation.z = (i ? 1 : -1) * (0.3 + fl)); }
-      if (pet.expr === 'eat') pet.mouth.eat.scale.y = 0.07 * (0.3 + Math.abs(Math.sin(t * 12)) * 0.9);
-      if (pet.nose && !asleep) pet.nose.scale.y = 0.032 * (1 + Math.max(0, Math.sin(t * 22)) * 0.35);
-      if (pet.mouth.tongue.visible) pet.mouth.tongue.position.y = pet.mouth.joy.position.y - 0.08 - Math.abs(Math.sin(t * 9)) * 0.02;
-      // blink every few seconds
-      const blink = !asleep && (t % 3.7) < 0.12;
-      pet.eyes.open.forEach(e => { e.scale.y = (pet.expr === 'surprise' ? 1.25 : pet.expr === 'sad' ? 0.8 : 1) * (blink ? 0.12 : 1); });
       if (act) animateAct(t, s);
+      // blink every few seconds; chew while eating
+      const blink = !asleep && (t % 3.7) < 0.13;
+      const chomp = (pet.faceOverride || pet.expr) === 'eat' && Math.sin(t * 20) > 0;
+      updateFace(pet, blink, chomp);
       placeDiv(pos);
     }
     renderer.render(scene, camera);
   }
   function animateAct(t, s) {
     const k = (t - act.t0) / act.dur;
-    if (k >= 1) { act = null; setExpr(pet, pet.expr); return; }
+    if (k >= 1) { act = null; pet.faceOverride = null; setExpr(pet, pet.expr); return; }
     const env = Math.max(0, Math.min(1, k / 0.18, (1 - k) / 0.18));
     const P = pet, I = P.inner, Hd = P.head, R = P.root;
     switch (act.name) {
@@ -1228,7 +1261,7 @@ const P3 = (() => {
       case 'bark': R.rotation.y = -0.9 * env + (1 - env) * R.rotation.y; Hd.rotation.x = -0.15 * env + Math.abs(Math.sin(t * 10)) * -0.08; break;
       case 'knead': P.feet.forEach((f, i) => f.position.y = 0.08 + Math.max(0, Math.sin(t * 8 + i * Math.PI)) * 0.08 * env); Hd.rotation.x = 0.1 * env; break;
       case 'tailup': if (P.tail) P.tail.rotation.x = -0.9 * env; break;
-      case 'chatter': R.rotation.y = -1.0 * env; Hd.rotation.x = -0.25 * env; P.mouth.o.visible = env > 0.5 && Math.sin(t * 30) > 0; break;
+      case 'chatter': R.rotation.y = -1.0 * env; Hd.rotation.x = -0.25 * env; P.faceOverride = env > 0.3 ? 'surprise' : null; break;
       case 'loaf': I.scale.y *= 1 - 0.16 * env; I.position.y = -0.05 * env; P.feet.forEach(f => f.visible = env < 0.5); break;
       case 'groom': Hd.rotation.x = 0.4 * env; Hd.rotation.y = Math.sin(t * 7) * 0.45 * env; break;
       case 'flop': R.rotation.z = 1.35 * env; R.position.y += 0.32 * s * env; break;
@@ -1241,7 +1274,7 @@ const P3 = (() => {
       case 'toboggan': R.rotation.x = 1.3 * env; R.position.y += 0.28 * s * env; if (P.flips) P.flips.forEach((f, i) => f.rotation.z = (i ? 1 : -1) * 1.2 * env); break;
       case 'burrow': I.position.y = -0.38 * s * env; Hd.rotation.x = 0.3 * env; break;
       case 'pouch': if (P.pouches) P.pouches.forEach(p => p.scale.set(0.22 + 0.1 * env, 0.18 + 0.07 * env, 0.17 + 0.05 * env)); break;
-      case 'munch': Hd.rotation.x = 0.12 + Math.sin(t * 7) * 0.08 * env; P.mouth.eat.visible = env > 0.3; P.mouth.eat.scale.y = 0.07 * (0.3 + Math.abs(Math.sin(t * 12)) * 0.9); break;
+      case 'munch': Hd.rotation.x = 0.12 + Math.sin(t * 7) * 0.08 * env; P.faceOverride = env > 0.3 ? 'eat' : null; break;
       case 'nap': I.scale.y *= 1 - 0.1 * env; Hd.rotation.x = 0.3 * env; break;
       case 'freeze': I.scale.y *= 1 - 0.05 * env; break;
       case 'sit': I.rotation.x = -0.32 * env; I.position.y = -0.06 * s * env; Hd.rotation.x = 0.12 * env; break;
@@ -2002,60 +2035,25 @@ function showEnding() {
 
 /* ---------- sounds (synthesized, no files) ---------- */
 const SND = (() => {
-  let ctx = null, noiseBuf = null;
+  let ctx = null;
   const on = () => M && M.sound !== false;
   function ac() {
     if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
   }
-  function noise() {
-    if (!noiseBuf) { noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
-    const n = ctx.createBufferSource(); n.buffer = noiseBuf; return n;
-  }
-  function env(g, t, a, peak, rel) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + rel); }
-  function tone(type, f0, f1, t, dur, peak, filt) {
+  // Only soft music-box chimes. Animal voices stay as speech bubbles, never synthesized cries.
+  const chime = (f, t, dur = 0.5, peak = 0.06) => {
     const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
-    let node = o;
-    if (filt) { const b = ctx.createBiquadFilter(); b.type = filt.type || 'bandpass'; b.frequency.value = filt.f; b.Q.value = filt.q || 1; o.connect(b); node = b; }
-    node.connect(g); g.connect(ctx.destination);
-    env(g, t, 0.01, peak, dur); o.start(t); o.stop(t + dur + 0.05);
-    return o;
-  }
-  function burst(t, dur, f, q, peak, type = 'bandpass') {
-    const n = noise(), b = ctx.createBiquadFilter(), g = ctx.createGain();
-    b.type = type; b.frequency.value = f; b.Q.value = q;
-    n.connect(b); b.connect(g); g.connect(ctx.destination);
-    env(g, t, 0.005, peak, dur); n.start(t); n.stop(t + dur + 0.05);
-  }
-  const pitch = () => (S ? [1.35, 1.15, 1][stageOf(ageMin())] : 1);
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + dur + 0.05);
+  };
   const lib = {
-    bark(n = 1) { const t0 = ctx.currentTime, p = pitch(); for (let i = 0; i < n; i++) { const t = t0 + i * 0.22; tone('sawtooth', 520 * p, 230 * p, t, 0.13, 0.35, { f: 1100 * p, q: 1.5 }); burst(t, 0.08, 1500 * p, 1, 0.25); } },
-    whine() { const t = ctx.currentTime, p = pitch(); const o = tone('sine', 700 * p, 900 * p, t, 0.7, 0.12); o.frequency.setValueAtTime(700 * p, t); o.frequency.linearRampToValueAtTime(1150 * p, t + 0.3); o.frequency.linearRampToValueAtTime(800 * p, t + 0.7); },
-    meow() { const t = ctx.currentTime, p = pitch(); const o = ctx.createOscillator(), b = ctx.createBiquadFilter(), g = ctx.createGain();
-      o.type = 'sawtooth'; o.frequency.setValueAtTime(480 * p, t); o.frequency.linearRampToValueAtTime(720 * p, t + 0.2); o.frequency.linearRampToValueAtTime(420 * p, t + 0.55);
-      b.type = 'bandpass'; b.Q.value = 3; b.frequency.setValueAtTime(700, t); b.frequency.linearRampToValueAtTime(1700, t + 0.2); b.frequency.linearRampToValueAtTime(800, t + 0.55);
-      o.connect(b); b.connect(g); g.connect(ctx.destination); env(g, t, 0.05, 0.35, 0.5); o.start(t); o.stop(t + 0.6); },
-    purr() { const t = ctx.currentTime, n = noise(), b = ctx.createBiquadFilter(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
-      b.type = 'lowpass'; b.frequency.value = 260; n.connect(b); b.connect(g); g.connect(ctx.destination);
-      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.35, t + 0.2); g.gain.linearRampToValueAtTime(0.0001, t + 1.8);
-      lfo.frequency.value = 26; lg.gain.value = 0.25; lfo.connect(lg); lg.connect(g.gain); n.start(t); n.stop(t + 1.9); lfo.start(t); lfo.stop(t + 1.9); },
-    chatter() { const t = ctx.currentTime; for (let i = 0; i < 7; i++) tone('square', 1300, 1100, t + i * 0.07, 0.03, 0.08); },
-    thump() { const t = ctx.currentTime; tone('sine', 140, 45, t, 0.18, 0.7); burst(t, 0.05, 300, 0.7, 0.3, 'lowpass'); },
-    grunt() { const t = ctx.currentTime; burst(t, 0.09, 600, 2, 0.2); burst(t + 0.13, 0.08, 650, 2, 0.15); },
-    squeak() { const t = ctx.currentTime; tone('sine', 2400, 3300, t, 0.07, 0.15); tone('sine', 2600, 3500, t + 0.11, 0.06, 0.12); },
-    bray() { const t = ctx.currentTime; for (let i = 0; i < 4; i++) tone('sawtooth', i % 2 ? 360 : 300, i % 2 ? 330 : 380, t + i * 0.2, 0.17, 0.2, { f: 900, q: 2 }); },
-    bleat() { const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain(), b = ctx.createBiquadFilter();
-      o.type = 'sawtooth'; o.frequency.value = 380; b.type = 'bandpass'; b.frequency.value = 1000; b.Q.value = 2;
-      o.connect(b); b.connect(g); g.connect(ctx.destination); env(g, t, 0.04, 0.25, 0.55);
-      lfo.frequency.value = 13; lg.gain.value = 30; lfo.connect(lg); lg.connect(o.frequency); o.start(t); o.stop(t + 0.65); lfo.start(t); lfo.stop(t + 0.65); },
-    munch() { const t = ctx.currentTime; for (let i = 0; i < 5; i++) burst(t + i * 0.16, 0.05, 2500, 1, 0.12); },
-    splash() { const t = ctx.currentTime; for (let i = 0; i < 4; i++) burst(t + i * 0.1, 0.12, 1800 + i * 300, 0.8, 0.12); },
-    coin() { const t = ctx.currentTime; tone('triangle', 988, 988, t, 0.08, 0.15); tone('triangle', 1319, 1319, t + 0.08, 0.2, 0.15); },
-    pop() { const t = ctx.currentTime; tone('sine', 500, 900, t, 0.08, 0.15); },
-    found() { const t = ctx.currentTime; [784, 988, 1175, 1568].forEach((f, i) => tone('triangle', f, f, t + i * 0.09, 0.14, 0.13)); },
-    level() { const t = ctx.currentTime; [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone('square', f, f, t + i * 0.1, 0.12, 0.07)); },
+    pop() { chime(1047, ctx.currentTime, 0.25, 0.035); },
+    coin() { const t = ctx.currentTime; chime(1319, t, 0.4); chime(1760, t + 0.08, 0.5); },
+    found() { const t = ctx.currentTime; [784, 988, 1175].forEach((f, i) => chime(f, t + i * 0.1, 0.6, 0.05)); },
+    level() { const t = ctx.currentTime; [659, 784, 988, 1319].forEach((f, i) => chime(f, t + i * 0.12, 0.8, 0.05)); },
   };
   return {
     play(name, arg) { if (!on() || !lib[name]) return; if (!ac()) return; try { lib[name](arg); } catch (e) {} },
@@ -2435,6 +2433,7 @@ function tick() {
 function start(data) {
   M = (data && data.M) || loadJSON(META_KEY) || newMeta();
   M = Object.assign(newMeta(), M);
+  if (M.soundV !== 2) { M.sound = false; M.soundV = 2; }
   S = normalize((data && data.S) || loadJSON(SAVE_KEY));
   window.claude?.hot?.snapshot?.(() => ({ S, M }));
   if (!P3.ok && !P3.tried) { P3.tried = true; if (P3.init) P3.init($('room')); if (P3.ok) addHint(); }
