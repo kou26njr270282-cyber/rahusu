@@ -54,6 +54,18 @@ canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; 
 .cast .foe { color: var(--alarm); }
 .rules { margin: 0 0 8px; padding-left: 1.3em; font-size: .9rem; line-height: 1.5; }
 .rules li + li { margin-top: 4px; }
+.title { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-block: 18px; }
+.title .logo { font-size: 2.2rem; color: var(--gold); letter-spacing: .08em; line-height: 1.2; text-shadow: 3px 3px 0 #8a4a22; }
+.title .vs { display: flex; align-items: center; gap: 14px; }
+.title .vs img { width: 64px; height: 64px; image-rendering: pixelated; animation: hop .6s steps(2) infinite alternate; }
+.title .vs img:last-child { animation-delay: .3s; }
+.title .vs span { color: var(--alarm); font-size: 1.3rem; }
+.title p { margin: 0; }
+.title .go { font-size: 1.4rem; padding: 10px 36px; border-color: var(--gold); color: var(--gold); border-width: 3px; animation: pulse 1.2s ease-in-out infinite; }
+.title .best { color: var(--dim); font-size: .85rem; }
+@keyframes hop { to { transform: translateY(-6px); } }
+@keyframes pulse { 50% { transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .title .vs img, .title .go { animation: none; } }
 .diary { margin-top: 10px; padding: 10px 12px; background: #f3e6c4; color: #3a2a1a; border-radius: 4px; transform: rotate(-.6deg); box-shadow: 3px 3px 0 rgba(0,0,0,.35); font-size: .88rem; line-height: 1.55; }
 .diary .dt { color: #8a4a22; font-size: .8rem; margin-bottom: 4px; border-bottom: 1px dashed #b89a68; }
 .diary p { margin: 0; }
@@ -559,27 +571,17 @@ button:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
     return v;
   }
   function showTitle() {
-    ov.innerHTML = `<div class="win">
-      <div class="cast">
-        <div class="you"><img src="${spriteURL("villager", 3)}" alt="">これが あなた<br>（むらびとA）</div>
-        <div class="foe"><img src="${spriteURL("hero", 3)}" alt="">これが ゆうしゃ<br>（かってに はいってくる）</div>
-      </div>
-      <p>ゆうしゃは まいにち あなたの いえに はいってきて、ツボを わり、タンスの なかみを もっていく。</p>
-      <p>まもる たからは 3しゅるい：${["gem", "medal", "gold"].map((k) => `<img src="${spriteURL(k, 2)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated">${ITEMS[k].n}`).join(" ")}</p>
-      <ol class="rules">
-        <li>ゆうしゃが くるまえに、入れものの なかみを かくそう</li>
-        <li><img src="${spriteURL("safe", 1)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated"> きんこ は ゆうしゃには あけられない（2こまで）</li>
-        <li>ゆうしゃが からっぽの 入れものを しらべたら「スカ！」 ボーナス +${SKA}G</li>
-        <li>ゆうしゃの <b>あかい しかい</b> に はいると あやしまれる。たからを もって うごくと すぐ バレる！ とまっていれば ただの むらびとの ふり が できる</li>
-        <li>ゆうしゃは はなが きく。さいごに 「たからの におい」で 1〜2かしょ しらべなおす！</li>
-        <li><img src="${spriteURL("banana", 2)}" alt="" width="16" height="16" style="vertical-align:middle;image-rendering:pixelated"> バナナを ふむと ゆうしゃは ころんで、とった ものを おとす！（どうぐは 日ごとに ふえる）</li>
-      </ol>
-      <p>1日目は ガイドが 光って おしえてくれるよ。</p>
-      ${(() => { const b = loadBest(); return b ? `<p style="color:var(--gold)">じこベスト：${b.score}G（${b.rank}）</p>` : ""; })()}
-      <p><button id="start">はじめる</button></p>
+    const b = loadBest();
+    ov.innerHTML = `<div class="win title">
+      <div class="logo">勇者おことわり</div>
+      <div class="vs"><img src="${spriteURL("villager", 4)}" alt="むらびとA（あなた）"><span>VS</span><img src="${spriteURL("hero", 4)}" alt="ゆうしゃ"></div>
+      <p>かってに いえに くる ゆうしゃから<br>たからを まもれ！</p>
+      <button id="start" class="go">▶ あそぶ</button>
+      ${b ? `<p class="best">じこベスト ${b.score}G</p>` : ""}
     </div>`;
     ov.hidden = false; ov.parentElement.classList.add("cover");
     $("start").onclick = startWave;
+    $("start").focus();
   }
   function loadBest() { try { return JSON.parse(localStorage.getItem("yusha-best") || "null"); } catch (e) { return null; } }
   function showEnd() {
