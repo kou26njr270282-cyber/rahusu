@@ -60,7 +60,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .touch { position: absolute; right: 16px; bottom: 16px; display: none; grid-template-columns: repeat(3, 54px); grid-auto-rows: 54px; gap: 6px; }
 .touch button { background: rgba(10,11,13,.55); border: 1px solid rgba(255,255,255,.14); border-radius: 4px; font-size: 1.3rem; touch-action: manipulation; }
 .touch button:active { background: rgba(230,192,63,.25); }
-.touch .use { grid-column: 1 / -1; font-size: .95rem; letter-spacing: .3em; color: var(--sign); }
+.touch .use { grid-column: span 2; font-size: .95rem; letter-spacing: .3em; color: var(--sign); }
 @media (pointer: coarse), (max-width: 760px) {
   .touch { display: grid; }
   .hud-bl { bottom: auto; top: 64px; }
@@ -148,7 +148,16 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .note-paper { background: var(--paper); color: var(--paper-ink); font-family: var(--hand); padding: 26px 30px 20px; width: 100%; max-width: 440px; transform: rotate(-1.2deg); box-shadow: 0 18px 50px rgba(0,0,0,.7); background-image: linear-gradient(to bottom, transparent 35px, var(--paper-line) 35px, var(--paper-line) 36px); background-size: 100% 36px; background-position: 0 14px; }
 .note-paper p { margin: 0; font-size: 1.15rem; line-height: 36px; white-space: pre-line; }
 .note-paper .note-close { margin-top: 12px; font-family: var(--pixel); font-size: .74rem; line-height: 1.6; opacity: .6; text-align: right; }
+.scare { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(110,0,0,.45), rgba(0,0,0,.94) 70%); }
+.scare canvas { width: min(78vh, 82vw); height: auto; aspect-ratio: 1 / 1; image-rendering: pixelated; }
+.scare.on { animation: scare 1.9s ease-out forwards; }
+.scare.on canvas { animation: scareFace .9s cubic-bezier(.2,1.5,.4,1) forwards, scareShake .09s steps(2) infinite; }
+@keyframes scare { 0% { opacity: 0; } 3% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes scareFace { 0% { transform: scale(.25); } 25% { transform: scale(1.2); } 100% { transform: scale(1.45); } }
+@keyframes scareShake { 0% { translate: -7px 5px; } 50% { translate: 7px -4px; } 100% { translate: -3px 0; } }
+.danger-vig { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(90,0,0,.55) 100%); transition: opacity .3s; }
 .fade.white { background: #efe9dc; transition: opacity 2.4s ease; }
+@media (prefers-reduced-motion: reduce) { .scare.on canvas { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .floor-card.show { animation-duration: .01s; opacity: 1; } .exit-sign b, .fade, .notebook, .hud, .subtitle { transition: none; } }
 </style>
 </head>
@@ -177,11 +186,14 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
       <button type="button" data-act="sleft" aria-label="左へ横歩き">⇠</button>
       <button type="button" data-act="back" aria-label="後ろへ">↓</button>
       <button type="button" data-act="sright" aria-label="右へ横歩き">⇢</button>
+      <button type="button" data-act="turnback" aria-label="振り返る" style="font-size:.85rem">振返</button>
       <button type="button" class="use" data-act="use">調べる</button>
     </div>
   </div>
 
   <div class="floor-card" id="floor-card"><b id="fc-num">0 番</b><span id="fc-sub">異変は ありません</span></div>
+  <div class="danger-vig" id="danger-vig"></div>
+  <div class="scare" id="scare"><canvas id="scare-face" width="64" height="64"></canvas></div>
   <div class="fade" id="fade"></div>
 
   <div class="screen dark" id="ov-loading"><p style="letter-spacing:.3em;color:var(--muted)">石を積んでいます……</p></div>
@@ -199,7 +211,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
           <button type="button" data-cycle="quality">画質 <span class="quality-label">◀ レトロ ▶</span></button>
           <button type="button" data-toggle="sound">音 <span class="sound-label">切</span></button>
         </nav>
-        <p class="keys">W A S D・矢印：移動と向き　Q E：横歩き　Space：調べる・階段<br>Tab：メモを開く　Esc：一時停止　スマートフォンは画面のボタンかスワイプ</p>
+        <p class="keys">W A S D・矢印：移動と向き　Q E：横歩き　Shift：走る　R：振り返る　Space：調べる・階段<br>Tab：メモを開く　Esc：一時停止　スマートフォンは画面のボタンかスワイプ</p>
       </div>
       <div class="notice">
         <h3>ご案内</h3>
@@ -262,6 +274,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
         <dt>かかった時間</dt><dd id="end-time">—</dd>
         <dt>歩いた階</dt><dd id="end-floors">—</dd>
         <dt>やり直し</dt><dd id="end-resets">—</dd>
+        <dt>捕まった</dt><dd id="end-caught">—</dd>
         <dt>これまでの最速</dt><dd id="end-best">—</dd>
         <dt>見抜いた異変</dt><dd><span id="end-found">0</span>（図鑑 <span id="end-cat">0</span> / <span class="anom-total">34</span>）</dd>
       </dl>
@@ -656,13 +669,17 @@ const ANOMS = [
   { id: 'note_missing', name: '消えた紙切れ', desc: '床に落ちていたはずの紙切れがない。', fn: f => {
     const n = f.objs.find(o => o.kind === 'note'); if (!n) return false; f.objs.splice(f.objs.indexOf(n), 1); return true; } },
   { id: 'door_open', name: '開いている鉄扉', desc: '番号を入れる前から、鉄扉が開いている。', fn: f => { if (!f.door) return false; f.doorPreOpen = true; return true; } },
+  { id: 'chaser', name: '走ってくる人影', desc: '奥から、何かが走ってくる。振り返って、逃げろ。', fn: f => {
+    const L = f.path.length; if (L < 8) return false; f.danger = { type: 'chaser', trig: clamp(Math.round(L * 0.42), 2, L - 5) }; return true; } },
+  { id: 'darkness', name: '迫る闇', desc: '松明がひとつずつ消えていく。闇に呑まれる前に、引き返せ。', fn: f => {
+    const L = f.path.length; if (L < 6) return false; f.danger = { type: 'dark', trig: clamp(Math.round(L * 0.4), 2, L - 3) }; return true; } },
   { id: 'steps_extra', name: '増えた段', desc: '上り階段の段が、ひとつ多い。', fn: f => {
     const u = f.objs.find(o => o.kind === 'up'); if (!u) return false; u.steps = 5; return true; } }
 ];
 
 // 異変の見つけやすさ。番号が進むほど、見つけにくい異変が選ばれやすくなる
 const TIER = {
-  statue: 1, follower: 1, eye: 1, writing: 1, hands: 1, red_light: 1, wall_block: 1, door: 1, crack: 1,
+  statue: 1, follower: 1, chaser: 1, darkness: 1, eye: 1, writing: 1, hands: 1, red_light: 1, wall_block: 1, door: 1, crack: 1,
   torch_color: 2, torch_unlit: 2, poster_upside: 2, painting_face: 2, vase_missing: 2, vase_broken: 2, doll: 2, footprints: 2,
   puddle: 2, exit_moved: 2, mirror: 2, low_ceiling: 2, door_open: 2, note_missing: 2,
   torch_extra: 3, poster_text: 3, painting_moved: 3, vase_moved: 3, wall_open: 3, sign_number: 3,
@@ -730,6 +747,10 @@ const sound = {
   turn() { this.noise(0.18, 'bandpass', 900, 0.6, 0.12, 0.2); },
   stairs(up) { for (let i = 0; i < 5; i++) this.noise(0.1, 'bandpass', 600 + i * (up ? 30 : -40), 1, 0.7 - i * 0.08, 0.5, i * 0.22); this.tone(up ? 196 : 110, 2.2, 0.08, 'triangle', 0.2, 0.9); },
   door() { this.noise(1.4, 'lowpass', 420, 1.5, 0.9, 0.6); this.tone(55, 1.4, 0.3, 'sawtooth', 0, 0.5, 40); },
+  sting() { [174, 185, 262, 277].forEach((f, i) => this.tone(f, 2.2, 0.06, 'sawtooth', i * 0.03, 1.2, f * 0.7)); this.noise(1.2, 'lowpass', 300, 0.7, 0.6, 1.0); },
+  beat() { this.tone(52, 0.18, 0.5, 'sine', 0, 0.1); this.tone(48, 0.2, 0.4, 'sine', 0.17, 0.1); },
+  chaseStep(dist) { const v = clamp(1.2 - dist * 0.12, 0.08, 1); this.noise(0.09, 'bandpass', 380, 1, 0.9 * v, 0.6); },
+  scream() { this.noise(1.1, 'bandpass', 1400, 0.7, 1.6, 0.6); [220, 233, 311, 330].forEach(f => this.tone(f, 1.1, 0.13, 'sawtooth', 0, 0.6, f * 0.45)); this.tone(60, 1.2, 0.6, 'sine', 0, 0.3, 30); },
   beep(ok) { if (ok) { this.tone(880, 0.14, 0.12, 'square', 0, 0.2); this.tone(1320, 0.2, 0.12, 'square', 0.12, 0.2); } else this.tone(180, 0.35, 0.15, 'square', 0, 0.2); },
   key() { this.tone(1200, 0.05, 0.06, 'square', 0, 0.1); },
   chime() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 1.6, 0.1, 'sine', i * 0.2, 0.7)); },
@@ -1041,7 +1062,7 @@ function woodTex() {
 // 3D
 // =====================================================================
 const canvas = $('view');
-let renderer, scene, camera, lantern, dust, floorGroup = null;
+let renderer, scene, camera, lantern, dust, floorGroup = null, chaserMesh = null;
 const M = {}, G = {};
 let torches = [], figures = [], ironDoor = null;
 
@@ -1078,6 +1099,7 @@ function init3D() {
   M.vase = new THREE.MeshStandardMaterial({ color: 0x5e3420, roughness: 0.85 });
   M.figure = new THREE.MeshStandardMaterial({ color: 0x040405, roughness: 1 });
   M.figEye = new THREE.MeshBasicMaterial({ color: 0xc8c2b4, fog: false });
+  M.figEyeRed = new THREE.MeshBasicMaterial({ color: 0xff2a1a, fog: false });
   M.doll = new THREE.MeshStandardMaterial({ color: 0xcfc5b2, roughness: 0.8 });
   M.dollDress = new THREE.MeshStandardMaterial({ color: 0x6b1f22, roughness: 0.9 });
   M.dollEye = new THREE.MeshBasicMaterial({ color: 0x050505 });
@@ -1263,6 +1285,12 @@ function buildScene(f) {
   f.decos.filter(d => d.kind === 'torch').forEach(d => { const g = new THREE.Group(); g.add(plane(0.9, 1.8, M.soot)); placeOnFace(g, d.x, d.y, d.side, 1.9, 0.006); });
   f.decos.forEach(d => addDeco(f, d));
   f.objs.forEach(o => addObj(f, o));
+  chaserMesh = null;
+  if (f.danger && f.danger.type === 'chaser') {
+    chaserMesh = makeFigure(); chaserMesh.visible = false;
+    chaserMesh.traverse(o => { if (o.material === M.figEye) o.material = M.figEyeRed; });
+    floorGroup.add(chaserMesh);
+  }
   // 鉄扉
   if (f.door) {
     const D = f.door, g = new THREE.Group();
@@ -1369,7 +1397,8 @@ const S = {
   count: 0, px: 0, py: 0, dir: 0, yaw: 0,
   mem: null, phase: 'loading', anim: null, queued: null, bumpT: 0, hold: null,
   floorStart: 0, runStart: 0, elapsedBefore: 0, stepsFloor: 0, stepAlt: false,
-  stats: { floors: 0, resets: 0 }, found: new Set(), doorOpen: false, confirm: null,
+  stats: { floors: 0, resets: 0, caught: 0 }, found: new Set(), doorOpen: false, confirm: null,
+  danger: null, darkMul: 1, nextBeat: 0, pathIdx: null, queuedRun: false,
   history: [], lastInput: 0, idleSaid: false
 };
 const D = () => DIFFS[S.diff];
@@ -1401,6 +1430,9 @@ function buildFloor() {
   buildScene(f);
   lantern.color.set(f.redLight ? 0xff4a30 : 0xffcf98);
   scene.fog.color.set(f.redLight ? 0x0d0302 : 0x040405);
+  scene.fog.density = 0.17; S.darkMul = 1; $('danger-vig').style.opacity = 0;
+  S.danger = f.danger ? { type: f.danger.type, trig: f.danger.trig, on: false } : null;
+  S.pathIdx = new Map(f.path.map((p, i) => [idx(p.x, p.y), i]));
   sound.setRed(!!f.redLight);
   S.floorStart = performance.now();
   updateMeta(); updatePrompt();
@@ -1449,7 +1481,7 @@ function updatePrompt() {
 // =====================================================================
 function newRun(diff) {
   S.diff = diff; S.base = genBase(diff);
-  S.count = 0; S.lastAnom = null; S.stats = { floors: 0, resets: 0 }; S.found = new Set();
+  S.count = 0; S.lastAnom = null; S.stats = { floors: 0, resets: 0, caught: 0 }; S.found = new Set();
   S.elapsedBefore = 0; S.runStart = performance.now();
   buildFloor(); saveRun();
 }
@@ -1489,7 +1521,7 @@ function beginPlay() { setPhase('play'); showFloorCard(); canvas.focus({ prevent
 function clearMemos() { memoText.value = ''; store.del('bd2.memo'); store.del('oblivion.memo'); mapNote.clear(); sketch.clear(); }
 
 function judge(claimAnomaly) {
-  S.confirm = null;
+  S.confirm = null; S.danger = null; $('danger-vig').style.opacity = 0;
   const correct = claimAnomaly === (S.anomaly !== null);
   S.stats.floors++;
   if (correct) { if (S.anomaly) { S.found.add(S.anomaly); addCatalog(S.anomaly); } S.count++; }
@@ -1526,6 +1558,7 @@ function finish() {
   $('end-time').textContent = fmt(sec);
   $('end-floors').textContent = S.stats.floors + ' 階';
   $('end-resets').textContent = S.stats.resets + ' 回';
+  $('end-caught').textContent = (S.stats.caught || 0) + ' 回';
   $('end-best').textContent = fmt(better ? sec : prev) + (better && prev ? '（更新）' : '');
   $('end-found').textContent = S.found.size + ' 種';
   $('end-cat').textContent = catalog().size;
@@ -1542,13 +1575,18 @@ function memAlpha(x, y, now) {
   const m = S.mem[idx(x, y)]; if (!m) return 0;
   const F = fadeMs(); return clamp((F - (now - m)) / (F * 0.6), 0, 1);
 }
-function act(a) {
+function act(a, run) {
   if (S.phase !== 'play') return;
   const now = performance.now();
   S.lastInput = now; S.idleSaid = false;
-  if (S.anim) { if (a !== 'use' && a !== 'cancel') S.queued = a; return; }
+  if (S.anim) { if (a !== 'use' && a !== 'cancel') { S.queued = a; S.queuedRun = !!run; } return; }
   if (S.confirm && a !== 'use') { S.confirm = null; updatePrompt(); if (a === 'cancel') { say('……もう少し、確かめよう。'); return; } }
   if (a === 'cancel') return;
+  if (a === 'turnback') {
+    S.dir = (S.dir + 2) % 4;
+    S.anim = { type: 'turn', t0: now, dur: 330, yaw0: S.yaw, yaw1: S.yaw + Math.PI };
+    sound.turn(); updateMeta(); updatePrompt(); return;
+  }
   if (a === 'left' || a === 'right') {
     S.dir = (S.dir + (a === 'left' ? 3 : 1)) % 4;
     S.anim = { type: 'turn', t0: now, dur: 230, yaw0: S.yaw, yaw1: S.yaw + (a === 'left' ? Math.PI / 2 : -Math.PI / 2) };
@@ -1564,7 +1602,7 @@ function act(a) {
     }
     const from = { x: S.px, y: S.py }, to = { x: S.px + DX[d], y: S.py + DY[d] };
     S.mem[idx(from.x, from.y)] = now;
-    S.anim = { type: 'move', t0: now, dur: 300, from, to };
+    S.anim = { type: 'move', t0: now, dur: run ? 185 : 300, from, to };
     S.stepAlt = !S.stepAlt; sound.step(S.stepAlt); updatePrompt(); return;
   }
   if (a === 'use') {
@@ -1588,7 +1626,92 @@ function arrive(to) {
   else if (facingDoor()) say('鉄の扉がある。番号……なんだったっけ。');
   S.mem[i] = now;
   moveFollower();
+  if (S.danger && !S.danger.on) { const pi = S.pathIdx.get(i); if (pi != null && pi >= S.danger.trig) triggerDanger(now); }
+  if (S.danger && S.danger.on && S.danger.type === 'chaser' && S.danger.x === S.px && S.danger.y === S.py) { caught(); return; }
   updateMeta(); updatePrompt();
+}
+// 危険な異変：走ってくる人影／迫る闇
+const CH_STEP = 500;
+function triggerDanger(now) {
+  const d = S.danger; d.on = true; d.t0 = now; S.nextBeat = now + 300;
+  sound.sting();
+  if (d.type === 'chaser') {
+    // 向いている方向の、見通しのきく直線の奥に現れる。正面が壁なら順路の3マス先
+    const f = S.floor;
+    let c = null, cx0 = S.px, cy0 = S.py, n = 0;
+    while (n < 4 && !hasWall(f, cx0, cy0, S.dir)) { cx0 += DX[S.dir]; cy0 += DY[S.dir]; n++; }
+    if (n >= 2) c = { x: cx0, y: cy0 };
+    else { const i0 = S.pathIdx.get(idx(S.px, S.py)) ?? d.trig; c = f.path[Math.min(i0 + 3, f.path.length - 1)]; }
+    Object.assign(d, { x: c.x, y: c.y, fx: c.x, fy: c.y, mt: now, next: now + 850 });
+    chaserMesh.visible = true; chaserMesh.position.set(W2(c.x), 0, W2(c.y));
+    say('……奥に、誰かいる。こっちに来る。');
+  } else {
+    d.limit = 6000 + d.trig * 950;
+    say('……松明が、消えていく。');
+  }
+}
+function chaserNext(d) {
+  // 鉄扉も壁もすり抜けず、壁だけを避けて最短で迫る（扉は抜ける）
+  const { dist } = bfs(S.floor, S.px, S.py, false);
+  let best = { x: d.x, y: d.y }, bd = dist[idx(d.x, d.y)];
+  for (let s = 0; s < 4; s++) {
+    if (hasWall(S.floor, d.x, d.y, s)) continue;
+    const nx = d.x + DX[s], ny = d.y + DY[s], v = dist[idx(nx, ny)];
+    if (v >= 0 && (bd < 0 || v < bd)) { bd = v; best = { x: nx, y: ny }; }
+  }
+  return best;
+}
+function updateDanger(now) {
+  const d = S.danger; if (!d || !d.on) return;
+  if (!['play', 'keypad', 'note'].includes(S.phase)) return;
+  if (d.type === 'chaser') {
+    if (now >= d.next) {
+      const n = chaserNext(d);
+      d.fx = d.x; d.fy = d.y; d.x = n.x; d.y = n.y; d.mt = now; d.next = now + CH_STEP;
+      sound.chaseStep(Math.hypot(d.x - S.px, d.y - S.py) * 2);
+      const moving = S.anim && S.anim.type === 'move';
+      if ((d.x === S.px && d.y === S.py && !moving) || (moving && d.x === S.anim.to.x && d.y === S.anim.to.y)) { caught(); return; }
+    }
+    const t = clamp((now - d.mt) / (CH_STEP * 0.9), 0, 1);
+    chaserMesh.position.set(W2(d.fx + (d.x - d.fx) * t), Math.abs(Math.sin(now / 75)) * 0.06, W2(d.fy + (d.y - d.fy) * t));
+    chaserMesh.lookAt(camera.position.x, chaserMesh.position.y, camera.position.z);
+    chaserMesh.rotateX(0.22);
+    const dist = Math.hypot(d.x - S.px, d.y - S.py);
+    $('danger-vig').style.opacity = clamp(1 - dist / 4, 0.15, 1);
+  } else {
+    const p = clamp((now - d.t0) / d.limit, 0, 1);
+    S.darkMul = 1 - p;
+    scene.fog.density = 0.17 + p * p * 1.5;
+    $('danger-vig').style.opacity = p * 0.9;
+    if (p >= 1) { caught(); return; }
+  }
+  if (now >= S.nextBeat) { sound.beat(); const p = d.type === 'dark' ? clamp((now - d.t0) / d.limit, 0, 1) : 0.6; S.nextBeat = now + 760 - p * 360; }
+}
+function caught() {
+  if (S.phase === 'caught') return;
+  const kind = S.danger && S.danger.type;
+  S.danger = null; S.anim = null; S.queued = null; S.confirm = null;
+  S.stats.floors++; if (S.count > 0) S.stats.resets++; S.stats.caught = (S.stats.caught || 0) + 1; S.count = 0;
+  setPhase('caught');
+  sound.scream();
+  const sc = $('scare'); sc.classList.remove('on'); void sc.offsetWidth; sc.classList.add('on');
+  setTimeout(() => $('fade').classList.add('on'), 1000);
+  setTimeout(() => {
+    sc.classList.remove('on'); buildFloor(); saveRun();
+    setTimeout(() => { $('fade').classList.remove('on'); beginPlay(); say(kind === 'dark' ? '……闇の中で、何かを忘れてきた気がする。' : '……捕まった。ここは、どこだっけ。'); }, 450);
+  }, 2000);
+}
+function drawScareFace() {
+  const c = $('scare-face'), x = c.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0, 0, 64, 64);
+  const g = x.createRadialGradient(30, 26, 2, 32, 32, 26); g.addColorStop(0, '#c9c3b6'); g.addColorStop(1, '#4a4640');
+  x.fillStyle = g; x.beginPath(); x.ellipse(32, 33, 19, 25, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#000';
+  x.beginPath(); x.ellipse(24, 27, 5.5, 7.5, 0.15, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(40, 27, 5.5, 7.5, -0.15, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(32, 47, 6, 9, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#ff2a1a'; x.fillRect(23, 27, 2, 2); x.fillRect(39, 27, 2, 2);
+  x.strokeStyle = 'rgba(0,0,0,.6)'; x.beginPath(); x.moveTo(32, 30); x.lineTo(30, 39); x.stroke();
 }
 function moveFollower() {
   const fo = figures.find(f => f.obj.kind === 'follower'); if (!fo) return;
@@ -1659,11 +1782,11 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (S.phase !== 'play') return;
-  const map = { arrowup: 'fwd', w: 'fwd', arrowdown: 'back', s: 'back', arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right', q: 'sleft', e: 'sright', ' ': 'use', enter: 'use', f: 'use', n: 'cancel', backspace: 'cancel' };
+  const map = { r: 'turnback', x: 'turnback', arrowup: 'fwd', w: 'fwd', arrowdown: 'back', s: 'back', arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right', q: 'sleft', e: 'sright', ' ': 'use', enter: 'use', f: 'use', n: 'cancel', backspace: 'cancel' };
   const a = map[e.key.toLowerCase()];
   if (!a) return;
   if (t === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
-  e.preventDefault(); act(a);
+  e.preventDefault(); act(a, e.shiftKey);
 });
 document.querySelectorAll('.touch button[data-act]').forEach(b => b.addEventListener('click', () => act(b.dataset.act)));
 $('prompt-main').addEventListener('click', () => act('use'));
@@ -1814,7 +1937,7 @@ function frame(now) {
       if (a.type === 'move') arrive(a.to);
       else if (a.type === 'turn') { S.yaw = a.yaw1; updatePrompt(); }
       else if (a.type === 'stairs') afterStairs();
-      if (S.queued && S.phase === 'play') { const q = S.queued; S.queued = null; act(q); }
+      if (S.queued && S.phase === 'play') { const q = S.queued; S.queued = null; act(q, S.queuedRun); }
     }
   } else if (S.hold && (S.phase === 'stairs' || S.phase === 'end')) {
     ({ cx, cy, cz, yaw } = S.hold);
@@ -1843,12 +1966,15 @@ function frame(now) {
     pa.needsUpdate = true;
   }
   lantern.position.set(cx + Math.sin(now / 700) * 0.04, 1.2 + cy, cz);
-  lantern.intensity = 0.88 + Math.sin(now / 310) * 0.04;
+  lantern.intensity = (0.88 + Math.sin(now / 310) * 0.04) * (0.25 + 0.75 * S.darkMul);
 
   let nearest = 99;
   torches.forEach(t => {
     const n = Math.sin(now / 90 + t.ph) * 0.5 + Math.sin(now / 37 + t.ph * 2) * 0.3 + Math.sin(now / 13 + t.ph * 3) * 0.2;
-    t.light.intensity = t.base * (0.85 + n * 0.12);
+    // 迫る闇：遠くの松明から順に消える
+    const fade = S.darkMul >= 1 ? 1 : clamp((S.darkMul - 1) * 3 + 1 + (1 - Math.hypot(W2(t.x) - cx, W2(t.y) - cz) / 14) * 0.6, 0, 1);
+    t.light.intensity = t.base * (0.85 + n * 0.12) * fade;
+    t.flame.visible = fade > 0.05;
     t.flame.scale.set(0.2 + n * 0.015, 0.36 + n * 0.05, 1);
     nearest = Math.min(nearest, Math.hypot(W2(t.x) - cx, W2(t.y) - cz));
   });
@@ -1859,6 +1985,7 @@ function frame(now) {
     if (f.mesh.userData.head) f.mesh.userData.head.rotation.z = Math.sin(now / 2300 + f.mesh.id) * 0.06;
   });
   if (ironDoor) { ironDoor.open += (ironDoor.target - ironDoor.open) * Math.min(1, dt * 1.6); ironDoor.slab.position.y = 1.125 + ironDoor.open * 2.15; }
+  updateDanger(now);
   if (S.phase === 'play') {
     S.mem[idx(S.px, S.py)] = now;
     if (!S.idleSaid && now - S.lastInput > 25000) { S.idleSaid = true; say(pick(IDLE_LINES)); }
@@ -1976,6 +2103,7 @@ async function boot() {
   } catch (e) {}
   try { init3D(); } catch (e) { $('ov-loading').querySelector('p').textContent = 'この端末では 3D 表示を開始できませんでした。'; return; }
   drawSign(0);
+  drawScareFace();
   setQuality(quality);
   const tab = store.get('bd2.tab'); if (TABS.includes(tab)) setTab(tab); else mapNote.draw();
   // タイトルの背後に迷宮を映す
