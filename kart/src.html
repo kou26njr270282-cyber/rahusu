@@ -1483,9 +1483,9 @@ function aiInput(k, dt) {
   const diff = wrapAngle(Math.atan2(ty - k.y, tx - k.x) - k.angle);
   const curve = Math.abs(wrapAngle(ang[(k.idx + 30) % n] - ang[k.idx]));
   let accel = true, brake = false;
-  if (curve > 1.1 && k.speed > k.st.max * 0.8) accel = false;
+  if (curve > 1.25 && k.speed > k.st.max * CLASSES[raceClass].mult * 0.86) accel = false;
   if (Math.abs(diff) > 1.4 && k.speed > 120) { accel = false; brake = true; }
-  const wantDrift = curve > 0.75 && Math.abs(diff) > 0.12 && k.speed > 180;
+  const wantDrift = curve > 0.6 && Math.abs(diff) > 0.1 && k.speed > 150;
   if (k.item && k.rollT <= 0) {
     k.itemT -= dt;
     if (k.itemT <= 0) {
@@ -1521,14 +1521,14 @@ function aiBattle(k, dt) {
     k.itemT -= dt;
     if (k.itemT <= 0) {
       const it = k.item, f2 = foe ? Math.hypot(foe.x - k.x, foe.y - k.y) : 1e9;
-      const ahead = foe && Math.abs(wrapAngle(Math.atan2(foe.y - k.y, foe.x - k.x) - k.angle)) < 0.35;
+      const ahead = foe && Math.abs(wrapAngle(Math.atan2(foe.y - k.y, foe.x - k.x) - k.angle)) < 0.6;
       const behind = foe && Math.abs(wrapAngle(Math.atan2(foe.y - k.y, foe.x - k.x) - k.angle)) > 2.3;
       let use = false;
-      if (['rocket', 'ball', 'bomb', 'missile'].includes(it)) use = ahead && f2 < 320;
+      if (['rocket', 'missile'].includes(it)) use = true; else if (['ball', 'bomb'].includes(it)) use = ahead && f2 < 450;
       else if (it === 'banana' || it === 'fake') use = behind && f2 < 160;
       else use = true;
       if (use) useItem(k);
-      k.itemT = it === 'triple' || it === 'golden' ? 0.7 : rand(0.3, 1.2);
+      k.itemT = it === 'triple' || it === 'golden' ? 0.7 : rand(0.15, 0.6);
     }
   }
   return { accel: true, brake: Math.abs(diff) > 2.2 && k.speed > 120, steer: clamp(diff * 2.4, -1, 1), drift: Math.abs(diff) > 0.7 && k.speed > 160 };
@@ -1851,7 +1851,7 @@ function updateKart(k, inp, dt) {
   for (const b of course.boxes) {
     if (b.t > 0) continue;
     if ((k.x - b.x) ** 2 + (k.y - b.y) ** 2 < 15 * 15 && Math.abs(k.h - b.h) < 20) {
-      b.t = 2.5;
+      b.t = course.battle ? 1.2 : 2.5;
       for (let i = 0; i < 14; i++) spawn(b.x, b.h + 8, b.y, rand(-50, 50), rand(10, 60), rand(-50, 50), 0.6, `hsl(${Math.floor(rand(0, 360))},90%,65%)`, rand(3, 5), 80);
       if (!k.item && k.rollT <= 0) { k.rollT = k.isPlayer ? 1.2 : 0.01; k.pending = rollItem(k); if (k.isPlayer) Sound.beep(1000, 0.08, 'square', 0.1); }
     }
