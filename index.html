@@ -143,6 +143,12 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 #sketch { background-image: linear-gradient(var(--paper-line) 1px, transparent 1px), linear-gradient(90deg, var(--paper-line) 1px, transparent 1px); background-size: 10% 10%; }
 .hint { margin: 0; font-size: .74rem; opacity: .75; }
 
+.intro { margin: 0; white-space: pre-line; text-align: center; font-size: 1.08rem; line-height: 2.3; letter-spacing: .14em; color: var(--fg); animation: introIn 1.6s ease both; }
+@keyframes introIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.note-paper { background: var(--paper); color: var(--paper-ink); font-family: var(--hand); padding: 26px 30px 20px; width: 100%; max-width: 440px; transform: rotate(-1.2deg); box-shadow: 0 18px 50px rgba(0,0,0,.7); background-image: linear-gradient(to bottom, transparent 35px, var(--paper-line) 35px, var(--paper-line) 36px); background-size: 100% 36px; background-position: 0 14px; }
+.note-paper p { margin: 0; font-size: 1.15rem; line-height: 36px; white-space: pre-line; }
+.note-paper .note-close { margin-top: 12px; font-family: var(--pixel); font-size: .74rem; line-height: 1.6; opacity: .6; text-align: right; }
+.fade.white { background: #efe9dc; transition: opacity 2.4s ease; }
 @media (prefers-reduced-motion: reduce) { .floor-card.show { animation-duration: .01s; opacity: 1; } .exit-sign b, .fade, .notebook, .hud, .subtitle { transition: none; } }
 </style>
 </head>
@@ -260,6 +266,11 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
       </dl>
       <nav class="menu"><button type="button" id="btn-again">タイトルへ</button></nav>
     </div>
+  </div>
+
+  <div class="screen dark" id="ov-intro" hidden><p class="intro" id="intro-text"></p></div>
+  <div class="screen" id="ov-note" hidden>
+    <div class="note-paper" role="dialog" aria-label="紙切れ"><p id="note-text"></p><p class="note-close">Space・クリックで閉じる</p></div>
   </div>
 
   <aside class="notebook" id="notebook" aria-label="メモ帳" inert>
@@ -381,6 +392,20 @@ const wallCount = (f, x, y) => { let n = 0; for (let s = 0; s < 4; s++) n += has
 // =====================================================================
 // 迷宮の生成（この迷宮は一周のあいだ変わらない）
 // =====================================================================
+const NOTES = [
+  'ここに来たのは三度目だ。\nたぶん。\n地図は役に立たない。紙に書け。',
+  '同じ通路を、何度も歩いている。\n松明の数を数えておくこと。\n壺の向きも。',
+  '扉の番号を、また忘れた。\n指が覚えていると思っていた。',
+  'さっき見た顔と、絵の顔が\n違う気がする。\n気のせいだと思いたい。',
+  '後ろに誰かいる。\n振り返ると、いない。\n振り返らないと、いる。',
+  '自分の名前を書いておく。\n＿＿＿＿＿＿＿＿。\n……書けなかった。',
+  'メモの字が、自分の字に見えない。\nそれでも、これしか信じられない。',
+  'あと少しのはずだ。\n出口の看板の数字を\n声に出して読め。'
+];
+const INTROS = [
+  '目を覚ますと、\n石の階段の下にいた。\n\nここに来る前のことを、\n何も思い出せない。',
+  'また、この階段の下だ。\n\n……また？'
+];
 const POSTERS = [
   ['出口は この先', '出口は この先ではない'],
   ['足元に ご注意 ください', '背後に ご注意 ください'],
@@ -495,6 +520,9 @@ function buildMaze() {
     f.decos.push({ kind: 'torch', x: p.x, y: p.y, side: pick(c), color: 'warm', lit: true });
     torches++;
   }
+  // 前の探索者が残した紙切れ（スタートのすぐ先）
+  const np = path.slice(1, 4).find(p => !objsAt(f, p.x, p.y).length && !(p.x === f.exit.x && p.y === f.exit.y));
+  if (np) { const s = nearWallSpot(f, np.x, np.y); f.objs.push({ kind: 'note', x: np.x, y: np.y, ox: s.ox * 0.7, oy: s.oy * 0.7, rot: Math.random() * 6 }); }
   // 壺
   (N >= 7 ? [0.25, 0.5, 0.8] : [0.33, 0.7]).forEach(r => {
     const i = Math.floor(L * r); if (i <= 0 || i >= L - 1) return;
@@ -659,8 +687,17 @@ const sound = {
   beep(ok) { if (ok) { this.tone(880, 0.14, 0.12, 'square', 0, 0.2); this.tone(1320, 0.2, 0.12, 'square', 0.12, 0.2); } else this.tone(180, 0.35, 0.15, 'square', 0, 0.2); },
   key() { this.tone(1200, 0.05, 0.06, 'square', 0, 0.1); },
   chime() { [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 1.6, 0.1, 'sine', i * 0.2, 0.7)); },
+  nextFar: 0,
   tick(now, torchDist) {
     if (!this.on || !this.ctx) return;
+    if (!this.nextFar) this.nextFar = now + 15000;
+    if (now > this.nextFar) {
+      this.nextFar = now + 18000 + Math.random() * 26000;
+      const k = rand(3), pan = Math.random() * 1.6 - 0.8;
+      if (k === 0) this.noise(2.2, 'lowpass', 110, 0.8, 0.9, 1.2, 0, pan);
+      else if (k === 1) { this.tone(240, 1.6, 0.025, 'sawtooth', 0, 1.5, 150); this.tone(310, 1.2, 0.015, 'sawtooth', 0.3, 1.5, 190); }
+      else for (let i = 0; i < 4; i++) this.noise(0.1, 'bandpass', 420, 1.4, 0.12, 1.6, i * 0.55, pan);
+    }
     if (now > this.nextDrip) { this.nextDrip = now + 2500 + Math.random() * 7000; this.tone(1400 + Math.random() * 600, 0.12, 0.05, 'sine', 0, 1.0, 500); }
     if (torchDist < 4 && now > this.nextCrackle) {
       this.nextCrackle = now + 60 + Math.random() * 260;
@@ -883,6 +920,41 @@ function codeTex(code) {
     return mkTex(c);
   });
 }
+function noteTex() {
+  return once('note', () => {
+    const W = 128, H = 160, c = cnv(W, H), x = c.getContext('2d');
+    x.fillStyle = '#cfc6ad'; x.fillRect(0, 0, W, H);
+    stains(x, W, 5, '110,90,50', 0.3);
+    x.strokeStyle = 'rgba(40,34,26,0.75)'; x.lineWidth = 2;
+    for (let i = 0; i < 8; i++) { const y = 22 + i * 16; x.beginPath(); x.moveTo(14, y); let px = 14; while (px < W - 18 - rand(30)) { px += 4 + rand(6); x.lineTo(px, y + (Math.random() - 0.5) * 3); } x.stroke(); }
+    x.fillStyle = 'rgba(0,0,0,0.25)'; x.beginPath(); x.moveTo(W, 0); x.lineTo(W - 22, 0); x.lineTo(W, 22); x.fill();
+    grain(x, W, H, 20);
+    return mkTex(c);
+  });
+}
+function webTex() {
+  return once('web', () => {
+    const S = 128, c = cnv(S, S), x = c.getContext('2d');
+    x.strokeStyle = 'rgba(210,205,190,0.55)'; x.lineWidth = 1;
+    const rays = 7;
+    for (let i = 0; i < rays; i++) { const a = i / (rays - 1) * Math.PI / 2; x.beginPath(); x.moveTo(0, 0); x.lineTo(Math.cos(a) * S, Math.sin(a) * S); x.stroke(); }
+    for (let r = 14; r < S; r += 12 + rand(6)) {
+      x.beginPath();
+      for (let i = 0; i < rays; i++) { const a = i / (rays - 1) * Math.PI / 2, rr2 = r * (0.85 + Math.random() * 0.2); const px = Math.cos(a) * rr2, py = Math.sin(a) * rr2; i ? x.quadraticCurveTo(Math.cos(a - 0.12) * rr2 * 0.86, Math.sin(a - 0.12) * rr2 * 0.86, px, py) : x.moveTo(px, py); }
+      x.stroke();
+    }
+    return mkTex(c);
+  });
+}
+function sootTex() {
+  return once('soot', () => {
+    const W = 128, H = 256, c = cnv(W, H), x = c.getContext('2d');
+    const g = x.createRadialGradient(W / 2, 40, 4, W / 2, 60, 110);
+    g.addColorStop(0, 'rgba(8,6,4,0.75)'); g.addColorStop(1, 'rgba(8,6,4,0)');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    return mkTex(c);
+  });
+}
 const signCanvas = cnv(512, 160);
 let signTexture = null;
 function drawSign(n) {
@@ -923,7 +995,7 @@ function woodTex() {
 // 3D
 // =====================================================================
 const canvas = $('view');
-let renderer, scene, camera, lantern, floorGroup = null;
+let renderer, scene, camera, lantern, dust, floorGroup = null;
 const M = {}, G = {};
 let torches = [], figures = [], ironDoor = null;
 
@@ -939,6 +1011,12 @@ function init3D() {
   camera.rotation.order = 'YXZ';
   lantern = new THREE.PointLight(0xffcf98, 1.05, 9, 2);
   scene.add(lantern, new THREE.AmbientLight(0x5a6272, 0.16));
+  // 灯りの中を漂う埃
+  const DN = 260, dpos = new Float32Array(DN * 3);
+  for (let i = 0; i < DN; i++) { dpos[i * 3] = (Math.random() - 0.5) * 6; dpos[i * 3 + 1] = Math.random() * 2.3; dpos[i * 3 + 2] = (Math.random() - 0.5) * 6; }
+  const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.BufferAttribute(dpos, 3));
+  dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xd8c09a, size: 0.006, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending }));
+  dust.frustumCulled = false; scene.add(dust);
 
   const w0 = wallTextures(0), w1 = wallTextures(1), fl = floorTextures(), ce = ceilTextures();
   M.wall0 = new THREE.MeshStandardMaterial({ map: w0.map, bumpMap: w0.bump, bumpScale: 0.05, roughness: 0.95 });
@@ -962,6 +1040,10 @@ function init3D() {
   M.ironDoor = new THREE.MeshStandardMaterial({ map: ironTex(), roughness: 0.55, metalness: 0.6 });
   M.woodDoor = new THREE.MeshStandardMaterial({ map: woodTex(), roughness: 0.85 });
   M.brass = new THREE.MeshStandardMaterial({ color: 0x8a6a2c, roughness: 0.4, metalness: 0.8 });
+  M.pillar = new THREE.MeshStandardMaterial({ map: w1.map, bumpMap: w1.bump, bumpScale: 0.05, color: 0x8c8679, roughness: 0.95 });
+  M.note = new THREE.MeshStandardMaterial({ map: noteTex(), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 });
+  M.web = new THREE.MeshBasicMaterial({ map: webTex(), transparent: true, depthWrite: false, opacity: 0.6, side: THREE.DoubleSide });
+  M.soot = new THREE.MeshBasicMaterial({ map: sootTex(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
   signTexture = mkTex(signCanvas);
   M.sign = new THREE.MeshBasicMaterial({ map: signTexture, color: 0xa8a8a8 });
 
@@ -1115,6 +1197,28 @@ function buildScene(f) {
     }
     const bt = new THREE.Mesh(G.cell, M.black); bt.rotation.x = -Math.PI / 2; bt.position.set(cx, -2.6, cz); floorGroup.add(bt);
   }
+  // 石の柱：壁の継ぎ目ごとに立てて、通路の単調さを崩す
+  const vtx = new Set();
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) for (let s = 0; s < 4; s++) {
+    if (!hasWall(f, x, y, s)) continue;
+    const ends = s === 0 ? [[x, y], [x + 1, y]] : s === 1 ? [[x + 1, y], [x + 1, y + 1]] : s === 2 ? [[x, y + 1], [x + 1, y + 1]] : [[x, y], [x, y + 1]];
+    ends.forEach(([i, j]) => vtx.add(i + ',' + j));
+  }
+  const pg = once('g-pillar', () => new THREE.BoxGeometry(0.28, 2.4, 0.28));
+  vtx.forEach(k => { const [i, j] = k.split(',').map(Number); const m = new THREE.Mesh(pg, M.pillar); m.position.set(i * 2, 1.2, j * 2); floorGroup.add(m); });
+  // 蜘蛛の巣と煤（迷宮ごとに決まった場所。毎回同じ）
+  const hash = (x, y, s) => (((x + 1) * 73856093) ^ ((y + 1) * 19349663) ^ ((s + 1) * 83492791)) >>> 0;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) for (let s = 0; s < 4; s++) {
+    if (!hasWall(f, x, y, s)) continue;
+    const h = hash(x, y, s);
+    if (h % 100 < 16) {
+      const w = plane(0.75, 0.75, M.web), g = new THREE.Group(), left = (h >> 8) % 2;
+      w.position.set(left ? -0.6 : 0.6, 0.78, 0.02); w.rotation.z = left ? 0 : -Math.PI / 2; w.scale.x = left ? 1 : 1;
+      if (!left) w.rotation.z = Math.PI * 1.5;
+      g.add(w); placeOnFace(g, x, y, s, 1.2, 0.01);
+    }
+  }
+  f.decos.filter(d => d.kind === 'torch').forEach(d => { const g = new THREE.Group(); g.add(plane(0.9, 1.8, M.soot)); placeOnFace(g, d.x, d.y, d.side, 1.9, 0.006); });
   f.decos.forEach(d => addDeco(f, d));
   f.objs.forEach(o => addObj(f, o));
   // 鉄扉
@@ -1199,6 +1303,10 @@ function addObj(f, o) {
     }
   } else if (o.kind === 'puddle') {
     const m = new THREE.Mesh(G.puddle, M.puddle); m.rotation.x = -Math.PI / 2; m.scale.set(1.4, 1, 1); m.position.set(cx, 0.005, cz + 0.1); floorGroup.add(m);
+  } else if (o.kind === 'note') {
+    const m = new THREE.Mesh(once('g-note', () => new THREE.PlaneGeometry(0.26, 0.34)), M.note);
+    m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, o.rot || 0, 0);
+    m.position.set(cx + (o.ox || 0) * 2, 0.007, cz + (o.oy || 0) * 2); floorGroup.add(m);
   } else if (o.kind === 'up') {
     const s = o.side;
     for (let k = 0; k < 4; k++) {
@@ -1286,6 +1394,7 @@ function updatePrompt() {
   let t = null;
   if (facingDoor()) t = '鉄扉を調べる［Space］';
   else if (facingCode()) t = '刻まれた番号を読む［Space］';
+  else if (objHere('note')) t = '紙切れを読む［Space］';
   else if (objHere('up')) t = '上り階段で引き返す［Space］';
   else if (objHere('down')) t = '下り階段で先へ進む［Space］';
   p.hidden = !t; if (t) main.textContent = t;
@@ -1317,7 +1426,7 @@ function addCatalog(id) { const c = catalog(); c.add(id); store.set('bd2.catalog
 
 function setPhase(p) {
   S.phase = p;
-  ['title', 'pause', 'end', 'catalog', 'keypad', 'loading'].forEach(k => { $('ov-' + k).hidden = p !== k; });
+  ['title', 'pause', 'end', 'catalog', 'keypad', 'loading', 'note', 'intro'].forEach(k => { $('ov-' + k).hidden = p !== k; });
   $('game').dataset.phase = p;
   if (p !== 'play' && p !== 'keypad') setMemo(false);
   if (p === 'pause') $('pause-info').textContent = D().label + '・歩いた階 ' + S.stats.floors;
@@ -1351,15 +1460,20 @@ function judge(claimAnomaly) {
 }
 function nearestYaw(cur, target) { let t = target; while (t - cur > Math.PI) t -= Math.PI * 2; while (t - cur < -Math.PI) t += Math.PI * 2; return t; }
 function afterStairs() {
-  $('fade').classList.add('on');
+  const fd = $('fade');
+  if (S.count >= 8) {
+    // 出口の光
+    fd.classList.add('white', 'on'); sound.chime();
+    setTimeout(() => { finish(); fd.classList.remove('on'); setTimeout(() => fd.classList.remove('white'), 2500); }, 2600);
+    return;
+  }
+  fd.classList.add('on');
   setTimeout(() => {
-    if (S.count >= 8) { finish(); $('fade').classList.remove('on'); return; }
     buildFloor(); saveRun();
-    setTimeout(() => { $('fade').classList.remove('on'); beginPlay(); }, 350);
+    setTimeout(() => { fd.classList.remove('on'); beginPlay(); }, 350);
   }, 800);
 }
 function finish() {
-  sound.chime();
   const sec = Math.round(elapsed() / 1000);
   const fmt = s => Math.floor(s / 60) + '分' + String(s % 60).padStart(2, '0') + '秒';
   const recs = store.json('bd2.records', {}), prev = recs[S.diff], better = !prev || sec < prev;
@@ -1412,6 +1526,7 @@ function act(a) {
   if (a === 'use') {
     if (S.confirm) { judge(S.confirm === 'up'); return; }
     if (facingDoor()) { openKeypad(); return; }
+    if (!facingCode() && objHere('note')) { openNote(); return; }
     if (facingCode()) { say('真鍮の板に「' + S.floor.door.code.split('').join(' ') + '」と刻まれている。……覚えていられるだろうか。'); return; }
     if (objHere('up')) { S.confirm = 'up'; say('引き返す？　さっきまでと、何かが違っていたなら。'); updatePrompt(); return; }
     if (objHere('down')) { S.confirm = 'down'; say('先へ進む？　何も変わっていなかったなら。'); updatePrompt(); return; }
@@ -1462,6 +1577,12 @@ function kpPress(k) {
   }
   if (kpVal.length < 4) { kpVal += k; drawKp(); sound.key(); }
 }
+function openNote() {
+  $('note-text').textContent = NOTES[Math.min(S.count, NOTES.length - 1)];
+  setPhase('note'); sound.noise(0.25, 'highpass', 3000, 0.6, 0.25, 0.2);
+}
+function closeNote() { setPhase('play'); canvas.focus({ preventScroll: true }); say(pick(['……誰が書いたんだろう。', '見覚えのある字だ。', 'メモしておこう。'])); }
+$('ov-note').addEventListener('click', closeNote);
 function closeKeypad() { setPhase('play'); canvas.focus({ preventScroll: true }); }
 $('kp-grid').addEventListener('click', e => { const b = e.target.closest('button'); if (b) kpPress(b.dataset.k); });
 
@@ -1478,6 +1599,8 @@ document.addEventListener('keydown', e => {
     (items[(i + n + items.length) % items.length] || items[0]).focus(); e.preventDefault(); return;
   }
   if (scr && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && el && el.dataset && el.dataset.cycle) { cycle(el.dataset.cycle, e.key === 'ArrowLeft' ? -1 : 1); e.preventDefault(); return; }
+  if (S.phase === 'note') { if ([' ', 'Enter', 'Escape', 'e', 'f'].includes(e.key)) { e.preventDefault(); closeNote(); } return; }
+  if (S.phase === 'intro') { if ([' ', 'Enter', 'Escape'].includes(e.key)) { e.preventDefault(); skipIntro(); } return; }
   if (S.phase === 'keypad') {
     if (/^[0-9]$/.test(e.key)) { kpPress(e.key); e.preventDefault(); }
     else if (e.key === 'Backspace') { kpPress('del'); e.preventDefault(); }
@@ -1501,6 +1624,13 @@ document.addEventListener('keydown', e => {
 document.querySelectorAll('.touch button[data-act]').forEach(b => b.addEventListener('click', () => act(b.dataset.act)));
 $('prompt-main').addEventListener('click', () => act('use'));
 $('prompt-sub').addEventListener('click', () => act('cancel'));
+const look = { x: 0, y: 0, tx: 0, ty: 0 };
+$('game').addEventListener('mousemove', e => {
+  const r = $('game').getBoundingClientRect();
+  look.tx = -((e.clientX - r.left) / r.width - 0.5) * 0.55;
+  look.ty = -((e.clientY - r.top) / r.height - 0.5) * 0.3;
+});
+$('game').addEventListener('mouseleave', () => { look.tx = 0; look.ty = 0; });
 let sw = null;
 canvas.addEventListener('pointerdown', e => { sw = { x: e.clientX, y: e.clientY }; const a = document.activeElement; if (a && a.tagName === 'TEXTAREA') a.blur(); });
 canvas.addEventListener('pointerup', e => {
@@ -1514,11 +1644,21 @@ function resume() { S.runStart = performance.now(); setPhase('play'); canvas.foc
 $('btn-pause').addEventListener('click', () => { if (S.phase === 'play') pause(); else if (S.phase === 'pause') resume(); });
 $('btn-resume').addEventListener('click', resume);
 $('btn-totitle').addEventListener('click', () => { saveRun(); toTitle(); });
+let introTimer = null;
+function playIntro(text) {
+  $('intro-text').textContent = text;
+  setPhase('intro');
+  clearTimeout(introTimer); introTimer = setTimeout(skipIntro, REDUCED ? 1500 : 5200);
+}
+function skipIntro() { if (S.phase !== 'intro') return; clearTimeout(introTimer); beginPlay(); }
+$('ov-intro').addEventListener('click', skipIntro);
+function autoSound() { if (!sound.on && store.get('bd2.sound') !== 'off') toggleSound(); }
 $('btn-start').addEventListener('click', () => {
-  store.set('bd2.diff', diffSel);
-  newRun(diffSel); beginPlay();
+  store.set('bd2.diff', diffSel); autoSound();
+  const seen = store.get('bd2.seenIntro'); store.set('bd2.seenIntro', '1');
+  newRun(diffSel); playIntro(INTROS[seen ? 1 : 0]);
 });
-$('btn-continue').addEventListener('click', () => { if (loadRun()) beginPlay(); else toTitle(); });
+$('btn-continue').addEventListener('click', () => { autoSound(); if (loadRun()) beginPlay(); else toTitle(); });
 $('btn-again').addEventListener('click', toTitle);
 $('btn-catalog').addEventListener('click', () => {
   const c = catalog(), ul = $('cat-list'); ul.textContent = '';
@@ -1536,6 +1676,7 @@ $('btn-cat-back').addEventListener('click', toTitle);
 function toggleSound() {
   const on = !sound.on; sound.setOn(on); if (on && S.floor) sound.setRed(!!S.floor.redLight);
   document.querySelectorAll('.sound-label').forEach(el => { el.textContent = on ? '入' : '切'; });
+  store.set('bd2.sound', on ? 'on' : 'off');
 }
 let diffSel = 'normal';
 const DIFF_KEYS = ['easy', 'normal', 'hard'];
@@ -1632,7 +1773,13 @@ function frame(now) {
   } else if (S.hold && (S.phase === 'stairs' || S.phase === 'end')) {
     ({ cx, cy, cz, yaw } = S.hold);
   }
-  if (['title', 'catalog', 'loading'].includes(S.phase)) { yaw = S.yaw + Math.sin(now / 4000) * 0.35; pitch = Math.sin(now / 5300) * 0.04; }
+  if (['title', 'catalog', 'loading', 'intro'].includes(S.phase)) { yaw = S.yaw + Math.sin(now / 4000) * 0.35; pitch = Math.sin(now / 5300) * 0.04; }
+  else {
+    const on = S.phase === 'play' && !memoOpen;
+    look.x += ((on ? look.tx : 0) - look.x) * Math.min(1, dt * 4); look.y += ((on ? look.ty : 0) - look.y) * Math.min(1, dt * 4);
+    yaw += look.x; pitch += look.y;
+    if (!REDUCED) { pitch += Math.sin(now / 1900) * 0.006; yaw += Math.sin(now / 2700) * 0.004; }
+  }
   if (now - S.bumpT < 260) { const t = (now - S.bumpT) / 260; cy += Math.sin(t * Math.PI * 3) * 0.02 * (1 - t); pitch += Math.sin(t * Math.PI * 3) * 0.012 * (1 - t); }
   if (S.phase !== 'stairs' && !S.hold && !a) {
     if (objHere('down')) cy -= 0.25;
@@ -1640,6 +1787,15 @@ function frame(now) {
   }
   camera.position.set(cx, 1.28 + cy, cz);
   camera.rotation.set(pitch, yaw, 0);
+  if (dust) {
+    dust.position.set(cx, 0, cz);
+    const pa = dust.geometry.attributes.position, arr = pa.array;
+    for (let i = 0; i < arr.length; i += 3) {
+      arr[i + 1] -= dt * 0.04; arr[i] += Math.sin(now / 2000 + i) * dt * 0.03;
+      if (arr[i + 1] < 0) arr[i + 1] += 2.3;
+    }
+    pa.needsUpdate = true;
+  }
   lantern.position.set(cx + Math.sin(now / 700) * 0.04, 1.2 + cy, cz);
   lantern.intensity = 0.88 + Math.sin(now / 310) * 0.04;
 
