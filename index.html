@@ -204,6 +204,23 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .coach-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 .coach-row button { background: #16181c; border: 1px solid var(--line); padding: 4px 12px; cursor: pointer; font-size: .82rem; }
 .coach-row button:hover, .coach-row button:focus-visible { border-color: var(--sign); color: var(--sign); outline: none; }
+.coach kbd { display: inline-block; min-width: 1.7em; text-align: center; padding: 0 6px; margin: 0 2px; border: 1px solid var(--sign); border-bottom-width: 3px; border-radius: 3px; color: var(--sign); font-size: .82em; opacity: 1; animation: keyPress 1.3s ease-in-out infinite; }
+@keyframes keyPress { 0%, 60%, 100% { transform: none; border-bottom-width: 3px; } 70% { transform: translateY(2px); border-bottom-width: 1px; } }
+.coach-dots { letter-spacing: .25em; color: var(--muted); font-size: .72rem; }
+.coach-dots i { font-style: normal; color: var(--sign); }
+.coach-stamp { position: absolute; right: 14px; top: 50%; transform: translateY(-50%) scale(0); font-size: 2.6rem; color: #8fd18a; text-shadow: 0 0 18px rgba(120,220,120,.6); pointer-events: none; }
+.coach.ok .coach-stamp { animation: stamp .9s cubic-bezier(.2,1.8,.4,1) forwards; }
+@keyframes stamp { 0% { transform: translateY(-50%) scale(0) rotate(-30deg); opacity: 0; } 40% { transform: translateY(-50%) scale(1.3) rotate(8deg); opacity: 1; } 100% { transform: translateY(-50%) scale(1) rotate(0); opacity: 1; } }
+.coach.ok { border-left-color: #8fd18a; }
+.coach .coach-sub { color: var(--muted); font-size: .72rem; margin-top: 6px; }
+.hl { position: absolute; pointer-events: none; border: 2px solid var(--sign); border-radius: 4px; box-shadow: 0 0 0 4px rgba(230,192,63,.25), 0 0 24px rgba(230,192,63,.5); animation: hlPulse 1.1s ease-in-out infinite; z-index: 5; }
+.hl::after { content: attr(data-label); position: absolute; left: 50%; top: -26px; transform: translateX(-50%); white-space: nowrap; background: var(--sign); color: var(--sign-ink); font-size: .75rem; padding: 1px 8px; border-radius: 2px; }
+@keyframes hlPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.06); opacity: .7; } }
+.tut-result { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; opacity: 0; }
+.tut-result b { font-weight: 400; font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: .2em; text-shadow: 0 2px 18px #000; }
+.tut-result span { margin-top: 8px; letter-spacing: .14em; text-shadow: 0 2px 8px #000; }
+.tut-result.good b { color: #9be08f; } .tut-result.bad b { color: var(--danger); }
+.tut-result.show { animation: card 2.6s ease forwards; }
 @media (pointer: coarse), (max-width: 760px) { .coach { top: auto; bottom: 236px; } }
 .toast { position: absolute; top: 18px; left: 50%; transform: translate(-50%, -140%); background: rgba(8,9,11,.9); border: 1px solid rgba(230,192,63,.6); padding: 6px 18px 8px; text-align: center; pointer-events: none; transition: transform .5s cubic-bezier(.2,1.4,.4,1); }
 .toast.on { transform: translate(-50%, 0); }
@@ -220,6 +237,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .floor-card.show b { animation: glitch 1.6s steps(1) 2; }
 .hud-num-scramble { color: var(--danger); }
 .fade.white { background: #efe9dc; transition: opacity 2.4s ease; }
+@media (prefers-reduced-motion: reduce) { .coach kbd, .hl, .coach.ok .coach-stamp { animation: none; } .coach.ok .coach-stamp { transform: translateY(-50%) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .scare.on canvas, .glitch, .floor-card.show b, .game.blink .lid, .prompt:not([hidden]) { animation: none; } }
 @media (prefers-reduced-motion: reduce) { .floor-card.show { animation-duration: .01s; opacity: 1; } .exit-sign b, .fade, .notebook, .hud, .subtitle { transition: none; } }
 </style>
@@ -230,7 +248,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 
   <div class="hud" id="hud">
     <div class="hud-tl">
-      <span class="exit-sign" aria-label="現在の番号"><span>出口</span><b id="hud-num">?</b><span>→</span></span>
+      <span class="exit-sign" id="exit-sign" aria-label="現在の番号"><span>出口</span><b id="hud-num">?</b><span>→</span></span>
     </div>
     <div class="hud-tr">
       <button class="hbtn" id="btn-memo" type="button" aria-expanded="false" aria-controls="notebook">メモ <kbd>Tab</kbd></button>
@@ -258,11 +276,15 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
   <div class="lid top"></div><div class="lid bot"></div>
   <div class="danger-vig" id="danger-vig"></div>
   <div class="coach" id="coach" hidden>
-    <div class="coach-head"><b>遊び方</b><small id="coach-step"></small></div>
+    <div class="coach-head"><b>遊び方</b><span class="coach-dots" id="coach-step"></span></div>
     <p id="coach-text"></p>
     <p class="coach-goal" id="coach-goal"></p>
+    <p class="coach-sub">スマートフォンは画面のボタンで同じ操作ができます。</p>
+    <span class="coach-stamp">✓</span>
     <div class="coach-row"><button type="button" id="coach-next">次へ（Space）</button><button type="button" id="coach-skip">チュートリアルを終える</button></div>
   </div>
+  <div class="hl" id="hl" hidden></div>
+  <div class="tut-result" id="tut-result"><b id="tr-big"></b><span id="tr-sub"></span></div>
   <div class="toast" id="toast" aria-live="polite"><small>異変図鑑に記録</small><b id="toast-name"></b></div>
   <div class="scare" id="scare"><canvas id="scare-face" width="64" height="64"></canvas></div>
   <div class="fade" id="fade"></div>
@@ -1683,7 +1705,7 @@ const S = {
   history: [], lastInput: 0, idleSaid: false
 };
 const D = () => DIFFS[S.diff];
-const fadeMs = () => { const d = D(); return Math.max(d.fadeMin, d.fadeMax - S.count * (d.fadeMax - d.fadeMin) / 7); };
+const fadeMs = () => { if (S.tut) return 3500; const d = D(); return Math.max(d.fadeMin, d.fadeMax - S.count * (d.fadeMax - d.fadeMin) / 7); };
 const blocked = (x, y, d) => hasWall(S.floor, x, y, d) || (!S.doorOpen && isDoorEdge(S.floor, x, y, d));
 
 const START_LINES = ['……ここは、どこだっけ。', '階段を降りてきた、気がする。', '同じ場所に見える。本当に同じだろうか。', 'さっきまで何を考えていたんだろう。', '湿った石の匂いがする。', '何かを書き留めていた気がする。'];
@@ -1771,7 +1793,7 @@ const facingDoor = () => !S.doorOpen && isDoorEdge(S.floor, S.px, S.py, S.dir);
 const facingCode = () => S.floor.decos.find(d => d.kind === 'code' && d.x === S.px && d.y === S.py && d.side === S.dir);
 function updatePrompt() {
   const p = $('prompt'), main = $('prompt-main'), sub = $('prompt-sub');
-  if (S.phase !== 'play' || S.anim || S.tut) { p.hidden = true; return; }
+  if (S.phase !== 'play' || S.anim) { p.hidden = true; return; }
   sub.hidden = true;
   if (S.confirm) {
     p.hidden = false; sub.hidden = false;
@@ -1782,8 +1804,8 @@ function updatePrompt() {
   if (facingDoor()) t = '鉄扉を調べる［Space］';
   else if (facingCode()) t = '刻まれた番号を読む［Space］';
   else if (objHere('note')) t = '紙切れを読む［Space］';
-  else if (objHere('up')) t = '上り階段で引き返す［Space］';
-  else if (objHere('down')) t = '下り階段で先へ進む［Space］';
+  else if (objHere('up') && (!S.tut || (TUT[S.tut.i] || {}).stairs === 'up')) t = '上り階段で引き返す［Space］';
+  else if (objHere('down') && (!S.tut || (TUT[S.tut.i] || {}).stairs === 'down')) t = '下り階段で先へ進む［Space］';
   p.hidden = !t; if (t) main.textContent = t;
 }
 
@@ -1799,7 +1821,7 @@ function newRun(diff) {
 }
 const elapsed = () => S.elapsedBefore + (S.phase === 'pause' ? 0 : performance.now() - S.runStart);
 function saveRun() {
-  if (!S.base) return;
+  if (!S.base || S.tut) return;
   store.set('bd2.save', JSON.stringify({ v: 2, diff: S.diff, base: S.base, count: S.count, stats: S.stats, found: [...S.found], elapsed: elapsed(), lastAnom: S.lastAnom, notesRead: [...S.notesRead], memoUsed: S.memoUsed, upStreak: S.upStreak }));
 }
 function loadRun() {
@@ -1832,69 +1854,178 @@ function toTitle() {
   setTimeout(() => ($('btn-continue').hidden ? $('btn-start') : $('btn-continue')).focus({ preventScroll: true }), 30);
 }
 // =====================================================================
-// チュートリアル：実際に動かしながら覚える
+// チュートリアル：練習用の小さな迷宮を、実際に一周して覚える
 // =====================================================================
+// 練習用の迷宮（5×5）。スタートから北へ、東へ曲がり、鉄扉を抜けて北東の下り階段へ。
+// 途中の (2,2) から南の行き止まり (2,4) に、番号の板がある。
+function makeTutBase() {
+  const NN = 5, f = { N: NN, walls: new Array(NN * NN).fill(15), decos: [], objs: [], diff: 'easy' };
+  const prevN = N; N = NN;
+  const link = (a, b) => setWall(f, a[0], a[1], dirBetween({ x: a[0], y: a[1] }, { x: b[0], y: b[1] }), false);
+  const route = [[0, 4], [0, 3], [0, 2], [1, 2], [2, 2], [3, 2], [4, 2], [4, 1], [4, 0]];
+  for (let i = 0; i < route.length - 1; i++) link(route[i], route[i + 1]);
+  link([2, 2], [2, 3]); link([2, 3], [2, 4]);
+  f.path = route.map(([x, y]) => ({ x, y }));
+  f.start = { x: 0, y: 4, dir: 0 }; f.exit = { x: 4, y: 0 };
+  f.decos.push({ kind: 'gate', x: 0, y: 4, side: 2 });
+  f.objs.push({ kind: 'up', x: 0, y: 4, side: 2 }, { kind: 'down', x: 4, y: 0 });
+  f.door = { x: 3, y: 2, side: 1, code: '0000' };
+  f.codeSpots = [{ x: 2, y: 4, side: 2 }];
+  f.decos.push({ kind: 'torch', x: 0, y: 3, side: 3, color: 'warm', lit: true });
+  f.decos.push({ kind: 'poster', x: 0, y: 2, side: 0, text: '練習用 迷宮', alt: '練習用 迷宮' });
+  f.decos.push({ kind: 'torch', x: 2, y: 2, side: 0, color: 'warm', lit: true });
+  f.decos.push({ kind: 'painting', x: 4, y: 2, side: 1, variant: 'normal' });
+  f.decos.push({ kind: 'torch', x: 4, y: 1, side: 3, color: 'warm', lit: true });
+  f.objs.push({ kind: 'vase', x: 1, y: 2, ox: 0, oy: -0.3 });
+  N = prevN;
+  return f;
+}
 const TUT = [
-  { text: 'ようこそ、忘却ダンジョンへ。\nまずは歩いてみよう。', goal: 'W / ↑（スマホは↑ボタン）で2歩進む', done: () => S.stepsFloor >= 2 },
-  { text: '向きを変えてみよう。\n横歩きは Q / E、その場で振り返るのは R。', goal: 'A D / ← →（スマホは↺↻）で向きを変える', done: () => S.tutTurns >= 1 },
-  { text: '左下の地図を見て。通った道は、数秒で消えていく。\n今の番号も、すぐに「?」になって忘れてしまう。', goal: '少し歩き回って、地図が消えるのを見る（6秒）', done: () => performance.now() - S.tutT0 > 6000 },
-  { text: '覚えていられるのは、メモ帳だけ。\n文字・地図ノート・スケッチの3つがあって、中身は消えない。', goal: 'Tab（または右上の「メモ」）で開いて、閉じる', done: () => S.tutMemo >= 2 },
-  { text: 'この迷宮は、階を進んでも同じ形をしている。\nでも、ときどき一か所だけ「ふだん」と違うことがある。それが異変。\n目の前の松明を見ていて。', goal: '「ふだん」と「異変」が交互に切り替わる', demo: true, next: true },
-  { text: '異変を見つけたら → スタート地点の「上り階段」で引き返す。\n何も変わっていなければ → 迷宮の奥の「下り階段」へ進む。\n階段の上で Space を押すと選べる。', goal: '正しければ番号が1つ進む。間違えると0番に戻り、迷宮も組み変わる。', next: true },
-  { text: '順路の途中には鉄扉がある。開けるには4桁の番号が要る。\n番号は脇道の真鍮の板に刻まれていて、階ごとに場所も番号も変わる。', goal: '板を見つけたら、すぐメモ帳に書いておこう', next: true },
-  { text: '奥から人影が走ってくる、闇や水が迫ってくる……そんな危険な異変もある。\nR で振り返って、Shift を押しながら走り、上り階段まで逃げ切れ。', goal: '捕まると0番に戻される。5回捕まると……', next: true },
-  { text: '準備はいい？　0番の階には異変がない。\nまずは道と景色をよく見て、メモに残しておこう。\n8番を抜ければ、外に出られる。', goal: '「次へ」で本番を始める', next: true }
+  { html: 'ようこそ。ここは練習用の小さな迷宮。<br>まずは、光の輪まで前へ歩こう。', goal: '<kbd>W</kbd> か <kbd>↑</kbd> で前へ', target: [0, 2], done: () => tAt(0, 2) },
+  { html: '曲がり角だ。右を向いて、次の光の輪まで進もう。', goal: '<kbd>D</kbd> / <kbd>→</kbd> で右を向いて、<kbd>W</kbd> で前へ', target: [2, 2], done: () => tAt(2, 2) },
+  { html: '左下の地図を見て。通った道は、少しずつ消えていく。<br>あなた自身も、通った道を忘れていく。', goal: '地図から道が消えるのを見届ける', hl: 'minimap', hlLabel: '消えていく地図', done: () => tMapFaded() },
+  { html: '覚えていられるのは、メモ帳だけ。<br>開いて、何か書いてみよう（例：「北→東」）。', goal: '<kbd>Tab</kbd> で開く → 1文字書く → <kbd>Tab</kbd> で閉じる', hl: 'btn-memo', hlLabel: 'メモ帳', done: () => S.tutWrote && !memoOpen },
+  { html: 'この先には鉄扉がある。開けるには4桁の番号が要る。<br>番号は、南の行き止まりの真鍮の板に刻まれている。', goal: '光の輪まで行き、板の正面で <kbd>Space</kbd>', target: [2, 4], done: () => S.codeRead },
+  { html: '番号は覚えた？　忘れそうならメモしよう。<br>鉄扉の前で調べて、番号を入れよう。', goal: '扉の正面で <kbd>Space</kbd> → 4桁を入力', target: [3, 2], done: () => S.doorOpen },
+  { html: '奥に下り階段がある。この階には何も起きていない。<br>だから「進む」が正解。', goal: '下り階段の上で <kbd>Space</kbd>', target: [4, 0], stairs: 'down' },
+  { html: '2周目。迷宮の形は、さっきと同じ。<br>でも……どこか、ちがわない？', goal: '異変に気づいたら、スタートの上り階段で <kbd>Space</kbd>（引き返す）', stairs: 'up', setup: 'statue', hl: 'exit-sign', hlLabel: '番号が1つ進んだ' },
+  { html: '危険な異変もある。奥から何かが走ってくる！<br>振り返って、走って、上り階段まで逃げろ。', goal: '<kbd>R</kbd> で振り返る → <kbd>Shift</kbd>＋<kbd>W</kbd> で走る → 上り階段で <kbd>Space</kbd>', stairs: 'up', setup: 'chase' },
+  { html: 'おみごと。これで全部。<br>本番では、番号が進むほど迷宮は広くなり、異変は見つけにくくなる。<br>8番を抜けて、外へ出よう。', goal: '<kbd>Space</kbd> で本番を始める', next: true }
 ];
-function startTutorial(after) {
-  S.tut = { i: -1, after };
-  S.diff = diffSel || 'easy';
-  newRun('easy'); S.diff = 'easy';
+const tAt = (x, y) => S.px === x && S.py === y && !S.anim;
+function tMapFaded() {
+  if (performance.now() - S.tutT0 > 9000) return true;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (S.mem[idx(x, y)] && !(x === S.px && y === S.py) && memAlpha(x, y, performance.now()) <= 0) return true;
+  return false;
+}
+let tutMarker = null;
+function makeTutMarker() {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.55, 40), new THREE.MeshBasicMaterial({ color: 0xffd860, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
+  const ring2 = ring.clone(); ring2.material = ring.material.clone();
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.3, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd060, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  beam.position.y = 1.15;
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.26, 4), new THREE.MeshBasicMaterial({ color: 0xffd860, fog: false }));
+  arrow.rotation.x = Math.PI; arrow.position.y = 1.9;
+  g.add(ring, ring2, beam, arrow); g.visible = false;
+  g.userData = { ring, ring2, beam, arrow };
+  scene.add(g); return g;
+}
+function startTutorial() {
+  if (!tutMarker) tutMarker = makeTutMarker();
+  S.tut = { i: 0 };
+  S.diff = 'easy'; S.base = makeTutBase(); S.count = 0; S.lastAnom = null;
+  S.stats = { floors: 0, resets: 0, caught: 0 }; S.found = new Set(); S.notesRead = new Set(); S.memoUsed = false; S.upStreak = 0;
+  S.tutTurns = 0; S.tutMemo = 0; S.tutWrote = false; S.codeRead = false;
+  tutLoad({});
   setPhase('play'); canvas.focus({ preventScroll: true });
   S.wakeT = performance.now(); const gm = $('game'); gm.classList.remove('blink'); void gm.offsetWidth; gm.classList.add('blink');
-  S.tutTurns = 0; S.tutMemo = 0;
   $('coach').hidden = false;
   tutGo(0);
+}
+function tutLoad(o) {
+  S.base = makeTutBase(); S.count = 0; S.regen = false;
+  buildFloor();
+  if (o.statue) { S.floor.objs.push({ kind: 'statue', x: 0, y: 2 }); buildScene(S.floor); }
+  if (o.chase) { S.floor.danger = { type: 'chaser', trig: 0 }; buildScene(S.floor); }
+  if (o.doorOpen) { S.doorOpen = true; if (ironDoor) { ironDoor.open = ironDoor.target = 1; ironDoor.slab.position.y = 1.125 + 2.15; } }
+  if (o.at) { S.px = o.at[0]; S.py = o.at[1]; S.dir = o.at[2]; S.yaw = ROT[S.dir]; }
+  drawSign(o.sign || 0);
+  S.danger = null; S.mem = new Float64Array(N * N);
+  updatePrompt(); updateMeta();
 }
 function tutGo(i) {
   const t = S.tut; if (!t) return;
   t.i = i; t.doneAt = 0; S.tutT0 = performance.now();
   const st = TUT[i];
-  $('coach-step').textContent = (i + 1) + ' / ' + TUT.length;
-  $('coach-text').textContent = st.text;
-  const g = $('coach-goal'); g.textContent = '▶ ' + st.goal; g.classList.remove('done');
+  $('coach-step').innerHTML = TUT.map((_, k) => k < i ? '<i>●</i>' : k === i ? '<i>◉</i>' : '○').join('');
+  $('coach-text').innerHTML = st.html;
+  $('coach-goal').innerHTML = '▶ ' + st.goal; $('coach-goal').classList.remove('done');
   $('coach-next').hidden = !st.next;
-  const c = $('coach'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
-  if (st.demo) tutDemo(true); else if (t.demoOn) tutDemo(false);
+  const c = $('coach'); c.classList.remove('ok'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
+  if (st.setup === 'statue') tutTransition(() => { tutLoad({ statue: true, sign: 1 }); showNumTut(1); say('……2周目。さっきと、同じはずだ。'); });
+  if (st.setup === 'chase') tutTransition(() => {
+    tutLoad({ chase: true, doorOpen: true, at: [2, 2, 1], sign: 2 }); showNumTut(2);
+    S.danger = { type: 'chaser', trig: 0, on: false };
+    setTimeout(() => { if (S.tut && S.tut.i === i && S.phase === 'play') triggerDanger(performance.now()); }, 1400);
+  });
 }
-function tutDemo(on) {
-  const t = S.tut;
-  if (on) {
-    const f0 = S.floor, f1 = structuredClone(f0);
-    const torch = f1.decos.find(d => d.kind === 'torch' && d.lit); if (!torch) return;
-    torch.color = 'red';
-    t.demo = { f0, f1, view: faceView(f0, torch.x, torch.y, torch.side), anom: false, next: performance.now() + 2200 };
-    t.demoOn = true; tutDemoShow();
+function showNumTut(n) { const el = $('hud-num'); el.textContent = n; el.style.opacity = 1; clearTimeout(numTimer); }
+function tutTransition(fn) {
+  const fd = $('fade'); fd.classList.add('on');
+  setTimeout(() => { fn(); fd.classList.remove('on'); S.wakeT = performance.now(); const gm = $('game'); gm.classList.remove('blink'); void gm.offsetWidth; gm.classList.add('blink'); }, 650);
+}
+function tutResult(good, big, sub) {
+  const r = $('tut-result'); r.className = 'tut-result ' + (good ? 'good' : 'bad');
+  $('tr-big').textContent = big; $('tr-sub').textContent = sub;
+  void r.offsetWidth; r.classList.add('show');
+  if (good) sound.chime(); else sound.beep(false);
+}
+function tutComplete() {
+  const t = S.tut; if (!t || t.doneAt) return;
+  t.doneAt = performance.now();
+  $('coach').classList.add('ok'); $('coach-goal').textContent = '✓ できた！'; $('coach-goal').classList.add('done');
+  sound.beep(true);
+  if (tutMarker && tutMarker.visible) { tutMarker.userData.burst = performance.now(); }
+}
+// 階段・扉・板を調べたとき（true を返したら通常の処理はしない）
+function tutUse() {
+  const t = S.tut, st = TUT[t.i]; if (!st) return true;
+  if (st.next) { tutNext(); return true; }
+  const here = objHere('up') ? 'up' : objHere('down') ? 'down' : null;
+  if (!here || facingDoor() || facingCode()) return false;
+  if (!st.stairs) { say(here === 'up' ? '上り階段だ。今はまだ、上の案内に従おう。' : '下り階段だ。今はまだ、上の案内に従おう。'); return true; }
+  if (t.doneAt) return true;
+  if (here === st.stairs) {
+    sound.stairs(here === 'up');
+    if (st.setup === 'statue') tutResult(true, '正解', '「立っている人影」に気づいて引き返した');
+    else if (st.setup === 'chase') tutResult(true, '逃げ切った', '危険な異変も、引き返せば正解');
+    else tutResult(true, '正解', '何も起きていない階は、進めばいい');
+    S.danger = null; if (chaserMesh) chaserMesh.visible = false; $('danger-vig').style.opacity = 0;
+    tutComplete();
+  } else if (st.stairs === 'down') {
+    say('まだ何も起きていない。下り階段まで進もう。');
   } else {
-    t.demoOn = false; S.floor = t.demo.f0; buildScene(S.floor); $('gal-badge').parentElement.hidden = true;
-    $('ov-gallery').hidden = true;
+    tutResult(false, 'ざんねん', 'スタートのすぐ先に、人影が立っていた');
+    setTimeout(() => tutTransition(() => tutLoad({ statue: true, sign: 1 })), 1200);
   }
+  return true;
 }
-function tutDemoShow() {
-  const d = S.tut.demo, f = d.anom ? d.f1 : d.f0;
-  S.floor = f; buildScene(f);
-  S.px = d.view.x; S.py = d.view.y; S.dir = d.view.dir; S.yaw = ROT[d.view.dir]; S.anim = null;
-  const bd = $('gal-badge'); $('ov-gallery').hidden = false; document.querySelector('.gal-panel').hidden = true;
-  bd.textContent = d.anom ? '異変' : 'ふだん'; bd.classList.toggle('calm', !d.anom);
-  glitchFx(0.6, 350); sound.turn();
+function tutCaught() {
+  S.danger = null; if (chaserMesh) chaserMesh.visible = false; $('danger-vig').style.opacity = 0;
+  glitchFx(1, 700); sound.bump(); S.bumpT = performance.now();
+  tutResult(false, '捕まった', 'もう一度。R で振り返って、Shift で走ろう');
+  const i = S.tut.i;
+  setTimeout(() => { if (S.tut && S.tut.i === i) tutGo(i); }, 1300);
 }
 function tutTick(now) {
-  const t = S.tut; if (!t || S.phase !== 'play') return;
-  const st = TUT[t.i];
-  if (t.demoOn && now > t.demo.next) { t.demo.anom = !t.demo.anom; t.demo.next = now + 2400; tutDemoShow(); }
-  if (!st.next && !t.doneAt && st.done()) {
-    t.doneAt = now; const g = $('coach-goal'); g.textContent = '✓ できた！'; g.classList.add('done'); sound.beep(true);
+  const t = S.tut; if (!t) { if (tutMarker) tutMarker.visible = false; $('hl').hidden = true; return; }
+  const st = TUT[t.i]; if (!st) return;
+  // 床の光の輪
+  if (tutMarker) {
+    const show = !!st.target && S.phase === 'play';
+    tutMarker.visible = show;
+    if (show) {
+      const u = tutMarker.userData, k = (now % 1400) / 1400;
+      tutMarker.position.set(W2(st.target[0]), 0, W2(st.target[1]));
+      u.ring.rotation.z = now / 900; u.ring2.scale.setScalar(1 + k * 0.9); u.ring2.material.opacity = 0.7 * (1 - k);
+      u.arrow.position.y = 1.85 + Math.sin(now / 260) * 0.12; u.arrow.rotation.y = now / 500;
+      u.beam.material.opacity = 0.1 + Math.sin(now / 300) * 0.04;
+      if (u.burst && now - u.burst < 700) { const b = (now - u.burst) / 700; u.ring.scale.setScalar(1 + b * 2); u.ring.material.opacity = 0.85 * (1 - b); }
+      else { u.ring.scale.setScalar(1); u.ring.material.opacity = 0.85; }
+    }
   }
-  if (t.doneAt && now - t.doneAt > 900) tutGo(t.i + 1);
+  // 画面の部品を光らせる
+  const hl = $('hl');
+  if (st.hl && S.phase === 'play' && !t.doneAt) {
+    const el = $(st.hl), gr = $('game').getBoundingClientRect(), r = el.getBoundingClientRect();
+    hl.hidden = false; hl.dataset.label = st.hlLabel || '';
+    Object.assign(hl.style, { left: (r.left - gr.left - 6) + 'px', top: (r.top - gr.top - 6) + 'px', width: (r.width + 12) + 'px', height: (r.height + 12) + 'px' });
+  } else hl.hidden = true;
+  if (S.phase !== 'play') return;
+  if (!st.next && !st.stairs && !t.doneAt && st.done && st.done()) tutComplete();
+  if (t.doneAt && now - t.doneAt > (st.stairs ? 2200 : 1100)) tutGo(t.i + 1);
 }
 function tutNext() {
   const t = S.tut; if (!t) return;
@@ -1902,12 +2033,12 @@ function tutNext() {
   if (TUT[t.i].next) tutGo(t.i + 1);
 }
 function endTutorial(start) {
-  const t = S.tut; if (!t) return;
-  if (t.demoOn) tutDemo(false);
-  S.tut = null; $('coach').hidden = true; $('ov-gallery').hidden = true; document.querySelector('.gal-panel').hidden = false;
+  if (!S.tut) return;
+  S.tut = null; $('coach').hidden = true; $('hl').hidden = true; if (tutMarker) tutMarker.visible = false;
+  S.danger = null; if (chaserMesh) chaserMesh.visible = false;
   store.set('bd2.tutDone', '1');
   if (start) { const d = diffSel || 'normal'; store.set('bd2.diff', d); newRun(d); playIntro(INTROS[0]); store.set('bd2.seenIntro', '1'); }
-  else toTitle();
+  else { store.del('bd2.save'); S.base = genBase(diffSel || 'normal'); buildFloor(); toTitle(); }
 }
 $('coach-next').addEventListener('click', tutNext);
 $('coach-skip').addEventListener('click', () => endTutorial(true));
@@ -2029,13 +2160,13 @@ function act(a, run) {
     S.anim = { type: 'move', t0: now, dur: run ? 185 : 300, from, to };
     S.stepAlt = !S.stepAlt; sound.step(S.stepAlt); updatePrompt(); return;
   }
-  if (a === 'use' && S.tut) { if (TUT[S.tut.i].next) tutNext(); else say('チュートリアル中は、まず上の案内に従ってみよう。'); return; }
+  if (a === 'use' && S.tut && tutUse()) return;
   if (a === 'use') {
     S.raiseT = now;
     if (S.confirm) { judge(S.confirm === 'up'); return; }
     if (facingDoor()) { openKeypad(); return; }
     if (!facingCode() && objHere('note')) { openNote(); return; }
-    if (facingCode()) { say('真鍮の板に「' + S.floor.door.code.split('').join(' ') + '」と刻まれている。……覚えていられるだろうか。'); return; }
+    if (facingCode()) { S.codeRead = true; say('真鍮の板に「' + S.floor.door.code.split('').join(' ') + '」と刻まれている。……覚えていられるだろうか。'); return; }
     if (objHere('up')) { S.confirm = 'up'; say('引き返す？　さっきまでと、何かが違っていたなら。'); updatePrompt(); return; }
     if (objHere('down')) { S.confirm = 'down'; say('先へ進む？　何も変わっていなかったなら。'); updatePrompt(); return; }
     say('特に何もない。');
@@ -2095,7 +2226,7 @@ function updateDanger(now) {
   if (d.type === 'chaser') {
     if (now >= d.next) {
       const n = chaserNext(d);
-      d.fx = d.x; d.fy = d.y; d.x = n.x; d.y = n.y; d.mt = now; d.next = now + CH_STEP;
+      d.fx = d.x; d.fy = d.y; d.x = n.x; d.y = n.y; d.mt = now; d.next = now + (S.tut ? 820 : CH_STEP);
       sound.chaseStep(Math.hypot(d.x - S.px, d.y - S.py) * 2);
       const moving = S.anim && S.anim.type === 'move';
       if ((d.x === S.px && d.y === S.py && !moving) || (moving && d.x === S.anim.to.x && d.y === S.anim.to.y)) { caught(); return; }
@@ -2127,6 +2258,7 @@ function updateDanger(now) {
 }
 function caught(force) {
   if (S.phase === 'caught') return;
+  if (S.tut) { tutCaught(); return; }
   const kind = force || (S.danger && S.danger.type);
   S.danger = null; S.anim = null; S.queued = null; S.confirm = null;
   S.stats.floors++; if (S.count > 0) S.stats.resets++; S.stats.caught = (S.stats.caught || 0) + 1; S.count = 0; S.regen = true;
@@ -2228,7 +2360,7 @@ document.addEventListener('keydown', e => {
   if (S.phase === 'keypad') {
     if (/^[0-9]$/.test(e.key)) { kpPress(e.key); e.preventDefault(); }
     else if (e.key === 'Backspace') { kpPress('del'); e.preventDefault(); }
-    else if (e.key === 'Enter' && t !== 'BUTTON') { kpPress('ok'); e.preventDefault(); }
+    else if (e.key === 'Enter') { kpPress('ok'); e.preventDefault(); }
     else if (e.key === 'Escape') { closeKeypad(); e.preventDefault(); }
     return;
   }
@@ -2276,7 +2408,7 @@ function resume() {
 }
 $('btn-pause').addEventListener('click', () => { if (S.phase === 'play') pause(); else if (S.phase === 'pause') resume(); });
 $('btn-resume').addEventListener('click', resume);
-$('btn-totitle').addEventListener('click', () => { if (S.tut) { S.tut = null; store.del('bd2.save'); $('coach').hidden = true; $('ov-gallery').hidden = true; document.querySelector('.gal-panel').hidden = false; } else saveRun(); toTitle(); });
+$('btn-totitle').addEventListener('click', () => { if (S.tut) { endTutorial(false); return; } saveRun(); toTitle(); });
 let introTimer = null;
 function playIntro(text) {
   $('intro-text').textContent = text;
@@ -2936,7 +3068,7 @@ $('gal-back').addEventListener('click', closeGallery);
 // =====================================================================
 const memoText = $('memo-text');
 memoText.value = store.get('bd2.memo') || store.get('oblivion.memo') || '';
-memoText.addEventListener('input', () => { store.set('bd2.memo', memoText.value); S.memoUsed = true; });
+memoText.addEventListener('input', () => { store.set('bd2.memo', memoText.value); S.memoUsed = true; if (memoText.value.trim()) S.tutWrote = true; });
 $('chips').addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });
 $('chips').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -2989,7 +3121,7 @@ const mapNote = (() => {
       const i = Math.floor(gi), j = Math.floor(gj); if (i < 0 || j < 0 || i >= GN || j >= GN) return;
       const k = j * GN + i; data.m[k] = data.m[k] === mode ? '' : mode;
     }
-    save(); draw(); S.memoUsed = true;
+    save(); draw(); S.memoUsed = true; S.tutWrote = true;
   }
   c.addEventListener('pointerdown', e => { e.preventDefault(); hit(e); });
   document.querySelectorAll('.mk').forEach(b => b.addEventListener('click', () => {
@@ -3010,7 +3142,7 @@ const sketch = (() => {
     sc.strokeStyle = '#2a2923'; sc.lineCap = 'round'; sc.lineJoin = 'round'; sc.lineWidth = tool === 'eraser' ? 26 : 4;
     sc.beginPath(); sc.moveTo(a[0], a[1]); sc.lineTo(b[0], b[1]); sc.stroke();
   };
-  sk.addEventListener('pointerdown', e => { drawing = true; S.memoUsed = true; last = pos(e); sk.setPointerCapture(e.pointerId); stroke(last, [last[0] + 0.1, last[1]]); });
+  sk.addEventListener('pointerdown', e => { drawing = true; S.memoUsed = true; S.tutWrote = true; last = pos(e); sk.setPointerCapture(e.pointerId); stroke(last, [last[0] + 0.1, last[1]]); });
   sk.addEventListener('pointermove', e => { if (!drawing) return; const p = pos(e); stroke(last, p); last = p; });
   const end = () => { if (!drawing) return; drawing = false; try { store.set('bd2.sketch', sk.toDataURL()); } catch (e) {} };
   sk.addEventListener('pointerup', end); sk.addEventListener('pointercancel', end);
