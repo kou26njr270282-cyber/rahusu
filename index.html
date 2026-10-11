@@ -247,6 +247,38 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 .game .arrows button:disabled { opacity: .5; }
 .mark { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: 4rem; font-weight: 800; z-index: 9; animation: pop .25s ease-out; }
 
+/* top bar, toasts, behavior album */
+.topbar { display: flex; align-items: center; gap: 6px; padding-inline: 4px; }
+.lv { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-family: var(--font-dot); font-size: .9rem; }
+.lvbar { flex: 1; height: 10px; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; background: var(--shell); }
+#lvFill { height: 100%; width: 0; background: linear-gradient(90deg, #FF9CC0, #FF6F61); transition: width .6s; }
+.ib { position: relative; border: 2px solid var(--ink); border-radius: 12px; background: var(--shell); box-shadow: 0 3px 0 var(--ink); font-size: 1.05rem; line-height: 1; padding: 5px 8px; cursor: pointer; display: flex; align-items: center; gap: 3px; }
+.ib small { font-family: var(--font-dot); font-size: .7rem; }
+.ib:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.badge { position: absolute; top: -7px; right: -7px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--coral); color: #fff; border: 2px solid var(--ink); font-size: .65rem; font-weight: 800; display: grid; place-items: center; padding-inline: 3px; }
+.toasts { position: absolute; top: 10px; left: 14px; right: 14px; z-index: 30; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.toasts .toast { pointer-events: auto; cursor: pointer; }
+.toast { background: var(--ink); color: var(--shell); border-radius: 14px; padding: 8px 12px; box-shadow: 0 4px 0 rgba(0,0,0,.2); animation: tin .3s ease-out; transition: opacity .4s, transform .4s; }
+.toast b { display: block; font-size: .9rem; }
+.toast span { display: block; font-size: .72rem; line-height: 1.45; opacity: .9; margin-top: 2px; }
+.toast.out { opacity: 0; transform: translateY(-10px); }
+@keyframes tin { from { transform: translateY(-14px); opacity: 0; } }
+.conf { position: absolute; top: -10px; width: 8px; height: 12px; border-radius: 2px; z-index: 12; pointer-events: none; animation: fall 1.8s ease-in forwards; }
+@keyframes fall { to { transform: translate(var(--dx), 340px) rotate(540deg); opacity: .2; } }
+.tabs.wrap { flex-wrap: wrap; }
+.tabs.wrap .tab { flex: 1 1 28%; }
+.zklist { display: flex; flex-direction: column; gap: 8px; }
+.zk { border: 2px dashed var(--line); border-radius: 14px; padding: 10px 12px; color: var(--ink-soft); }
+.zk b { display: block; font-size: .95rem; }
+.zk span { font-size: .8rem; line-height: 1.6; }
+.zk.on { border: 2px solid var(--ink); background: var(--wall); color: var(--ink); }
+.mis { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.mis.done { background: var(--wall); border-color: var(--ink); }
+.mis .bar { grid-column: 1 / -1; height: 8px; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; }
+.mis .bar i { display: block; height: 100%; background: var(--m-energy); }
+.mis b { font-size: .9rem; }
+.mis span { font-family: var(--font-dot); font-size: .85rem; }
+
 /* 3D mode: the WebGL canvas draws the room and pet; DOM layers stay on top for speech, items and games */
 .three-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; touch-action: pan-y; cursor: grab; }
 .room.three { background: #DDF1E6; }
@@ -276,6 +308,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
         <div class="coins" id="coins" aria-label="コイン">🪙 0</div>
       </div>
     </header>
+    <div class="topbar">
+      <div class="lv" title="なかよしレベル"><span id="lvLbl">Lv.1</span><div class="lvbar"><div id="lvFill"></div></div></div>
+      <button class="ib" id="misBtn" aria-label="きょうの ミッション">🎯<span class="badge" id="misBadge">3</span></button>
+      <button class="ib" id="zkBtn" aria-label="こうどうずかん">📖<small id="zkCount">0</small></button>
+      <button class="ib" id="sndBtn" aria-label="おとを けす">🔊</button>
+    </div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
 
     <section class="meters" aria-label="ステータス">
       <div class="meter" id="m-hunger"><span>おなか</span><div class="bar"><div class="fill" style="background:var(--m-hunger)"></div></div></div>
@@ -328,6 +367,14 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
         <input id="nameInput" maxlength="10" autocomplete="off" value="ポチ">
       </label>
       <button class="big" id="startBtn">そだてはじめる</button>
+    </section>
+
+    <section class="overlay" id="zukan" hidden>
+      <h2>こうどうずかん</h2>
+      <div class="tabs wrap" id="zkTabs"></div>
+      <p id="zkSub"></p>
+      <div class="zklist" id="zkList"></div>
+      <button class="big ghost" id="closeZk">とじる</button>
     </section>
 
     <section class="overlay" id="info" hidden>
@@ -496,7 +543,7 @@ let bubbleTimer = 0, chatterAt = 0, lastSave = 0;
 const sp = () => SPECIES[S.species];
 
 /* ---------- state ---------- */
-function newMeta() { return { coins: 30, inv: {}, hats: [], hat: null, furn: [], album: [], unlocked: {}, bonusDay: '' }; }
+function newMeta() { return { coins: 30, inv: {}, hats: [], hat: null, furn: [], album: [], unlocked: {}, bonusDay: '', seen: {}, sound: true, missions: [], mDay: '', mBonus: false, tips: {} }; }
 function newPet(species, color, name) {
   const t = Date.now();
   const ps = Object.keys(PERSONALITIES);
@@ -505,7 +552,7 @@ function newPet(species, color, name) {
     weight: { dog: 1.2, cat: 0.8, rabbit: 0.6, hamster: 0.1, penguin: 2.0, panda: 3.0 }[species],
     poop: 0, poopClock: 3, sick: false, asleep: false, neglect: 0, stage: 0, variant: null, alive: true,
     snacks: [], fed: 0, played: 0, wins: 0, best: 0, personality: ps[Math.floor(Math.random() * ps.length)],
-    gift: false, giftAt: t + 4 * 60000, giftX: 30, archived: false, walkAt: t };
+    gift: false, giftAt: t + 4 * 60000, giftX: 30, archived: false, walkAt: t, xp: 0, lv: 1 };
 }
 function save() {
   try { if (S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); localStorage.setItem(META_KEY, JSON.stringify(M)); } catch (e) {}
@@ -769,8 +816,8 @@ const P3 = (() => {
     const bodyR = hamster ? 0.62 : 0.55;
     inner.add(ell(mBase, bodyR, [0, 0.52, 0], [1, 0.86, 0.9]));
     inner.add(ell(mLight, 0.38, [0, 0.48, 0.3], [1, 0.95, 0.55]));
-    inner.add(ell(mFeet, 0.17, [-0.25, 0.08, 0.26], [1, 0.62, 1.35]));
-    inner.add(ell(mFeet, 0.17, [0.25, 0.08, 0.26], [1, 0.62, 1.35]));
+    parts.feet = [ell(mFeet, 0.17, [-0.25, 0.08, 0.26], [1, 0.62, 1.35]), ell(mFeet, 0.17, [0.25, 0.08, 0.26], [1, 0.62, 1.35])];
+    parts.feet.forEach(f => inner.add(f));
 
     // head
     const head = new T.Group();
@@ -827,6 +874,9 @@ const P3 = (() => {
     const eat = ell(mRed, 0.07, [0, my - 0.02, mz], [1, 1, 0.4]); head.add(eat); parts.mouth.eat = eat;
     const sad = geoMesh(new T.TorusGeometry(0.05, 0.012, 8, 12, Math.PI), mMouthLine, [0, my - 0.04, mz]); head.add(sad); parts.mouth.sad = sad;
     const sleep = ell(mMouthLine, 0.025, [0, my, mz], [1, 0.7, 0.4]); head.add(sleep); parts.mouth.sleep = sleep;
+    const oMouth = geoMesh(new T.TorusGeometry(0.045, 0.016, 8, 20), mRed, [0, my - 0.02, mz]); head.add(oMouth); parts.mouth.o = oMouth;
+    const yawn = ell(mRed, 0.09, [0, my - 0.04, mz], [1, 1.3, 0.4]); head.add(yawn); parts.mouth.yawn = yawn;
+    const tongue = ell(mat('#FF8FA3', { r: 0.4 }), 0.06, [0, my - 0.08, mz + 0.02], [0.9, 1.4, 0.4]); head.add(tongue); parts.mouth.tongue = tongue;
     if (species === 'penguin') parts.mouth.normal.visible = false, parts.mouth.normalHidden = true;
 
     const whiskers = (len) => {
@@ -894,7 +944,7 @@ const P3 = (() => {
           ear.add(ell(mPink, 0.13, [0, 0.36, 0.05], [0.55, 2.4, 0.3]));
           head.add(ear); (parts.ears = parts.ears || []).push(ear);
         }
-        head.add(ell(mNose, 1, [0, -0.1, onHead(0, -0.1, 0) + 0.01], [0.045, 0.032, 0.03]));
+        parts.nose = ell(mNose, 1, [0, -0.1, onHead(0, -0.1, 0) + 0.01], [0.045, 0.032, 0.03]); head.add(parts.nose);
         whiskers(0.22);
         tailPivot.add(ell(mLight, 0.15, [0, -0.05, -0.05]));
         if (adult) inner.add(geoMesh(new T.TorusGeometry(0.34, 0.06, 12, 32), mat('#FF8FB1'), [0, 0.98, 0.04], [Math.PI / 2 - 0.15, 0, 0]));
@@ -961,14 +1011,17 @@ const P3 = (() => {
   }
   function setExpr(parts, expr) {
     const E = parts.eyes, Mo = parts.mouth;
-    const openEyes = expr === 'normal' || expr === 'sad' || expr === 'eat';
-    E.open.forEach(e => { e.visible = openEyes; e.scale.setScalar(expr === 'sad' ? 0.8 : 1); });
-    E.happy.forEach(e => e.visible = expr === 'smile' || expr === 'joy');
-    E.closed.forEach(e => e.visible = expr === 'sleep');
+    const openEyes = expr === 'normal' || expr === 'sad' || expr === 'eat' || expr === 'surprise';
+    E.open.forEach(e => { e.visible = openEyes; e.scale.setScalar(expr === 'sad' ? 0.8 : expr === 'surprise' ? 1.25 : 1); });
+    E.happy.forEach(e => e.visible = expr === 'smile' || expr === 'joy' || expr === 'pant');
+    E.closed.forEach(e => e.visible = expr === 'sleep' || expr === 'yawn');
     E.x.forEach(e => e.visible = expr === 'sick');
     E.sad.forEach(e => e.visible = expr === 'sad' || expr === 'sick');
     Mo.normal.visible = !Mo.normalHidden && (expr === 'normal' || expr === 'smile');
-    Mo.joy.visible = expr === 'joy';
+    Mo.joy.visible = expr === 'joy' || expr === 'pant';
+    Mo.o.visible = expr === 'surprise';
+    Mo.yawn.visible = expr === 'yawn';
+    Mo.tongue.visible = expr === 'pant' && parts.species === 'dog';
     Mo.eat.visible = expr === 'eat';
     Mo.sad.visible = expr === 'sad' || expr === 'sick';
     Mo.sleep.visible = expr === 'sleep';
@@ -1016,7 +1069,7 @@ const P3 = (() => {
   function buildRoom() {
     const floor = new T.Mesh(new T.PlaneGeometry(16, 9), new T.MeshStandardMaterial({ map: woodTexture(), roughness: 0.8 }));
     floor.rotation.x = -Math.PI / 2; floor.position.z = 2; floor.receiveShadow = true; scene.add(floor);
-    const wall = new T.Mesh(new T.PlaneGeometry(16, 7), mat('#DDF1E6', { r: 0.95, em: '#DDF1E6', ei: 0.45 }));
+    const wall = new T.Mesh(new T.PlaneGeometry(16, 7), mat('#CDEBDA', { r: 0.95, em: '#CDEBDA', ei: 0.12 }));
     wall.position.set(0, 3.5, -2.5); wall.receiveShadow = true; scene.add(wall);
     scene.add(geoMesh(new T.BoxGeometry(16, 0.2, 0.08), mat('#FFFDF8'), [0, 0.1, -2.46]));
     const rug = new T.Mesh(new T.CylinderGeometry(1.7, 1.7, 0.03, 64), mat('#F7C6CF', { r: 0.95 }));
@@ -1078,6 +1131,8 @@ const P3 = (() => {
     }
     if (pet.expr !== o.expr) setExpr(pet, o.expr);
   };
+  let act = null;
+  api.act = (name, dur) => { act = { name, t0: performance.now() / 1000, dur: dur / 1000 }; };
   api.setSky = (sky, orb) => { if (skyMat) { skyMat.color.set(sky); orbMat.color.set(orb); } };
   api.setFrame = (text) => {
     if (!frameCtx || text === frameText) return;
@@ -1128,7 +1183,10 @@ const P3 = (() => {
       if (pos.classList.contains('jump')) { if (jumpT < 0) jumpT = t; const k = ((t - jumpT) % 0.5) / 0.5; y = Math.sin(k * Math.PI) * 0.65 * s; } else jumpT = -1;
       if (pos.classList.contains('spin')) { if (spinT < 0) spinT = t; const k = Math.min(1, (t - spinT) / 0.8); extra = k * Math.PI * 2; y = Math.max(y, Math.sin(k * Math.PI) * 0.5 * s); } else spinT = -1;
       pet.root.position.set(x, y, 0);
-      pet.root.rotation.y = rotY + extra;
+      pet.root.rotation.set(0, rotY + extra, 0);
+      pet.inner.rotation.set(0, 0, 0); pet.inner.position.set(0, 0, 0); pet.head.rotation.y = 0;
+      if (pet.tail) pet.tail.rotation.x = 0;
+      pet.feet.forEach(f => { f.position.y = 0.08; f.visible = true; });
       const asleep = S.asleep, sadish = pet.expr === 'sad' || pet.expr === 'sick';
       const br = asleep ? Math.sin(t * 1.6) * 0.035 : Math.sin(t * 3.4) * 0.018;
       pet.inner.scale.set(1 - br * 0.5, (asleep ? 0.93 : 1) + br, 1 - br * 0.5);
@@ -1139,9 +1197,48 @@ const P3 = (() => {
       if (pet.ears && pet.species === 'dog') pet.ears.forEach((e, i) => e.rotation.z = (i ? 1 : -1) * (0.3 + (moving ? Math.sin(t * 18) * 0.15 : 0)));
       if (pet.flips) { const fl = moving || pet.expr === 'joy' ? Math.sin(t * 14) * 0.35 : Math.sin(t * 2) * 0.05; pet.flips.forEach((f, i) => f.rotation.z = (i ? 1 : -1) * (0.3 + fl)); }
       if (pet.expr === 'eat') pet.mouth.eat.scale.y = 0.07 * (0.3 + Math.abs(Math.sin(t * 12)) * 0.9);
+      if (pet.nose && !asleep) pet.nose.scale.y = 0.032 * (1 + Math.max(0, Math.sin(t * 22)) * 0.35);
+      if (pet.mouth.tongue.visible) pet.mouth.tongue.position.y = pet.mouth.joy.position.y - 0.08 - Math.abs(Math.sin(t * 9)) * 0.02;
+      // blink every few seconds
+      const blink = !asleep && (t % 3.7) < 0.12;
+      pet.eyes.open.forEach(e => { e.scale.y = (pet.expr === 'surprise' ? 1.25 : pet.expr === 'sad' ? 0.8 : 1) * (blink ? 0.12 : 1); });
+      if (act) animateAct(t, s);
       placeDiv(pos);
     }
     renderer.render(scene, camera);
+  }
+  function animateAct(t, s) {
+    const k = (t - act.t0) / act.dur;
+    if (k >= 1) { act = null; setExpr(pet, pet.expr); return; }
+    const env = Math.max(0, Math.min(1, k / 0.18, (1 - k) / 0.18));
+    const P = pet, I = P.inner, Hd = P.head, R = P.root;
+    switch (act.name) {
+      case 'bow': I.rotation.x = 0.42 * env; I.position.y = -0.08 * env; if (P.tail) P.tail.rotation.y = Math.sin(t * 22) * 0.7; break;
+      case 'tilt': Hd.rotation.z = 0.5 * env; break;
+      case 'shake': I.rotation.z = Math.sin(t * 45) * 0.22 * env; Hd.rotation.y = Math.sin(t * 45) * 0.35 * env; break;
+      case 'sniff': Hd.rotation.x = 0.45 * env; I.rotation.x = 0.18 * env; Hd.rotation.y = Math.sin(t * 3) * 0.3 * env; break;
+      case 'yawn': Hd.rotation.x = -0.3 * env; break;
+      case 'wag': if (P.tail) P.tail.rotation.y = Math.sin(t * 24) * 0.8; I.rotation.y = Math.sin(t * 12) * 0.08 * env; break;
+      case 'bark': R.rotation.y = -0.9 * env + (1 - env) * R.rotation.y; Hd.rotation.x = -0.15 * env + Math.abs(Math.sin(t * 10)) * -0.08; break;
+      case 'knead': P.feet.forEach((f, i) => f.position.y = 0.08 + Math.max(0, Math.sin(t * 8 + i * Math.PI)) * 0.08 * env); Hd.rotation.x = 0.1 * env; break;
+      case 'tailup': if (P.tail) P.tail.rotation.x = -0.9 * env; break;
+      case 'chatter': R.rotation.y = -1.0 * env; Hd.rotation.x = -0.25 * env; P.mouth.o.visible = env > 0.5 && Math.sin(t * 30) > 0; break;
+      case 'loaf': I.scale.y *= 1 - 0.16 * env; I.position.y = -0.05 * env; P.feet.forEach(f => f.visible = env < 0.5); break;
+      case 'groom': Hd.rotation.x = 0.4 * env; Hd.rotation.y = Math.sin(t * 7) * 0.45 * env; break;
+      case 'flop': R.rotation.z = 1.35 * env; R.position.y += 0.32 * s * env; break;
+      case 'periscope': I.rotation.x = -0.32 * env; I.position.y = 0.18 * s * env; Hd.rotation.y = Math.sin(t * 2.5) * 0.5 * env; break;
+      case 'chin': Hd.rotation.x = 0.35 * env; R.position.x += Math.sin(t * 10) * 0.05 * env; break;
+      case 'binky': { R.position.y = Math.sin(k * Math.PI) * 0.95 * s; R.rotation.z = Math.sin(k * Math.PI * 2) * 0.5; R.rotation.y += Math.sin(k * Math.PI) * 0.9; break; }
+      case 'thump': I.rotation.x = -0.12 * env; if (Math.abs(k - 0.5) < 0.06) R.position.y += 0.06; break;
+      case 'preen': Hd.rotation.y = 1.5 * env; Hd.rotation.x = 0.35 * env; break;
+      case 'ecstatic': Hd.rotation.x = -0.85 * env; I.scale.y *= 1 + 0.07 * env; if (P.flips) P.flips.forEach((f, i) => f.rotation.z = (i ? 1 : -1) * (0.3 + 1.1 * env)); break;
+      case 'toboggan': R.rotation.x = 1.3 * env; R.position.y += 0.28 * s * env; if (P.flips) P.flips.forEach((f, i) => f.rotation.z = (i ? 1 : -1) * 1.2 * env); break;
+      case 'burrow': I.position.y = -0.38 * s * env; Hd.rotation.x = 0.3 * env; break;
+      case 'pouch': if (P.pouches) P.pouches.forEach(p => p.scale.set(0.22 + 0.1 * env, 0.18 + 0.07 * env, 0.17 + 0.05 * env)); break;
+      case 'munch': Hd.rotation.x = 0.12 + Math.sin(t * 7) * 0.08 * env; P.mouth.eat.visible = env > 0.3; P.mouth.eat.scale.y = 0.07 * (0.3 + Math.abs(Math.sin(t * 12)) * 0.9); break;
+      case 'nap': I.scale.y *= 1 - 0.1 * env; Hd.rotation.x = 0.3 * env; break;
+      case 'freeze': I.scale.y *= 1 - 0.05 * env; break;
+    }
   }
   const _v = new T.Vector3();
   function toPx(px, py, pz) {
@@ -1150,7 +1247,7 @@ const P3 = (() => {
   }
   function placeDiv(pos) {
     const s = pet.S3, ry = pet.root.position.y;
-    const [, top] = toPx(x, ry + 1.95 * s, 0);
+    const [, top] = toPx(x, ry + ({ rabbit: 2.55, cat: 2.1 }[pet.species] || 1.95) * s, 0);
     const [, bot] = toPx(x, ry, 0.3 * s);
     const [lx] = toPx(x - 0.72 * s, ry + 0.8 * s, 0);
     const [rx] = toPx(x + 0.72 * s, ry + 0.8 * s, 0);
@@ -1193,6 +1290,7 @@ function petPic(species, color, stage, expr, variant) {
 
 /* ---------- ui helpers ---------- */
 function say(text, ms = 2400) {
+  if (S && text.includes(sp().voice)) voice();
   const pos = $('petpos');
   pos.querySelectorAll('.bubble').forEach(b => b.remove());
   const b = document.createElement('div');
@@ -1300,6 +1398,7 @@ function render() {
   if (!S.asleep && z) z.remove();
   renderSky();
   renderPet();
+  renderTop();
   const days = Math.floor(m / (60 * 24));
   $('frame').innerHTML = days > 0 ? `${S.name}<br>${days}にちめ` : `${S.name}<br>${Math.floor(m)}ふん`;
   if (P3.ok) P3.setFrame(days > 0 ? `${S.name}\n${days}にちめ` : `${S.name}\n${Math.floor(m)}ふん`);
@@ -1357,16 +1456,21 @@ function eat(food, done) {
 function feedBasic() {
   if (S.hunger >= 95) { setAnim('normal', 1500); return say('もう おなか いっぱい'); }
   eat(sp().meal.icon, () => {
-    S.hunger = clamp(S.hunger + 28); S.weight += 0.1; S.poopClock += 1.5; S.fed++;
+    S.hunger = clamp(S.hunger + 28); S.weight += 0.1; S.poopClock += 1.5; S.fed++; afterEat();
     lcd(`${S.name}は ${sp().meal.name}を たべた`);
   });
+}
+function afterEat() {
+  mission('feed'); gainXP(4);
+  if (S.species === 'hamster') setTimeout(() => playBehavior(findBehavior('pouch')), 1700);
+  if (S.species === 'panda') SND.play('munch');
 }
 function feedSnack() {
   const t = Date.now();
   S.snacks = (S.snacks || []).filter(x => t - x < 10 * 60000);
   eat('🍪', () => {
     S.snacks.push(t);
-    S.happy = clamp(S.happy + 15); S.hunger = clamp(S.hunger + 5); S.weight += 0.2;
+    S.happy = clamp(S.happy + 15); S.hunger = clamp(S.hunger + 5); S.weight += 0.2; afterEat();
     if (S.snacks.length > 3) { S.health = clamp(S.health - 8); lcd('おやつの たべすぎ…ちょっと ぐあいが わるそう'); say('うっぷ…'); }
     else { lcd(`${S.name}は おやつで ごきげん！`); setAnim('joy', 1400); }
   });
@@ -1378,7 +1482,7 @@ function feedItem(key) {
   M.inv[key]--;
   eat(f.icon, () => {
     S.hunger = clamp(S.hunger + (f.hunger || 0)); S.energy = clamp(S.energy + (f.energy || 0));
-    S.health = clamp(S.health + (f.health || 0)); S.weight += f.w || 0; S.fed++; S.poopClock += 1;
+    S.health = clamp(S.health + (f.health || 0)); S.weight += f.w || 0; S.fed++; S.poopClock += 1; afterEat();
     let happy = f.happy || 0;
     if (key === 'fav' && S.personality === 'くいしんぼう') happy += 10;
     S.happy = clamp(S.happy + happy);
@@ -1423,7 +1527,8 @@ const actions = {
     setAnim('joy', 1800);
     say(bark('♪'));
     setTimeout(() => {
-      S.clean = 100; S.happy = clamp(S.happy + B.mood + (loves ? 10 : 0));
+      S.clean = 100; S.happy = clamp(S.happy + B.mood + (loves ? 10 : 0)); mission('bath'); gainXP(5);
+      if (S.species === 'dog' || S.species === 'penguin') setTimeout(() => playBehavior(findBehavior('shake')), 400);
       lcd(B.text);
       busy = false; render(); save();
     }, 1800);
@@ -1431,7 +1536,7 @@ const actions = {
   clean() {
     if (S.poop === 0) return lcd('へやは きれいだよ');
     S.poop = 0; S.clean = clamp(S.clean + 10);
-    lcd('うんちを かたづけた'); say(bark('♪')); setAnim('smile', 1200);
+    lcd('うんちを かたづけた'); say(bark('♪')); setAnim('smile', 1200); mission('clean'); gainXP(3);
     render(); save();
   },
   med() {
@@ -1493,8 +1598,13 @@ function renderSheet() {
     const X = sp().special;
     list.innerHTML =
       row(X.icon, X.name, X.desc + (walkOverdue() ? '・<b style="color:var(--coral);display:inline">いきたがってる！</b>' : ''), tired ? 'つかれてる' : 'いく', 'data-special="1"', tired) +
+      row('📣', 'なまえを よぶ', `「${S.name}！」と よんでみよう。どうぶつに よって はんのうが ちがう`, 'よぶ', 'data-call="1"') +
       row('↔️', 'どっちむくかな？', `${S.name}が むく ほうこうを あてよう（5かい）`, tired ? 'つかれてる' : 'あそぶ', 'data-game="dir"', tired) +
       row('🧺', 'おやつキャッチ', `ゆびで うごかして キャッチ！ 🌶️は さけてね（ベスト ${S.best || 0}）`, tired ? 'つかれてる' : 'あそぶ', 'data-game="catch"', tired);
+  } else if (sheetMode === 'missions') {
+    $('sheetTitle').textContent = 'きょうの ミッション';
+    list.innerHTML = M.missions.map(m => `<div class="mis${m.done ? ' done' : ''}"><b>${m.done ? '✅ ' : ''}${m.text}</b><span>${Math.min(m.have, m.n)}/${m.n}</span><div class="bar"><i style="width:${Math.min(100, m.have / m.n * 100)}%"></i></div></div>`).join('') +
+      `<div class="empty">1つ クリアで 15コイン、ぜんぶ クリアで さらに 30コイン。まいにち かわるよ</div>`;
   } else if (sheetMode === 'shop') {
     $('sheetTitle').textContent = 'ショップ';
     tabs.innerHTML = [['food', 'たべもの'], ['hat', 'きせかえ'], ['furn', 'へや']].map(([k, l]) =>
@@ -1528,7 +1638,8 @@ function onSheetClick(e) {
     const k = t.dataset.feed;
     return k === 'basic' ? feedBasic() : k === 'snack' ? feedSnack() : feedItem(k);
   }
-  if (t.dataset.special) { closeSheet(); return doSpecial(); }
+  if (t.dataset.call) { closeSheet(); return callPet(); }
+  if (t.dataset.special) { closeSheet(); mission('special'); mission('play'); gainXP(10); return doSpecial(); }
   if (t.dataset.game) { closeSheet(); return t.dataset.game === 'dir' ? startDir() : startCatch(); }
   if (t.dataset.wear) {
     M.hat = M.hat === t.dataset.wear ? null : t.dataset.wear;
@@ -1670,7 +1781,7 @@ function startDir() {
 function endDir(g, wins) {
   g.remove(); busy = false;
   S.happy = clamp(S.happy + 8 + wins * 6); S.energy = clamp(S.energy - 12); S.hunger = clamp(S.hunger - 5);
-  S.weight = Math.max(0.05, S.weight - 0.1); S.played++; S.wins += wins;
+  S.weight = Math.max(0.05, S.weight - 0.1); S.played++; S.wins += wins; mission('play'); gainXP(8 + wins * 2);
   const coins = Math.round((2 + wins * 3) * (S.personality === 'やんちゃ' ? 1.5 : 1));
   addCoins(coins);
   if (wins === 5) { setAnim('joy', 2000); say('ぜんぶ あたり！'); lcd(`パーフェクト！ ${coins}コイン ゲット`); }
@@ -1747,7 +1858,7 @@ function startCatch() {
     goCenter();
     const newBest = score > (S.best || 0);
     if (newBest) S.best = score;
-    S.played++;
+    S.played++; mission('play'); gainXP(8 + Math.min(20, score));
     S.happy = clamp(S.happy + 6 + Math.min(30, score * 2)); S.energy = clamp(S.energy - 15);
     S.hunger = clamp(S.hunger + Math.min(15, score)); S.weight += 0.05;
     const coins = Math.round(score * (S.personality === 'やんちゃ' ? 1.5 : 1));
@@ -1869,6 +1980,329 @@ function showEnding() {
   save();
 }
 
+/* ---------- sounds (synthesized, no files) ---------- */
+const SND = (() => {
+  let ctx = null, noiseBuf = null;
+  const on = () => M && M.sound !== false;
+  function ac() {
+    if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+  function noise() {
+    if (!noiseBuf) { noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
+    const n = ctx.createBufferSource(); n.buffer = noiseBuf; return n;
+  }
+  function env(g, t, a, peak, rel) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + rel); }
+  function tone(type, f0, f1, t, dur, peak, filt) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    let node = o;
+    if (filt) { const b = ctx.createBiquadFilter(); b.type = filt.type || 'bandpass'; b.frequency.value = filt.f; b.Q.value = filt.q || 1; o.connect(b); node = b; }
+    node.connect(g); g.connect(ctx.destination);
+    env(g, t, 0.01, peak, dur); o.start(t); o.stop(t + dur + 0.05);
+    return o;
+  }
+  function burst(t, dur, f, q, peak, type = 'bandpass') {
+    const n = noise(), b = ctx.createBiquadFilter(), g = ctx.createGain();
+    b.type = type; b.frequency.value = f; b.Q.value = q;
+    n.connect(b); b.connect(g); g.connect(ctx.destination);
+    env(g, t, 0.005, peak, dur); n.start(t); n.stop(t + dur + 0.05);
+  }
+  const pitch = () => (S ? [1.35, 1.15, 1][stageOf(ageMin())] : 1);
+  const lib = {
+    bark(n = 1) { const t0 = ctx.currentTime, p = pitch(); for (let i = 0; i < n; i++) { const t = t0 + i * 0.22; tone('sawtooth', 520 * p, 230 * p, t, 0.13, 0.35, { f: 1100 * p, q: 1.5 }); burst(t, 0.08, 1500 * p, 1, 0.25); } },
+    whine() { const t = ctx.currentTime, p = pitch(); const o = tone('sine', 700 * p, 900 * p, t, 0.7, 0.12); o.frequency.setValueAtTime(700 * p, t); o.frequency.linearRampToValueAtTime(1150 * p, t + 0.3); o.frequency.linearRampToValueAtTime(800 * p, t + 0.7); },
+    meow() { const t = ctx.currentTime, p = pitch(); const o = ctx.createOscillator(), b = ctx.createBiquadFilter(), g = ctx.createGain();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(480 * p, t); o.frequency.linearRampToValueAtTime(720 * p, t + 0.2); o.frequency.linearRampToValueAtTime(420 * p, t + 0.55);
+      b.type = 'bandpass'; b.Q.value = 3; b.frequency.setValueAtTime(700, t); b.frequency.linearRampToValueAtTime(1700, t + 0.2); b.frequency.linearRampToValueAtTime(800, t + 0.55);
+      o.connect(b); b.connect(g); g.connect(ctx.destination); env(g, t, 0.05, 0.35, 0.5); o.start(t); o.stop(t + 0.6); },
+    purr() { const t = ctx.currentTime, n = noise(), b = ctx.createBiquadFilter(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain();
+      b.type = 'lowpass'; b.frequency.value = 260; n.connect(b); b.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.35, t + 0.2); g.gain.linearRampToValueAtTime(0.0001, t + 1.8);
+      lfo.frequency.value = 26; lg.gain.value = 0.25; lfo.connect(lg); lg.connect(g.gain); n.start(t); n.stop(t + 1.9); lfo.start(t); lfo.stop(t + 1.9); },
+    chatter() { const t = ctx.currentTime; for (let i = 0; i < 7; i++) tone('square', 1300, 1100, t + i * 0.07, 0.03, 0.08); },
+    thump() { const t = ctx.currentTime; tone('sine', 140, 45, t, 0.18, 0.7); burst(t, 0.05, 300, 0.7, 0.3, 'lowpass'); },
+    grunt() { const t = ctx.currentTime; burst(t, 0.09, 600, 2, 0.2); burst(t + 0.13, 0.08, 650, 2, 0.15); },
+    squeak() { const t = ctx.currentTime; tone('sine', 2400, 3300, t, 0.07, 0.15); tone('sine', 2600, 3500, t + 0.11, 0.06, 0.12); },
+    bray() { const t = ctx.currentTime; for (let i = 0; i < 4; i++) tone('sawtooth', i % 2 ? 360 : 300, i % 2 ? 330 : 380, t + i * 0.2, 0.17, 0.2, { f: 900, q: 2 }); },
+    bleat() { const t = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(), lfo = ctx.createOscillator(), lg = ctx.createGain(), b = ctx.createBiquadFilter();
+      o.type = 'sawtooth'; o.frequency.value = 380; b.type = 'bandpass'; b.frequency.value = 1000; b.Q.value = 2;
+      o.connect(b); b.connect(g); g.connect(ctx.destination); env(g, t, 0.04, 0.25, 0.55);
+      lfo.frequency.value = 13; lg.gain.value = 30; lfo.connect(lg); lg.connect(o.frequency); o.start(t); o.stop(t + 0.65); lfo.start(t); lfo.stop(t + 0.65); },
+    munch() { const t = ctx.currentTime; for (let i = 0; i < 5; i++) burst(t + i * 0.16, 0.05, 2500, 1, 0.12); },
+    splash() { const t = ctx.currentTime; for (let i = 0; i < 4; i++) burst(t + i * 0.1, 0.12, 1800 + i * 300, 0.8, 0.12); },
+    coin() { const t = ctx.currentTime; tone('triangle', 988, 988, t, 0.08, 0.15); tone('triangle', 1319, 1319, t + 0.08, 0.2, 0.15); },
+    pop() { const t = ctx.currentTime; tone('sine', 500, 900, t, 0.08, 0.15); },
+    found() { const t = ctx.currentTime; [784, 988, 1175, 1568].forEach((f, i) => tone('triangle', f, f, t + i * 0.09, 0.14, 0.13)); },
+    level() { const t = ctx.currentTime; [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone('square', f, f, t + i * 0.1, 0.12, 0.07)); },
+  };
+  return {
+    play(name, arg) { if (!on() || !lib[name]) return; if (!ac()) return; try { lib[name](arg); } catch (e) {} },
+    unlock() { if (on()) ac(); },
+  };
+})();
+const VOICE_SND = { dog: 'bark', cat: 'meow', rabbit: 'grunt', hamster: 'squeak', penguin: 'bray', panda: 'bleat' };
+let lastVoice = 0;
+function voice() { if (Date.now() - lastVoice < 2500) return; lastVoice = Date.now(); SND.play(VOICE_SND[S.species]); }
+
+/* ---------- real behaviors (researched) ---------- */
+// Each entry is a real behavior of the animal. Seeing one for the first time adds it to the behavior album.
+const BEHAVIORS = {
+  dog: [
+    { id: 'playbow', name: 'プレイバウ', when: () => S.happy > 55 && S.energy > 35, w: 3, act: 'bow', dur: 1800, expr: 'joy', snd: 'bark', line: 'あそぼ！',
+      fact: '前あしを ふせて おしりを 上げる ポーズは「あそぼう！」の さそい。「こわくないよ」と つたえる あいずでもある。' },
+    { id: 'zoomies', name: 'ズーミー', when: () => S.energy > 60 && S.happy > 60, w: 2, special: 'zoom', dur: 2600, expr: 'pant', line: 'ダダダダッ！',
+      fact: 'とつぜん へやを かけまわるのは、あまった エネルギーを 発散している しるし。あそびの とちゅうに よく 見られる。' },
+    { id: 'tilt', name: 'くびかしげ', w: 2, act: 'tilt', dur: 1600, expr: 'surprise', line: '？',
+      fact: '音が どこから きたのかを さぐったり、はなの むこうの 人の かおを よく 見ようとして くびを かしげると いわれている。' },
+    { id: 'yawn', name: 'あくび', when: () => S.energy < 55 || S.happy < 45, w: 2, act: 'yawn', dur: 1800, expr: 'yawn', line: 'ふあぁ…',
+      fact: 'ねむいとき だけでなく、きんちょうを おちつかせる「カーミングシグナル」としても あくびを する。' },
+    { id: 'shake', name: 'ブルブル', w: 1, act: 'shake', dur: 1000, line: 'ブルブルッ',
+      fact: 'ぬれていなくても からだを ふるわせるのは、きもちを リセットする サインと いわれている。' },
+    { id: 'sniff', name: 'くんくん', w: 2, act: 'sniff', dur: 2200, line: 'くんくん…',
+      fact: 'いぬは においで せかいを しらべる。ゆかを かいでいるときは じょうほうを あつめている さいちゅう。' },
+    { id: 'whine', name: 'くーん', when: () => S.happy < 40, w: 4, act: 'sniff', dur: 1800, expr: 'sad', snd: 'whine', line: 'くーん…',
+      fact: 'さみしいときや かまって ほしいとき、はなを ならすように くーんと なく。' },
+    { id: 'alert', name: 'けいかいぼえ', w: 1, act: 'bark', dur: 1400, expr: 'surprise', snd: ['bark', 2], line: 'ワンワン！',
+      fact: 'ほえるのは なにかを 知らせたい とき。まどの そとの 音や 見なれない ものに 反応して ほえる。' },
+    { id: 'wag', name: 'しっぽフリフリ', when: () => S.happy > 65, w: 3, act: 'wag', dur: 1800, expr: 'pant', line: bark => '♪',
+      fact: 'ゆるく からだごと ふる しっぽは なかよしの サイン。ピンと かたく ふるときは けいかい していることも ある。' },
+  ],
+  cat: [
+    { id: 'slowblink', name: 'ゆっくりまばたき', when: () => S.happy > 50, w: 3, act: 'freeze', dur: 1800, expr: 'smile', line: '…（じーっ、ぱち）',
+      fact: '「ねこの キス」と よばれる しんらいの サイン。2020年の 研究では、人が ゆっくり まばたきすると ねこも かえして くれやすかった。' },
+    { id: 'knead', name: 'ふみふみ', when: () => S.happy > 65, w: 2, act: 'knead', dur: 2400, expr: 'smile', snd: 'purr', line: 'ふみふみ…',
+      fact: 'こねこの ころ、おかあさんの おっぱいを おして ミルクを だした なごり。おとなでは まんぞくしている しるし。' },
+    { id: 'purr', name: 'ゴロゴロ', when: () => S.happy > 45, w: 2, act: 'freeze', dur: 1800, expr: 'smile', snd: 'purr', line: 'ゴロゴロ…',
+      fact: 'リラックスしている ときの 音。でも ぐあいが わるい ときに 自分を おちつかせる ために ならす ことも ある。' },
+    { id: 'tailup', name: 'しっぽピーン', when: () => S.happy > 55, w: 2, act: 'tailup', dur: 1800, expr: 'normal', snd: 'meow', line: 'ニャッ',
+      fact: 'しっぽを ピンと 立てて ちかづくのは「こんにちは」の あいさつ。ふくらんでいたら こわがっている。' },
+    { id: 'chatter', name: 'クラッキング', when: () => !isNight(), w: 2, act: 'chatter', dur: 2000, expr: 'surprise', snd: 'chatter', line: 'カカカッ',
+      fact: 'まどの そとの とりを 見て カカカッと なくのは、えものを 見つけた こうふんと とどかない もどかしさ と いわれている。' },
+    { id: 'loaf', name: 'こうばこずわり', w: 2, act: 'loaf', dur: 3000, expr: 'smile', line: '…',
+      fact: 'あしを からだの 下に しまって すわる ポーズ。パンのように 見えるので「ローフ」とも よばれる。おちついている しるし。' },
+    { id: 'groom', name: 'けづくろい', w: 2, act: 'groom', dur: 2200, line: 'ぺろぺろ',
+      fact: 'ざらざらの したで けを ととのえ、よごれを とったり においを けしたり している。' },
+    { id: 'meow', name: 'ニャーと なく', when: () => S.hunger < 50, w: 3, act: 'tilt', dur: 1200, snd: 'meow', line: 'ニャー',
+      fact: 'おとなの ねこが ニャーと なくのは おもに 人に むけて。ごはんの さいそくにも よく つかう。' },
+  ],
+  rabbit: [
+    { id: 'binky', name: 'ビンキー', when: () => S.happy > 65 && S.energy > 30, w: 3, act: 'binky', dur: 900, expr: 'joy', line: 'ぴょーん！',
+      fact: 'くうちゅうで からだを ひねって ジャンプするのは、うれしくて たまらない しるし。' },
+    { id: 'flop', name: 'ごろん（フロップ）', when: () => S.happy > 55 && S.energy < 75, w: 2, act: 'flop', dur: 3000, expr: 'sleep', line: '…ごろん',
+      fact: 'よこに ばたっと たおれるのは、あんしんしきって リラックス している サイン。' },
+    { id: 'thump', name: 'スタンピング', w: 1, act: 'thump', dur: 900, expr: 'surprise', snd: 'thump', line: 'ダンッ！',
+      fact: 'うしろあしで ゆかを ダンッと たたくのは「きけんだよ！」の けいほう。こわい ときや ふまんな ときにも する。' },
+    { id: 'chin', name: 'あごスリスリ', w: 2, act: 'chin', dur: 1600, line: 'すりすり',
+      fact: 'あごの したに においの でる ところが あって、こすりつけて「ここは わたしの もの」と しるしを つける。' },
+    { id: 'periscope', name: 'たっち（みはり）', w: 2, act: 'periscope', dur: 2000, expr: 'surprise', line: '…？',
+      fact: 'うしろあしで 立ちあがって まわりを 見わたす。気に なる ものを さがしている しるし。' },
+    { id: 'twilight', name: 'あさゆうの げんきタイム', when: () => { const h = new Date().getHours(); return (h >= 5 && h < 9) || (h >= 16 && h < 20); }, w: 4, special: 'hops', dur: 2600, expr: 'joy', line: 'ぴょこぴょこ',
+      fact: 'うさぎは あさと ゆうがたに いちばん げんきに なる どうぶつ（はくめいはくぼせい）。' },
+    { id: 'groom', name: 'かおあらい', w: 2, act: 'groom', dur: 2000, line: 'くしくし',
+      fact: 'まえあしを なめて かおを あらう。うさぎは とても きれいずき。' },
+  ],
+  hamster: [
+    { id: 'pouch', name: 'ほおぶくろ', w: 1, act: 'pouch', dur: 2600, expr: 'smile', line: 'ほっぺ パンパン',
+      fact: 'ほおぶくろには からだの おもさの やく20% もの たべものを つめこめる。あとで すに はこんで ためておく。' },
+    { id: 'burrow', name: 'あなほり', w: 2, act: 'burrow', dur: 2400, line: 'ほりほり…',
+      fact: 'やせいの ハムスターは じめんに あなを ほって すを つくり、たべものを たくわえる。' },
+    { id: 'groom', name: 'かおくしくし', w: 3, act: 'groom', dur: 1800, line: 'くしくし',
+      fact: 'まえあしで かおを なでるように こまめに けづくろいを する。' },
+    { id: 'night', name: 'よるの おさんぽ', when: () => isNight() && !S.asleep, w: 4, special: 'zoom', dur: 2400, expr: 'joy', snd: 'squeak', line: 'ちょこちょこ！',
+      fact: 'ハムスターは よるに かつどうする どうぶつ。まわしぐるまで ひとばんに 5〜9km も はしることが ある。' },
+    { id: 'freeze', name: 'かたまる', w: 1, act: 'freeze', dur: 1500, expr: 'surprise', line: '…！',
+      fact: 'びっくりすると その場で ピタッと かたまって ようすを うかがう。' },
+  ],
+  penguin: [
+    { id: 'preen', name: 'はねづくろい', w: 3, act: 'preen', dur: 2400, line: 'つんつん',
+      fact: 'しっぽの つけねから でる あぶらを くちばしで はねに ぬって、みずを はじくように している。' },
+    { id: 'ecstatic', name: 'エクスタティック・ディスプレイ', when: () => S.happy > 50, w: 2, act: 'ecstatic', dur: 2200, expr: 'joy', snd: 'bray', line: 'クワーッ！！',
+      fact: 'むねを はり、くびを のばし つばさを ひろげて おおごえで なく。こえは 1わごとに ちがい、なわばりや 自分を しらせる。' },
+    { id: 'toboggan', name: 'トボガン', when: () => S.energy > 30, w: 2, act: 'toboggan', special: 'slide', dur: 2200, expr: 'joy', line: 'すいーっ',
+      fact: 'おなかで すべって いどうする ことを トボガンと いう。こおりの うえを とおくまで すすむ ときに つかう。' },
+    { id: 'shake', name: 'ブルブル', w: 1, act: 'shake', dur: 1000, line: 'ふるふる', fact: 'みずから あがると からだを ふるわせて みずを きる。' },
+  ],
+  panda: [
+    { id: 'munch', name: 'たけを もぐもぐ', w: 4, act: 'munch', dur: 3200, snd: 'munch', line: 'もぐもぐ…',
+      fact: 'たべものの 99% が たけ。いちにちに 10〜16じかんも たべつづける。' },
+    { id: 'nap', name: 'ちょこっと ひるね', when: () => S.energy < 80, w: 2, act: 'nap', dur: 3000, expr: 'sleep', line: 'Zzz…',
+      fact: '2〜4じかんの ひるねを なんども くりかえし、1日に 8〜12じかん ねむる。' },
+    { id: 'bleat', name: 'メェ〜と なく', w: 2, act: 'tilt', dur: 1300, snd: 'bleat', line: 'メェ〜',
+      fact: 'クマの なかまなのに、ヤギのように メェ〜と ないて きもちを つたえると いわれている。' },
+    { id: 'roll', name: 'ころりん', when: () => S.happy > 60, w: 2, special: 'roll', dur: 1200, expr: 'joy', line: 'ころりん',
+      fact: 'こども パンダは よく ころがって あそぶ。' },
+  ],
+};
+const behaviorKey = (sp, id) => sp + ':' + id;
+let behaviorUntil = 0;
+function playBehavior(b) {
+  if (!b || busy || S.asleep) return false;
+  behaviorUntil = Date.now() + (b.dur || 1500);
+  if (b.expr) setAnim(b.expr, b.dur || 1500);
+  if (b.act && P3.ok) P3.act(b.act, b.dur || 1500);
+  if (b.snd) Array.isArray(b.snd) ? SND.play(b.snd[0], b.snd[1]) : SND.play(b.snd);
+  if (b.line) say(typeof b.line === 'function' ? bark('♪') : b.line, Math.min(3000, (b.dur || 1500) + 400));
+  if (b.special === 'zoom' || b.special === 'hops') {
+    const range = $('room').clientWidth * 0.3;
+    let n = 0; const steps = b.special === 'zoom' ? 5 : 4;
+    const go = () => { if (n++ >= steps || busy) return; walkX = (n % 2 ? 1 : -1) * range * (0.6 + Math.random() * 0.4); facing = walkX > 0 ? 1 : -1; placePet(true); if (b.special === 'hops') { const p = $('petpos'); p.classList.remove('jump'); void p.offsetWidth; p.classList.add('jump'); setTimeout(() => p.classList.remove('jump'), 600); } setTimeout(go, b.dur / steps); };
+    go();
+  }
+  if (b.special === 'slide') { facing = walkX > 0 ? -1 : 1; walkX = -walkX || $('room').clientWidth * 0.25; placePet(false); }
+  if (b.special === 'roll') { trick(); }
+  discover(b);
+  mission('behav');
+  return true;
+}
+function pickBehavior(filter) {
+  const list = (BEHAVIORS[S.species] || []).filter(b => (!b.when || b.when()) && (!filter || filter(b)));
+  const total = list.reduce((a, b) => a + b.w, 0);
+  let r = Math.random() * total;
+  for (const b of list) { r -= b.w; if (r <= 0) return b; }
+  return null;
+}
+const findBehavior = (id) => (BEHAVIORS[S.species] || []).find(b => b.id === id);
+function discover(b) {
+  const k = behaviorKey(S.species, b.id);
+  if (M.seen[k]) return;
+  M.seen[k] = Date.now();
+  SND.play('found');
+  toast(`📖 はじめて見た！「${b.name}」`, b.fact);
+  addCoins(5); gainXP(8);
+  save();
+}
+
+/* ---------- bond level, missions, toasts ---------- */
+const xpNeed = (lv) => 40 + lv * 25;
+function gainXP(n) {
+  if (!S) return;
+  S.xp = (S.xp || 0) + n;
+  let up = false;
+  while (S.xp >= xpNeed(S.lv)) { S.xp -= xpNeed(S.lv); S.lv++; up = true; }
+  if (up) {
+    SND.play('level'); confetti();
+    const reward = 15 + S.lv * 5;
+    M.coins += reward;
+    toast(`💞 なかよしレベル ${S.lv} に アップ！`, `${reward}コイン もらった`);
+    setAnim('joy', 2000); say(bark('！！'));
+  }
+  renderTop();
+}
+const MISSION_POOL = [
+  { id: 'feed', text: 'ごはんや おやつを 3かい あげる', n: 3 },
+  { id: 'pet', text: '5かい なでる', n: 5 },
+  { id: 'play', text: '2かい あそぶ', n: 2 },
+  { id: 'clean', text: 'おそうじ する', n: 1 },
+  { id: 'bath', text: 'おていれ（おふろ・ブラシ）を する', n: 1 },
+  { id: 'behav', text: 'どうぶつの こうどうを 3かい 見る', n: 3 },
+  { id: 'call', text: 'なまえを よぶ', n: 1 },
+  { id: 'special', text: 'とくべつな あそびを する', n: 1 },
+];
+function ensureMissions() {
+  if (M.mDay === today() && M.missions?.length) return;
+  const pool = MISSION_POOL.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+  M.missions = pool.map(m => ({ id: m.id, text: m.text, n: m.n, have: 0, done: false }));
+  M.mDay = today(); M.mBonus = false;
+}
+function mission(id) {
+  if (!M || !M.missions) return;
+  let changed = false;
+  for (const m of M.missions) if (m.id === id && !m.done) {
+    m.have++; changed = true;
+    if (m.have >= m.n) { m.done = true; M.coins += 15; gainXP(15); SND.play('coin'); toast('🎯 ミッション クリア！', `${m.text}（+15コイン）`); }
+  }
+  if (changed && !M.mBonus && M.missions.every(m => m.done)) { M.mBonus = true; M.coins += 30; confetti(); toast('🏆 きょうの ミッション ぜんぶ クリア！', 'ボーナス 30コイン'); }
+  if (changed) { renderTop(); save(); }
+}
+const toastQ = [];
+let toastBusy = false;
+function toast(title, body) { toastQ.push([title, body]); if (toastQ.length > 4) toastQ.shift(); if (!toastBusy) nextToast(); }
+function nextToast() {
+  const item = toastQ.shift();
+  if (!item) { toastBusy = false; return; }
+  toastBusy = true;
+  const [title, body] = item, box = $('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `<b></b>${body ? '<span></span>' : ''}`;
+  t.querySelector('b').textContent = title;
+  if (body) t.querySelector('span').textContent = body;
+  box.innerHTML = ''; box.appendChild(t);
+  const ms = body && body.length > 30 ? 4800 : 2600;
+  t.addEventListener('click', () => { t.remove(); nextToast(); }, { once: true });
+  setTimeout(() => t.classList.add('out'), ms);
+  setTimeout(() => { if (t.isConnected) { t.remove(); nextToast(); } }, ms + 400);
+}
+function confetti() {
+  const room = $('room');
+  const colors = ['#FF6F61', '#FFD45E', '#6BCB77', '#3EC1D3', '#FF7BAC', '#B39BF2'];
+  for (let i = 0; i < 36; i++) {
+    const c = document.createElement('div');
+    c.className = 'conf';
+    c.style.left = Math.random() * 100 + '%';
+    c.style.background = colors[i % colors.length];
+    c.style.animationDelay = Math.random() * 0.4 + 's';
+    c.style.setProperty('--dx', (Math.random() * 80 - 40) + 'px');
+    room.appendChild(c);
+    setTimeout(() => c.remove(), 2200);
+  }
+}
+function renderTop() {
+  if (!S) return;
+  $('lvLbl').textContent = 'Lv.' + (S.lv || 1);
+  $('lvFill').style.width = Math.min(100, (S.xp || 0) / xpNeed(S.lv || 1) * 100) + '%';
+  const left = (M.missions || []).filter(m => !m.done).length;
+  $('misBadge').textContent = left; $('misBadge').hidden = !left;
+  const total = Object.values(BEHAVIORS).reduce((a, l) => a + l.length, 0);
+  $('zkCount').textContent = Object.keys(M.seen).length + '/' + total;
+  $('sndBtn').textContent = M.sound === false ? '🔇' : '🔊';
+  $('sndBtn').setAttribute('aria-label', M.sound === false ? 'おとを だす' : 'おとを けす');
+  $('coins').textContent = '🪙 ' + M.coins;
+}
+function openMissions() {
+  ensureMissions();
+  sheetMode = 'missions'; renderSheet(); $('sheet').hidden = false;
+}
+let zkTab = null;
+function openZukan() {
+  closeSheet();
+  zkTab = zkTab || S.species;
+  const tabs = Object.entries(SPECIES).filter(([k, s]) => !s.secret || M.unlocked[k]);
+  const list = BEHAVIORS[zkTab] || [];
+  const got = list.filter(b => M.seen[behaviorKey(zkTab, b.id)]).length;
+  $('zkTabs').innerHTML = tabs.map(([k, s]) => `<button class="tab" data-zk="${k}" aria-selected="${k === zkTab}">${s.label}</button>`).join('');
+  $('zkSub').textContent = `${SPECIES[zkTab].label}の こうどう ${got} / ${list.length}。そだてていると ほんものと おなじ こうどうを 見せてくれるよ。`;
+  $('zkList').innerHTML = list.map(b => {
+    const seen = M.seen[behaviorKey(zkTab, b.id)];
+    return seen ? `<div class="zk on"><b>${b.name}</b><span>${b.fact}</span></div>` : `<div class="zk"><b>？？？</b><span>${zkTab === S.species ? 'いっしょに すごしていると 見られるかも' : SPECIES[zkTab].label + 'を そだてると 見られる'}</span></div>`;
+  }).join('');
+  $('zukan').hidden = false;
+}
+
+/* ---------- calling the pet by name ---------- */
+function callPet() {
+  if (busy || S.asleep) return say('…Zzz');
+  mission('call'); gainXP(3);
+  const sp = S.species;
+  if (sp === 'cat' && S.personality !== 'あまえんぼう' && Math.random() < 0.5) {
+    if (P3.ok) P3.act('tilt', 600);
+    say('…（みみだけ ぴくっ）');
+    toastOnce('callcat', '📖 ねこの ひみつ', 'ねこは じぶんの なまえを ききわけている という 研究が ある。でも くるかどうかは きぶん しだい。');
+    return;
+  }
+  walkX = 0; facing = 1; placePet(true);
+  setTimeout(() => {
+    if (sp === 'dog') playBehavior(findBehavior('tilt')), SND.play('bark');
+    else if (sp === 'rabbit') playBehavior(findBehavior('periscope'));
+    else if (sp === 'penguin') { SND.play('bray'); say('クワッ！'); setAnim('joy', 1200); }
+    else if (sp === 'hamster') playBehavior(findBehavior('freeze'));
+    else { voice(); say(bark('？')); setAnim('surprise', 1200); if (P3.ok) P3.act('tilt', 1200); }
+  }, 900);
+}
+function toastOnce(key, title, body) { M.tips = M.tips || {}; if (M.tips[key]) return; M.tips[key] = 1; toast(title, body); save(); }
+
 /* ---------- loop ---------- */
 function handleEvents(evts) {
   for (const e of evts) {
@@ -1906,16 +2340,18 @@ function tick() {
   if (dailyBonus()) { lcd('きょうの ログインボーナス 20コイン！'); addCoins(0); }
   wander();
   if (!busy && !S.asleep && Date.now() > chatterAt) {
-    chatterAt = Date.now() + 9000 + Math.random() * 8000;
+    chatterAt = Date.now() + 7000 + Math.random() * 7000;
     let line = null;
     if (S.sick) line = 'ぐあい わるい…';
+    else if (S.hunger < 30 && S.species === 'cat') playBehavior(findBehavior('meow'));
     else if (S.hunger < 30) line = 'おなか すいた…';
     else if (S.poop > 1) line = '…くさい';
+    else if (S.happy < 30 && S.species === 'dog') playBehavior(findBehavior('whine'));
     else if (S.happy < 30) line = 'あそんで！';
     else if (S.energy < 20) line = 'ねむい…';
     else if (S.clean < 30) line = 'からだが かゆい';
-    else if (S.happy > 75 && Math.random() < (has('radio') ? 0.5 : 0.25)) { trick(); if (has('radio')) S.happy = clamp(S.happy + 3); }
-    else if (walkOverdue()) line = 'さんぽ いきたい！';
+    else if (walkOverdue()) { line = 'さんぽ いきたい！'; if (P3.ok) P3.act('bow', 1500); SND.play('whine'); }
+    else if (Math.random() < 0.6 && playBehavior(pickBehavior())) { if (has('radio')) S.happy = clamp(S.happy + 3); }
     else if (sp().nocturnal && !isNight() && Math.random() < 0.4) line = 'ふあぁ…（ひるは ねむい）';
     else if (Math.random() < 0.6) line = sp().idles[Math.floor(Math.random() * sp().idles.length)];
     else if (Math.random() < 0.5) line = bark(['！', '♪', '～'][Math.floor(Math.random() * 3)]);
@@ -1934,6 +2370,8 @@ function start(data) {
   wire();
   if (!S) { openSetup(); return; }
   if (!S.alive) { render(); return showEnding(); }
+  ensureMissions(); renderTop();
+  setTimeout(() => { if (!S || !S.alive || S.asleep) return; const g = { dog: 'wag', cat: 'tailup', rabbit: 'periscope', penguin: 'ecstatic' }[S.species]; if (g) playBehavior(findBehavior(g)); }, 1800);
   const evts = catchUp();
   const bonus = dailyBonus();
   render();
@@ -1955,6 +2393,7 @@ function begin() {
   $('setup').hidden = true; $('ending').hidden = true;
   $('poops').innerHTML = '';
   render();
+  ensureMissions(); renderTop();
   lcd(`${name}が やってきた！ せいかくは「${S.personality}」みたい`);
   say(bark('！'));
 }
@@ -1964,16 +2403,23 @@ function wire() {
   $('pad').addEventListener('click', (e) => {
     const b = e.target.closest('.act'); if (!b || !S || !S.alive) return;
     if (busy && b.dataset.act !== 'info') return;
+    if (b.dataset.act === 'bath' && sp().bath.style !== 'brush') SND.play('splash');
     actions[b.dataset.act]();
   });
   const pet = () => {
     if (!S || busy) return;
     if (S.asleep) return say('…Zzz');
     const t = Date.now();
-    if (S.species === 'cat' && S.personality !== 'あまえんぼう' && Math.random() < 0.25) { setAnim('normal', 900); return say('…プイッ', 1200); }
-    if (t - (S.lastPet || 0) > 1500) { S.lastPet = t; S.happy = clamp(S.happy + (S.personality === 'あまえんぼう' ? 6 : 3)); }
+    if (S.species === 'cat' && S.personality !== 'あまえんぼう' && Math.random() < 0.25) { setAnim('normal', 900); if (P3.ok) P3.act('groom', 900); return say('…プイッ', 1200); }
+    if (t - (S.lastPet || 0) > 1500) { S.lastPet = t; S.happy = clamp(S.happy + (S.personality === 'あまえんぼう' ? 6 : 3)); mission('pet'); gainXP(2); }
     const c = petCenterPct();
     floatAt('💗', c.x - 4, c.y);
+    SND.play('pop');
+    // how each animal answers a pat
+    const r = Math.random();
+    if (S.species === 'cat' && S.happy > 45 && r < 0.45) return playBehavior(findBehavior(r < 0.2 ? 'slowblink' : 'purr'));
+    if (S.species === 'dog' && r < 0.4) return playBehavior(findBehavior('wag'));
+    if (S.species === 'rabbit' && S.happy > 70 && r < 0.25) return playBehavior(findBehavior('binky'));
     setAnim('joy', 900); say(bark('♪'), 1200); render();
   };
   $('petpos').addEventListener('click', pet);
@@ -1985,6 +2431,12 @@ function wire() {
   $('sheet').addEventListener('click', (e) => { if (e.target === $('sheet')) closeSheet(); });
   $('nameInput').addEventListener('input', () => { nameTouched = true; });
   $('startBtn').onclick = begin;
+  $('misBtn').onclick = () => { if (S && S.alive) openMissions(); };
+  $('zkBtn').onclick = () => { if (S) { zkTab = S.species; openZukan(); } };
+  $('zkTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-zk]'); if (b) { zkTab = b.dataset.zk; openZukan(); } });
+  $('closeZk').onclick = () => { $('zukan').hidden = true; };
+  $('sndBtn').onclick = () => { M.sound = M.sound === false; renderTop(); save(); if (M.sound) SND.play('pop'); };
+  document.addEventListener('pointerdown', () => SND.unlock(), { passive: true });
   $('closeInfo').onclick = () => { $('info').hidden = true; };
   $('resetAsk').onclick = () => { $('resetBox').hidden = false; };
   $('resetNo').onclick = () => { $('resetBox').hidden = true; };
