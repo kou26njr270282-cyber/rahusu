@@ -195,7 +195,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
           <button type="button" id="btn-continue" hidden>つづきから <span id="continue-info"></span></button>
           <button type="button" id="btn-start">はじめから</button>
           <button type="button" id="btn-diff" data-cycle="diff">難易度 <span id="diff-label">◀ ふつう ▶</span></button>
-          <button type="button" id="btn-catalog">異変図鑑 <span id="cat-mini">0 / 27</span></button>
+          <button type="button" id="btn-catalog">異変図鑑 <span id="cat-mini">0 / 34</span></button>
           <button type="button" data-cycle="quality">画質 <span class="quality-label">◀ レトロ ▶</span></button>
           <button type="button" data-toggle="sound">音 <span class="sound-label">切</span></button>
         </nav>
@@ -218,9 +218,10 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 
   <div class="screen dark" id="ov-catalog" hidden>
     <div class="panel wide">
-      <h2>異変図鑑 <small id="cat-count">0 / 27</small></h2>
+      <h2>異変図鑑 <small id="cat-count">0 / 34</small></h2>
       <p>見抜いた異変だけが記録されます。見抜けなかったものは、名前もわかりません。</p>
       <ul class="catalog" id="cat-list"></ul>
+      <p id="records" style="margin:0 0 12px"></p>
       <nav class="menu"><button type="button" id="btn-cat-back">戻る</button></nav>
     </div>
   </div>
@@ -262,7 +263,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
         <dt>歩いた階</dt><dd id="end-floors">—</dd>
         <dt>やり直し</dt><dd id="end-resets">—</dd>
         <dt>これまでの最速</dt><dd id="end-best">—</dd>
-        <dt>見抜いた異変</dt><dd><span id="end-found">0</span>（図鑑 <span id="end-cat">0</span> / 27）</dd>
+        <dt>見抜いた異変</dt><dd><span id="end-found">0</span>（図鑑 <span id="end-cat">0</span> / <span class="anom-total">34</span>）</dd>
       </dl>
       <nav class="menu"><button type="button" id="btn-again">タイトルへ</button></nav>
     </div>
@@ -536,6 +537,16 @@ function buildMaze() {
 // =====================================================================
 // 異変（すべて「スタートから下り階段への順路」の上に起きる）
 // =====================================================================
+function wallVertices(f) {
+  const vtx = new Set();
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) for (let s = 0; s < 4; s++) {
+    if (!hasWall(f, x, y, s)) continue;
+    const ends = s === 0 ? [[x, y], [x + 1, y]] : s === 1 ? [[x + 1, y], [x + 1, y + 1]] : s === 2 ? [[x, y + 1], [x + 1, y + 1]] : [[x, y], [x, y + 1]];
+    ends.forEach(([i, j]) => vtx.add(i + ',' + j));
+  }
+  return vtx;
+}
+const webHash = (x, y, s) => (((x + 1) * 73856093) ^ ((y + 1) * 19349663) ^ ((s + 1) * 83492791)) >>> 0;
 const pathCells = (f, a, b) => f.path.slice(a, f.path.length + b).filter(p => !objsAt(f, p.x, p.y).length);
 const onFace = (f, kind, extra = {}) => { const ff = freeFaces(f); if (!ff.length) return false; const c = pick(ff); f.decos.push(Object.assign({ kind, x: c.x, y: c.y, side: c.side }, extra)); return true; };
 const ANOMS = [
@@ -624,8 +635,43 @@ const ANOMS = [
     f.path = f.path.map(p => ({ x: N - 1 - p.x, y: p.y }));
     return true; } },
   { id: 'red_light', name: '赤い灯り', desc: '手もとの灯りが、赤く染まっている。', fn: f => { f.redLight = true; return true; } },
-  { id: 'sign_number', name: '看板の番号', desc: '上り階段の看板の番号が、さっき見た番号と違う。', fn: f => { f.signShift = true; return true; } }
+  { id: 'sign_number', name: '看板の番号', desc: '上り階段の看板の番号が、さっき見た番号と違う。', fn: f => { f.signShift = true; return true; } },
+  { id: 'torch_shift', name: '移った松明', desc: '松明が、同じ区画の別の壁に掛かっている。', fn: f => {
+    const used = usedFaces(f);
+    const ts = shuffle(f.decos.filter(d => d.kind === 'torch'));
+    for (const t of ts) {
+      const opts = [0, 1, 2, 3].filter(s => s !== t.side && hasWall(f, t.x, t.y, s) && !isDoorEdge(f, t.x, t.y, s) && !used.has(faceKey(t.x, t.y, s)));
+      if (opts.length) { t.side = pick(opts); return true; }
+    }
+    return false; } },
+  { id: 'painting_tilt', name: '傾いた額', desc: '肖像画が、わずかに傾いている。', fn: f => {
+    const p = f.decos.find(d => d.kind === 'painting'); if (!p) return false; p.tilt = pick([-1, 1]) * 0.07; return true; } },
+  { id: 'pillar_missing', name: '消えた柱', desc: '壁の継ぎ目の柱が、ひとつ足りない。', fn: f => {
+    const vtx = wallVertices(f), c = [];
+    f.path.slice(1).forEach(p => [[p.x, p.y], [p.x + 1, p.y], [p.x, p.y + 1], [p.x + 1, p.y + 1]].forEach(([i, j]) => { const k = i + ',' + j; if (vtx.has(k) && i > 0 && j > 0 && i < N && j < N) c.push(k); }));
+    if (!c.length) return false; f.missingPillar = pick(c); return true; } },
+  { id: 'web_extra', name: '増えた蜘蛛の巣', desc: 'なかったはずの場所に、蜘蛛の巣が張っている。', fn: f => {
+    const ff = freeFaces(f).filter(c => webHash(c.x, c.y, c.side) % 100 >= 16); if (!ff.length) return false;
+    const c = pick(ff); f.extraWeb = { x: c.x, y: c.y, side: c.side }; return true; } },
+  { id: 'note_missing', name: '消えた紙切れ', desc: '床に落ちていたはずの紙切れがない。', fn: f => {
+    const n = f.objs.find(o => o.kind === 'note'); if (!n) return false; f.objs.splice(f.objs.indexOf(n), 1); return true; } },
+  { id: 'door_open', name: '開いている鉄扉', desc: '番号を入れる前から、鉄扉が開いている。', fn: f => { if (!f.door) return false; f.doorPreOpen = true; return true; } },
+  { id: 'steps_extra', name: '増えた段', desc: '上り階段の段が、ひとつ多い。', fn: f => {
+    const u = f.objs.find(o => o.kind === 'up'); if (!u) return false; u.steps = 5; return true; } }
 ];
+
+// 異変の見つけやすさ。番号が進むほど、見つけにくい異変が選ばれやすくなる
+const TIER = {
+  statue: 1, follower: 1, eye: 1, writing: 1, hands: 1, red_light: 1, wall_block: 1, door: 1, crack: 1,
+  torch_color: 2, torch_unlit: 2, poster_upside: 2, painting_face: 2, vase_missing: 2, vase_broken: 2, doll: 2, footprints: 2,
+  puddle: 2, exit_moved: 2, mirror: 2, low_ceiling: 2, door_open: 2, note_missing: 2,
+  torch_extra: 3, poster_text: 3, painting_moved: 3, vase_moved: 3, wall_open: 3, sign_number: 3,
+  torch_shift: 3, painting_tilt: 3, pillar_missing: 3, web_extra: 3, steps_extra: 3
+};
+function anomalyOrder(count, exclude) {
+  const w = a => { const t = TIER[a.id] || 2; return t === 1 ? Math.max(0.35, 1.6 - count * 0.2) : t === 2 ? 1 : 0.3 + count * 0.22; };
+  return ANOMS.filter(a => a.id !== exclude).map(a => ({ a, k: Math.pow(Math.random(), 1 / w(a)) })).sort((p, q) => q.k - p.k).map(e => e.a);
+}
 
 // =====================================================================
 // 音（すべて合成）
@@ -1198,20 +1244,16 @@ function buildScene(f) {
     const bt = new THREE.Mesh(G.cell, M.black); bt.rotation.x = -Math.PI / 2; bt.position.set(cx, -2.6, cz); floorGroup.add(bt);
   }
   // 石の柱：壁の継ぎ目ごとに立てて、通路の単調さを崩す
-  const vtx = new Set();
-  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) for (let s = 0; s < 4; s++) {
-    if (!hasWall(f, x, y, s)) continue;
-    const ends = s === 0 ? [[x, y], [x + 1, y]] : s === 1 ? [[x + 1, y], [x + 1, y + 1]] : s === 2 ? [[x, y + 1], [x + 1, y + 1]] : [[x, y], [x, y + 1]];
-    ends.forEach(([i, j]) => vtx.add(i + ',' + j));
-  }
+  const vtx = wallVertices(f);
+  if (f.missingPillar) vtx.delete(f.missingPillar);
   const pg = once('g-pillar', () => new THREE.BoxGeometry(0.28, 2.4, 0.28));
   vtx.forEach(k => { const [i, j] = k.split(',').map(Number); const m = new THREE.Mesh(pg, M.pillar); m.position.set(i * 2, 1.2, j * 2); floorGroup.add(m); });
   // 蜘蛛の巣と煤（迷宮ごとに決まった場所。毎回同じ）
-  const hash = (x, y, s) => (((x + 1) * 73856093) ^ ((y + 1) * 19349663) ^ ((s + 1) * 83492791)) >>> 0;
+  const ew = f.extraWeb;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) for (let s = 0; s < 4; s++) {
     if (!hasWall(f, x, y, s)) continue;
-    const h = hash(x, y, s);
-    if (h % 100 < 16) {
+    const h = webHash(x, y, s);
+    if (h % 100 < 16 || (ew && ew.x === x && ew.y === y && ew.side === s)) {
       const w = plane(0.75, 0.75, M.web), g = new THREE.Group(), left = (h >> 8) % 2;
       w.position.set(left ? -0.6 : 0.6, 0.78, 0.02); w.rotation.z = left ? 0 : -Math.PI / 2; w.scale.x = left ? 1 : 1;
       if (!left) w.rotation.z = Math.PI * 1.5;
@@ -1231,7 +1273,8 @@ function buildScene(f) {
     const p2 = new THREE.Mesh(postG, M.iron); p2.position.set(0.875, 1.2, 0);
     const lt = new THREE.Mesh(once('g-lt', () => new THREE.BoxGeometry(2, 0.15, 0.34)), M.iron); lt.position.set(0, 2.325, 0);
     g.add(slab, p1, p2, lt); floorGroup.add(g);
-    ironDoor = { slab, open: 0, target: 0 };
+    ironDoor = { slab, open: f.doorPreOpen ? 1 : 0, target: f.doorPreOpen ? 1 : 0 };
+    if (f.doorPreOpen) slab.position.y = 1.125 + 2.15;
   }
 }
 
@@ -1263,6 +1306,7 @@ function addDeco(f, d) {
     const fr = new THREE.Mesh(once('g-frame', () => new THREE.BoxGeometry(0.8, 1.0, 0.06)), M.frame); fr.position.z = 0.03;
     const pic = plane(0.64, 0.82, once('pt' + d.variant, () => new THREE.MeshStandardMaterial({ map: paintingTex(d.variant), roughness: 0.6 }))); pic.position.z = 0.062;
     g.add(fr, pic); placeOnFace(g, d.x, d.y, d.side, 1.45, 0);
+    if (d.tilt) { fr.rotation.z = d.tilt; pic.rotation.z = d.tilt; }
   } else if (d.kind === 'eye') { g.add(plane(1.2, 0.6, decalMat(decalTex('eye')))); placeOnFace(g, d.x, d.y, d.side, 1.4, 0.012); }
   else if (d.kind === 'writing') { g.add(plane(1.7, 0.85, decalMat(decalTex('writing', d.text)))); placeOnFace(g, d.x, d.y, d.side, 1.25, 0.012); }
   else if (d.kind === 'hands') { g.add(plane(1.5, 1.5, decalMat(decalTex('hands')))); placeOnFace(g, d.x, d.y, d.side, 1.15, 0.012); }
@@ -1308,10 +1352,10 @@ function addObj(f, o) {
     m.rotation.order = 'YXZ'; m.rotation.set(-Math.PI / 2, o.rot || 0, 0);
     m.position.set(cx + (o.ox || 0) * 2, 0.007, cz + (o.oy || 0) * 2); floorGroup.add(m);
   } else if (o.kind === 'up') {
-    const s = o.side;
-    for (let k = 0; k < 4; k++) {
-      const h = 0.18 * (4 - k), along = 1 - 0.11 - k * 0.22;
-      const geo = once('g-up' + (DX[s] ? 'x' : 'z') + k, () => DX[s] ? new THREE.BoxGeometry(0.22, h, 1.3) : new THREE.BoxGeometry(1.3, h, 0.22));
+    const s = o.side, n = o.steps || 4, dep = 0.88 / n, rise = 0.72 / n;
+    for (let k = 0; k < n; k++) {
+      const h = rise * (n - k), along = 1 - dep / 2 - k * dep;
+      const geo = once('g-up' + n + (DX[s] ? 'x' : 'z') + k, () => DX[s] ? new THREE.BoxGeometry(dep, h, 1.3) : new THREE.BoxGeometry(1.3, h, dep));
       const st = new THREE.Mesh(geo, M.stone); st.position.set(cx + DX[s] * along, h / 2, cz + DY[s] * along); floorGroup.add(st);
     }
   }
@@ -1346,12 +1390,12 @@ function buildFloor() {
   const f = structuredClone(S.base);
   let anomaly = null;
   if (S.count > 0 && Math.random() < D().prob) {
-    for (const a of shuffle(ANOMS.filter(a => a.id !== S.lastAnom))) { if (a.fn(f)) { anomaly = a.id; break; } }
+    for (const a of anomalyOrder(S.count, S.lastAnom)) { if (a.fn(f)) { anomaly = a.id; break; } }
   }
   S.floor = f; S.anomaly = anomaly; if (anomaly) S.lastAnom = anomaly;
   S.px = f.start.x; S.py = f.start.y; S.dir = f.start.dir; S.yaw = ROT[S.dir];
   S.mem = new Float64Array(N * N);
-  S.anim = null; S.queued = null; S.hold = null; S.doorOpen = false; S.confirm = null; S.history = [{ x: S.px, y: S.py }];
+  S.anim = null; S.queued = null; S.hold = null; S.doorOpen = !!f.doorPreOpen; S.confirm = null; S.history = [{ x: S.px, y: S.py }];
   S.stepsFloor = 0; S.idleSaid = false; S.lastInput = performance.now();
   drawSign(f.signShift ? (S.count >= 3 ? S.count - 1 - rand(2) : S.count + 1 + rand(3)) : S.count);
   buildScene(f);
@@ -1670,6 +1714,8 @@ $('btn-catalog').addEventListener('click', () => {
     li.append(b, sp); ul.appendChild(li);
   });
   $('cat-count').textContent = c.size + ' / ' + ANOMS.length;
+  const recs = store.json('bd2.records', {}), fmtR = v => v ? Math.floor(v / 60) + '分' + String(v % 60).padStart(2, '0') + '秒' : '—';
+  $('records').textContent = '最速記録　' + DIFF_KEYS.map(k => DIFFS[k].label + ' ' + fmtR(recs[k])).join('　');
   setPhase('catalog'); $('btn-cat-back').focus({ preventScroll: true });
 });
 $('btn-cat-back').addEventListener('click', toTitle);
