@@ -1034,11 +1034,15 @@ function buildCourse(ci) {
       const h = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6, 0, TAU, 0, Math.PI / 2), mm);
       h.scale.set(rr, hh, rr); h.position.set(cx + Math.cos(a) * r, -10, cy + Math.sin(a) * r); group.add(h);
     }
-    if (!night) for (let i = 0; i < 22; i++) {
-      const c = cloneModel('cloud'); c.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
-      const a = rand(0, TAU), r = rand(400, 2600), s = rand(60, 120);
-      c.scale.set(s * 1.6, s * 0.7, s); c.position.set(cx + Math.cos(a) * r, rand(650, 950), cy + Math.sin(a) * r); c.rotation.y = rand(0, TAU); group.add(c);
-      const sp = rand(3, 8); course.anim.push(() => { c.position.x += sp * 0.016; });
+    if (!night) {
+      const cm = new THREE.MeshToonMaterial({ color: '#ffffff', emissive: '#8a8a8a', gradientMap: gradMap, fog: false });
+      for (let i = 0; i < 18; i++) {
+        const cl = new THREE.Group(), a = rand(0, TAU), r = rand(700, 2800);
+        cl.position.set(cx + Math.cos(a) * r, rand(700, 1000), cy + Math.sin(a) * r);
+        for (let k = 0; k < 6; k++) { const s2 = new THREE.Mesh(GEO.sph, cm); const sz = rand(45, 85); s2.scale.set(sz * 1.3, sz * 0.8, sz); s2.position.set(k * 55 - 140, rand(-12, 18), rand(-30, 30)); cl.add(s2); }
+        cl.rotation.y = rand(0, TAU); group.add(cl);
+        const sp = rand(3, 8); course.anim.push(() => { cl.position.x += sp * 0.016; });
+      }
     }
   }
 
