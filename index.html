@@ -1185,16 +1185,22 @@ const P3 = (() => {
       pet.root.position.set(x, y, 0);
       pet.root.rotation.set(0, rotY + extra, 0);
       pet.inner.rotation.set(0, 0, 0); pet.inner.position.set(0, 0, 0); pet.head.rotation.y = 0;
-      if (pet.tail) pet.tail.rotation.x = 0;
       pet.feet.forEach(f => { f.position.y = 0.08; f.visible = true; });
       const asleep = S.asleep, sadish = pet.expr === 'sad' || pet.expr === 'sick';
       const br = asleep ? Math.sin(t * 1.6) * 0.035 : Math.sin(t * 3.4) * 0.018;
       pet.inner.scale.set(1 - br * 0.5, (asleep ? 0.93 : 1) + br, 1 - br * 0.5);
+      if (pet.tail) pet.tail.rotation.x = 0;
       pet.head.rotation.z = Math.sin(t * 1.3) * (asleep ? 0.02 : 0.07);
       pet.head.rotation.x = asleep ? 0.28 : sadish ? 0.16 : Math.sin(t * 0.9) * 0.03;
       if (pet.tail) pet.tail.rotation.y = Math.sin(t * pet.tailSpeed) * (asleep || sadish ? 0.05 : pet.tailSpeed > 5 ? 0.6 : 0.35);
       if (pet.ears && pet.species === 'rabbit' && !asleep) { const tw = (t % 3.2) < 0.25 ? Math.sin(t * 40) * 0.12 : 0; pet.ears.forEach((e, i) => e.rotation.x = i ? tw : -tw); }
-      if (pet.ears && pet.species === 'dog') pet.ears.forEach((e, i) => e.rotation.z = (i ? 1 : -1) * (0.3 + (moving ? Math.sin(t * 18) * 0.15 : 0)));
+      // ears and tail show the mood, like real body language
+      const mood = pet.expr, low = mood === 'sad' || mood === 'sick', alert = mood === 'surprise';
+      if (pet.ears && pet.species === 'dog') pet.ears.forEach((e, i) => { const sx = i ? 1 : -1; e.rotation.z = sx * (low ? 0.6 : alert ? 0.12 : 0.3 + (moving ? Math.sin(t * 18) * 0.15 : 0)); e.rotation.x = low ? 0.45 : alert ? -0.3 : 0; });
+      if (pet.ears && pet.species === 'cat') pet.ears.forEach((e, i) => { const sx = i ? 1 : -1; e.rotation.z = sx * (low ? -1.05 : alert ? -0.22 : -0.38); });
+      if (pet.ears && pet.species === 'rabbit' && (low || asleep)) pet.ears.forEach(e => e.rotation.x = -0.75);
+      if (pet.tail && pet.species === 'dog') pet.tail.rotation.x = low ? 0.95 : alert ? -0.35 : 0;
+      if (pet.tail && pet.species === 'cat') pet.tail.scale.setScalar(alert ? 1.35 : 1);
       if (pet.flips) { const fl = moving || pet.expr === 'joy' ? Math.sin(t * 14) * 0.35 : Math.sin(t * 2) * 0.05; pet.flips.forEach((f, i) => f.rotation.z = (i ? 1 : -1) * (0.3 + fl)); }
       if (pet.expr === 'eat') pet.mouth.eat.scale.y = 0.07 * (0.3 + Math.abs(Math.sin(t * 12)) * 0.9);
       if (pet.nose && !asleep) pet.nose.scale.y = 0.032 * (1 + Math.max(0, Math.sin(t * 22)) * 0.35);
@@ -1238,6 +1244,9 @@ const P3 = (() => {
       case 'munch': Hd.rotation.x = 0.12 + Math.sin(t * 7) * 0.08 * env; P.mouth.eat.visible = env > 0.3; P.mouth.eat.scale.y = 0.07 * (0.3 + Math.abs(Math.sin(t * 12)) * 0.9); break;
       case 'nap': I.scale.y *= 1 - 0.1 * env; Hd.rotation.x = 0.3 * env; break;
       case 'freeze': I.scale.y *= 1 - 0.05 * env; break;
+      case 'sit': I.rotation.x = -0.32 * env; I.position.y = -0.06 * s * env; Hd.rotation.x = 0.12 * env; break;
+      case 'down': I.scale.y *= 1 - 0.28 * env; I.position.y = -0.1 * s * env; I.rotation.x = 0.12 * env; break;
+      case 'paw': I.rotation.x = -0.2 * env; P.feet[1].position.y = 0.08 + 0.4 * env; P.feet[1].position.z = 0.26 + 0.15 * env; break;
     }
   }
   const _v = new T.Vector3();
@@ -1598,9 +1607,17 @@ function renderSheet() {
     const X = sp().special;
     list.innerHTML =
       row(X.icon, X.name, X.desc + (walkOverdue() ? '・<b style="color:var(--coral);display:inline">いきたがってる！</b>' : ''), tired ? 'つかれてる' : 'いく', 'data-special="1"', tired) +
+      (S.species === 'dog' ? row('🦴', 'しつけ', 'おすわり・ふせ・おての れんしゅう。できたら ほめて ごほうび', 'れんしゅう', 'data-train-menu="1"', tired) : '') +
       row('📣', 'なまえを よぶ', `「${S.name}！」と よんでみよう。どうぶつに よって はんのうが ちがう`, 'よぶ', 'data-call="1"') +
       row('↔️', 'どっちむくかな？', `${S.name}が むく ほうこうを あてよう（5かい）`, tired ? 'つかれてる' : 'あそぶ', 'data-game="dir"', tired) +
       row('🧺', 'おやつキャッチ', `ゆびで うごかして キャッチ！ 🌶️は さけてね（ベスト ${S.best || 0}）`, tired ? 'つかれてる' : 'あそぶ', 'data-game="catch"', tired);
+  } else if (sheetMode === 'train') {
+    $('sheetTitle').textContent = 'しつけ';
+    const sk = S.skills || {};
+    list.innerHTML = TRAIN.map(tr => {
+      const lv = Math.min(3, sk[tr.id] || 0);
+      return row(tr.icon, tr.name + (lv >= 3 ? ' ✅' : ''), lv >= 3 ? 'おぼえた！ ときどき じぶんから やってくれる' : `おぼえるまで ${'●'.repeat(lv)}${'○'.repeat(3 - lv)}`, 'れんしゅう', `data-train="${tr.id}"`, S.energy < 15);
+    }).join('') + `<div class="empty">ごきげんが いいと せいこうしやすいよ。せいこうすると ごほうびの おやつを あげるよ</div>`;
   } else if (sheetMode === 'missions') {
     $('sheetTitle').textContent = 'きょうの ミッション';
     list.innerHTML = M.missions.map(m => `<div class="mis${m.done ? ' done' : ''}"><b>${m.done ? '✅ ' : ''}${m.text}</b><span>${Math.min(m.have, m.n)}/${m.n}</span><div class="bar"><i style="width:${Math.min(100, m.have / m.n * 100)}%"></i></div></div>`).join('') +
@@ -1638,6 +1655,8 @@ function onSheetClick(e) {
     const k = t.dataset.feed;
     return k === 'basic' ? feedBasic() : k === 'snack' ? feedSnack() : feedItem(k);
   }
+  if (t.dataset.trainMenu) { sheetMode = 'train'; return renderSheet(); }
+  if (t.dataset.train) { closeSheet(); return practice(t.dataset.train); }
   if (t.dataset.call) { closeSheet(); return callPet(); }
   if (t.dataset.special) { closeSheet(); mission('special'); mission('play'); gainXP(10); return doSpecial(); }
   if (t.dataset.game) { closeSheet(); return t.dataset.game === 'dir' ? startDir() : startCatch(); }
@@ -1709,6 +1728,7 @@ function doSpecial() {
         S.walkAt = Date.now(); S.clean = clamp(S.clean - 12); S.weight = Math.max(0.05, S.weight - 0.1);
         const f = findSomething('こうえん');
         end(28, f || 'さんぽ たのしかった！ ちょっと よごれたかも', 'ただいま！');
+        setTimeout(() => setAnim('pant', 3500), 1700);
       });
       break;
     case 'swim':
@@ -2053,7 +2073,7 @@ const BEHAVIORS = {
     { id: 'playbow', name: 'プレイバウ', when: () => S.happy > 55 && S.energy > 35, w: 3, act: 'bow', dur: 1800, expr: 'joy', snd: 'bark', line: 'あそぼ！',
       fact: '前あしを ふせて おしりを 上げる ポーズは「あそぼう！」の さそい。「こわくないよ」と つたえる あいずでもある。' },
     { id: 'zoomies', name: 'ズーミー', when: () => S.energy > 60 && S.happy > 60, w: 2, special: 'zoom', dur: 2600, expr: 'pant', line: 'ダダダダッ！',
-      fact: 'とつぜん へやを かけまわるのは、あまった エネルギーを 発散している しるし。あそびの とちゅうに よく 見られる。' },
+      after: 'pant', fact: 'とつぜん へやを かけまわるのは、あまった エネルギーを 発散している しるし。あそびの とちゅうに よく 見られる。' },
     { id: 'tilt', name: 'くびかしげ', w: 2, act: 'tilt', dur: 1600, expr: 'surprise', line: '？',
       fact: '音が どこから きたのかを さぐったり、はなの むこうの 人の かおを よく 見ようとして くびを かしげると いわれている。' },
     { id: 'yawn', name: 'あくび', when: () => S.energy < 55 || S.happy < 45, w: 2, act: 'yawn', dur: 1800, expr: 'yawn', line: 'ふあぁ…',
@@ -2066,6 +2086,12 @@ const BEHAVIORS = {
       fact: 'さみしいときや かまって ほしいとき、はなを ならすように くーんと なく。' },
     { id: 'alert', name: 'けいかいぼえ', w: 1, act: 'bark', dur: 1400, expr: 'surprise', snd: ['bark', 2], line: 'ワンワン！',
       fact: 'ほえるのは なにかを 知らせたい とき。まどの そとの 音や 見なれない ものに 反応して ほえる。' },
+    { id: 'sit', name: 'おすわり', when: () => (S.skills?.sit || 0) >= 3 && S.happy > 50, w: 1, act: 'sit', dur: 1800, expr: 'smile', line: 'おすわり！',
+      fact: 'しつけは ごほうびを あげて ほめると おぼえやすい（よい こうどうを ほめて のばす）。くりかえし れんしゅうで みにつく。' },
+    { id: 'down', name: 'ふせ', when: () => (S.skills?.down || 0) >= 3 && S.happy > 50, w: 1, act: 'down', dur: 1800, expr: 'smile', line: 'ふせ！',
+      fact: 'ふせは おちついて まつ ための たいせつな しつけ。できたら すぐ ほめるのが コツ。' },
+    { id: 'paw', name: 'おて', when: () => (S.skills?.paw || 0) >= 3 && S.happy > 50, w: 1, act: 'paw', dur: 1600, expr: 'joy', line: 'おて！',
+      fact: 'おては 人との コミュニケーションを たのしむ あそびの ひとつ。みじかい れんしゅうを なんども くりかえすと よい。' },
     { id: 'wag', name: 'しっぽフリフリ', when: () => S.happy > 65, w: 3, act: 'wag', dur: 1800, expr: 'pant', line: bark => '♪',
       fact: 'ゆるく からだごと ふる しっぽは なかよしの サイン。ピンと かたく ふるときは けいかい していることも ある。' },
   ],
@@ -2152,6 +2178,7 @@ function playBehavior(b) {
   }
   if (b.special === 'slide') { facing = walkX > 0 ? -1 : 1; walkX = -walkX || $('room').clientWidth * 0.25; placePet(false); }
   if (b.special === 'roll') { trick(); }
+  if (b.after) setTimeout(() => setAnim(b.after, 2500), b.dur || 1500);
   discover(b);
   mission('behav');
   return true;
@@ -2281,6 +2308,46 @@ function openZukan() {
   $('zukan').hidden = false;
 }
 
+/* ---------- dog training ---------- */
+const TRAIN = [
+  { id: 'sit', name: 'おすわり', icon: '🐕' },
+  { id: 'down', name: 'ふせ', icon: '🛋️' },
+  { id: 'paw', name: 'おて', icon: '🐾' },
+];
+function practice(id) {
+  if (busy || S.asleep) return;
+  const tr = TRAIN.find(x => x.id === id);
+  S.skills = S.skills || {};
+  const lv = S.skills[id] || 0;
+  busy = true; goCenter(); facing = 1; placePet(false);
+  lcd(`「${S.name}、${tr.name}！」`);
+  setAnim('surprise', 900); if (P3.ok) P3.act('tilt', 900);
+  const chance = 0.35 + lv * 0.18 + (S.happy > 60 ? 0.15 : 0) - (S.energy < 30 ? 0.2 : 0);
+  setTimeout(() => {
+    const ok = Math.random() < chance || lv >= 3;
+    if (ok) {
+      if (P3.ok) P3.act(id, 1700);
+      setAnim('pant', 1800); say(tr.name + '！');
+      setTimeout(() => {
+        const c = petCenterPct(); floatAt('🍪', c.x - 4, c.y);
+        S.skills[id] = Math.min(3, lv + 1);
+        S.happy = clamp(S.happy + 8); S.hunger = clamp(S.hunger + 3); S.energy = clamp(S.energy - 5);
+        gainXP(6); mission('play');
+        if (lv < 3 && S.skills[id] >= 3) { SND.play('found'); confetti(); toast(`🐕 「${tr.name}」を おぼえた！`, 'ときどき じぶんから やって みせてくれるよ'); addCoins(10); discover(findBehavior(id)); }
+        else { SND.play('bark'); lcd(`できた！ いいこ いいこ（${S.skills[id]}/3）`); }
+        busy = false; render(); save();
+      }, 1700);
+    } else {
+      const miss = Math.random() < 0.5 ? 'zoom' : 'sniff';
+      if (miss === 'zoom') { walkX = $('room').clientWidth * 0.25 * (Math.random() < 0.5 ? -1 : 1); facing = walkX > 0 ? 1 : -1; placePet(true); }
+      else if (P3.ok) P3.act('sniff', 1400);
+      say(miss === 'zoom' ? 'あそぶの？' : 'くんくん…', 1400);
+      lcd('うーん、まだ わかってない みたい。もういちど！');
+      setTimeout(() => { busy = false; goCenter(); render(); }, 1500);
+    }
+  }, 1000);
+}
+
 /* ---------- calling the pet by name ---------- */
 function callPet() {
   if (busy || S.asleep) return say('…Zzz');
@@ -2309,7 +2376,11 @@ function handleEvents(evts) {
     if (e === 'poop') lcd(`${S.name}が うんちを した`);
     if (e === 'sick') { lcd(`${S.name}の ようすが へん…くすりを あげよう`); say('うぅ…'); }
     if (e === 'wake') { lcd(`${S.name}が めを さました`); say('おはよう！'); }
-    if (e === 'gift') lcd('あれ？ へやに プレゼントが おちてる！');
+    if (e === 'gift') {
+      lcd('あれ？ へやに プレゼントが おちてる！');
+      const r = { dog: 'alert', cat: 'tailup', rabbit: 'periscope', hamster: 'freeze', penguin: 'ecstatic' }[S.species];
+      if (r && !S.asleep) setTimeout(() => playBehavior(findBehavior(r)), 600);
+    }
   }
 }
 function dailyBonus() {
