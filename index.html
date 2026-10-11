@@ -8,13 +8,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
 <style>
-/* Layout: one handheld "device" column — header, care meters, the room (stage), an LCD message line, then a 4×2 grid of care buttons. */
+/* Layout: one handheld "device" column — header, care meters, the room (stage), an LCD message line, then a 4×2 grid of care buttons. Menus slide up as sheets inside the device. */
 :root {
   --sun: #FFD45E;        /* page ground */
   --shell: #FFFDF8;      /* device body */
   --ink: #3A2E39;        /* plum-brown text and outlines */
   --ink-soft: #7A6878;
   --coral: #FF6F61;      /* the one accent */
+  --honey: #FFE6A3;
   --wall: #DDF1E6;
   --floor: #E7B98A;
   --floor-line: #D49E6C;
@@ -53,16 +54,20 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
   box-shadow: 0 8px 0 var(--ink);
   padding: 14px;
   display: flex; flex-direction: column; gap: 12px;
-  position: relative;
+  position: relative; overflow: hidden;
 }
 
 /* header */
 .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-inline: 4px; }
 .who { min-width: 0; }
 .who h1 { margin: 0; font-size: 1.35rem; font-weight: 800; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.who .sub { font-size: .78rem; color: var(--ink-soft); display: flex; gap: 8px; flex-wrap: wrap; }
-.hearts { display: flex; gap: 2px; flex-shrink: 0; }
-.hearts svg { width: 20px; height: 20px; }
+.who .sub { font-size: .76rem; color: var(--ink-soft); display: flex; gap: 2px 8px; flex-wrap: wrap; }
+.right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.hearts { display: flex; gap: 2px; }
+.hearts svg { width: 19px; height: 19px; }
+.coins { font-family: var(--font-dot); font-size: .95rem; background: var(--honey); border: 2px solid var(--ink); border-radius: 999px; padding: 0 10px; font-variant-numeric: tabular-nums; }
+.coins.bump { animation: bump .4s ease-out; }
+@keyframes bump { 40% { transform: scale(1.25); } }
 
 /* meters */
 .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; padding-inline: 4px; }
@@ -77,13 +82,14 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
   position: relative; width: 100%; aspect-ratio: 1 / .86; max-width: 100%;
   border: 3px solid var(--ink); border-radius: 22px; overflow: hidden;
   background: var(--wall);
-  user-select: none; -webkit-user-select: none;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
 }
 .room::after { /* floor */
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 30%;
   background: repeating-linear-gradient(90deg, var(--floor) 0 46px, var(--floor-line) 46px 48px);
   border-top: 3px solid var(--ink);
 }
+.room.catching { touch-action: none; }
 .window {
   position: absolute; top: 9%; left: 8%; width: 30%; aspect-ratio: 1 / .8;
   border: 3px solid var(--ink); border-radius: 10px; overflow: hidden; background: #9ED8F5;
@@ -93,28 +99,43 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 .window::before { left: 50%; top: 0; bottom: 0; width: 3px; transform: translateX(-50%); }
 .window::after { top: 50%; left: 0; right: 0; height: 3px; transform: translateY(-50%); }
 .sky-orb { position: absolute; width: 28%; aspect-ratio: 1; border-radius: 50%; top: 14%; left: 14%; }
-.frame { position: absolute; top: 12%; right: 10%; width: 18%; aspect-ratio: 1 / 1.2; border: 3px solid var(--ink); border-radius: 6px; background: #FFF6E0; display: grid; place-items: center; font-family: var(--font-dot); font-size: .7rem; text-align: center; line-height: 1.2; }
+.frame { position: absolute; top: 12%; right: 10%; width: 18%; aspect-ratio: 1 / 1.2; border: 3px solid var(--ink); border-radius: 6px; background: #FFF6E0; display: grid; place-items: center; font-family: var(--font-dot); font-size: .68rem; text-align: center; line-height: 1.2; overflow: hidden; }
 .rug { position: absolute; bottom: 6%; left: 50%; width: 62%; height: 12%; transform: translateX(-50%); background: #F7C6CF; border: 3px solid var(--ink); border-radius: 50%; z-index: 1; }
+.furn { position: absolute; z-index: 2; line-height: 1; pointer-events: none; }
+.furn.radio { animation: bob 1s ease-in-out infinite; }
+.gift { position: absolute; bottom: 9%; z-index: 4; font-size: 2rem; line-height: 1; background: none; border: 0; padding: 0; cursor: pointer; animation: wiggle 1.2s ease-in-out infinite; }
+@keyframes wiggle { 0%, 60%, 100% { transform: rotate(0); } 70% { transform: rotate(-12deg); } 80% { transform: rotate(12deg); } 90% { transform: rotate(-6deg); } }
 
 .petpos { position: absolute; bottom: 8%; left: 50%; width: 52%; z-index: 3; transform: translateX(-50%); transition: transform 1.6s ease-in-out; cursor: pointer; }
+.room.catching .petpos { transition: none; width: 36%; }
 .petflip { transition: transform .25s; }
 .petflip.left { transform: scaleX(-1); }
-.petbob { animation: bob 1.2s ease-in-out infinite; transform-origin: 50% 100%; }
+.petbob { position: relative; animation: bob 1.2s ease-in-out infinite; transform-origin: 50% 100%; }
 .petpos.walking .petbob { animation: hop .4s ease-in-out infinite; }
 .petpos.asleep .petbob { animation: breathe 3s ease-in-out infinite; }
 .petpos.jump .petbob { animation: jump .5s ease-out 2; }
+.petpos.spin .petbob { animation: spin .8s ease-in-out; }
 @keyframes bob { 50% { transform: translateY(-3px) scaleY(.98); } }
 @keyframes hop { 50% { transform: translateY(-8px); } }
 @keyframes breathe { 50% { transform: scale(1.03, .97); } }
 @keyframes jump { 40% { transform: translateY(-30px) scaleY(1.05); } 80% { transform: translateY(0) scaleY(.92); } }
+@keyframes wheel { from { transform: translateX(-50%) rotate(0); } to { transform: translateX(-50%) rotate(360deg); } }
+@keyframes spin { 50% { transform: translateY(-24px) rotate(180deg); } 100% { transform: rotate(360deg); } }
 .pet-svg { display: block; width: 100%; height: auto; overflow: visible; }
 .pet-svg .tail { animation: wag .5s ease-in-out infinite alternate; }
 .pet-svg.cat .tail { animation: swish 1.6s ease-in-out infinite alternate; }
-.pet-svg.sleep .tail, .pet-svg.sick .tail, .pet-svg.sad .tail { animation: none; }
+.pet-svg.rabbit .ears-b, .pet-svg.hamster .ears-b { animation: twitch 3s ease-in-out infinite; transform-origin: 100px 70px; transform-box: view-box; }
+.pet-svg.penguin .flip-l { animation: flap .6s ease-in-out infinite alternate; transform-origin: 62px 130px; transform-box: view-box; }
+.pet-svg.penguin .flip-r { animation: flap .6s ease-in-out infinite alternate-reverse; transform-origin: 138px 130px; transform-box: view-box; }
+.pet-svg.sleep .tail, .pet-svg.sick .tail, .pet-svg.sad .tail, .pet-svg.sleep .ears-b, .pet-svg.sleep .flip-l, .pet-svg.sleep .flip-r { animation: none; }
 @keyframes wag { from { transform: rotate(-12deg); } to { transform: rotate(14deg); } }
 @keyframes swish { from { transform: rotate(-6deg); } to { transform: rotate(8deg); } }
+@keyframes twitch { 0%, 80%, 100% { transform: rotate(0); } 86% { transform: rotate(-4deg); } 92% { transform: rotate(4deg); } }
+@keyframes flap { from { transform: rotate(-8deg); } to { transform: rotate(10deg); } }
 .pet-svg .chomp { animation: chomp .25s steps(2) infinite; }
 @keyframes chomp { 50% { transform: scaleY(.2); } }
+.hat { position: absolute; left: 50%; line-height: 1; pointer-events: none; transform: translate(-50%, -70%); }
+.hat.eyes { transform: translate(-50%, -50%); }
 
 .bubble {
   position: absolute; bottom: 92%; left: 50%; transform: translateX(-50%);
@@ -132,11 +153,12 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 .room.lights-off .dark { opacity: 1; }
 
 .item { position: absolute; z-index: 5; font-size: 2rem; line-height: 1; pointer-events: none; }
+.drop { position: absolute; left: 0; top: 0; z-index: 7; font-size: 1.9rem; line-height: 1; pointer-events: none; will-change: transform; }
 .poop { position: absolute; bottom: 5%; z-index: 2; font-size: 1.7rem; line-height: 1; animation: plop .4s ease-out; }
 .poop::before { content: "〰"; position: absolute; top: -12px; left: 4px; font-size: .8rem; color: #7d9a3a; animation: stink 1.6s ease-in-out infinite; }
 @keyframes plop { from { transform: scale(.2) translateY(20px); } }
 @keyframes stink { 50% { transform: translateY(-4px); opacity: .4; } }
-.float { position: absolute; z-index: 7; pointer-events: none; animation: rise 1.1s ease-out forwards; font-size: 1.4rem; }
+.float { position: absolute; z-index: 9; pointer-events: none; animation: rise 1.1s ease-out forwards; font-size: 1.4rem; font-weight: 800; white-space: nowrap; }
 @keyframes rise { to { transform: translateY(-60px) scale(1.3); opacity: 0; } }
 .bub { position: absolute; z-index: 7; border-radius: 50%; border: 2px solid #8FD3E8; background: rgba(255,255,255,.7); pointer-events: none; animation: bubup 1.6s ease-out forwards; }
 @keyframes bubup { to { transform: translateY(-120px); opacity: 0; } }
@@ -161,34 +183,67 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 .act.need::after { content: "!"; position: absolute; top: -8px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--coral); color: #fff; border: 2px solid var(--ink); font-size: .75rem; display: grid; place-items: center; animation: nudge .8s ease-in-out infinite; }
 @keyframes nudge { 50% { transform: scale(1.2); } }
 
-/* overlays */
+/* full overlays */
 .overlay { position: absolute; inset: 0; z-index: 20; background: var(--shell); border-radius: 31px; padding: 22px 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
 .overlay h2 { margin: 0; font-size: 1.3rem; font-weight: 800; text-align: center; text-wrap: balance; }
+.overlay h3 { margin: 0; font-size: 1rem; font-weight: 800; }
 .overlay p { margin: 0; text-align: center; color: var(--ink-soft); font-size: .9rem; line-height: 1.6; }
-.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.choice { border: 2.5px solid var(--ink); border-radius: 18px; background: var(--wall); padding: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; font-weight: 800; font-size: 1rem; }
-.choice[aria-pressed="true"] { background: #FFE6A3; box-shadow: 0 0 0 3px var(--coral); }
-.choice svg { width: 100%; max-width: 130px; height: auto; }
-.swatches { display: flex; justify-content: center; gap: 12px; }
-.sw { width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--ink); cursor: pointer; }
+.choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.choice { border: 2.5px solid var(--ink); border-radius: 16px; background: var(--wall); padding: 6px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 800; font-size: .9rem; }
+.choice[aria-pressed="true"] { background: var(--honey); box-shadow: 0 0 0 3px var(--coral); }
+.choice svg { width: 100%; max-width: 92px; height: auto; }
+.choice.locked { background: var(--line); cursor: default; }
+.choice.locked svg { filter: brightness(0); opacity: .25; }
+.choice small { font-size: .62rem; color: var(--ink-soft); font-weight: 500; line-height: 1.3; text-align: center; }
+.colors-box { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.colors-box .cname { font-size: .85rem; font-weight: 800; }
+.swatches { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.sw { width: 38px; height: 38px; border-radius: 50%; border: 2.5px solid var(--ink); cursor: pointer; padding: 0; box-shadow: inset -4px -5px 0 rgba(0,0,0,.12), inset 4px 4px 0 rgba(255,255,255,.45); }
+.sw.custom { position: relative; overflow: hidden; background: conic-gradient(#FF8A8A, #FFD36E, #9BE38F, #7FD3F0, #B39BF2, #FF8AC8, #FF8A8A); display: grid; place-items: center; font-weight: 800; font-size: 1rem; }
+.sw.custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .sw[aria-pressed="true"] { box-shadow: 0 0 0 4px var(--shell), 0 0 0 7px var(--coral); }
 .field { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; font-weight: 800; }
 .field input { font: inherit; font-size: 1.1rem; padding: 10px 12px; border: 2.5px solid var(--ink); border-radius: 12px; background: #fff; color: var(--ink); }
 .big { border: 2.5px solid var(--ink); border-radius: 16px; background: var(--coral); color: #fff; font-weight: 800; font-size: 1.1rem; padding: 12px; box-shadow: 0 4px 0 var(--ink); cursor: pointer; }
 .big.ghost { background: var(--shell); color: var(--ink); }
 .big:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
-.rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: .95rem; }
+.rows { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: .92rem; margin: 0; }
 .rows dt { color: var(--ink-soft); }
 .rows dd { margin: 0; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
 .confirm { display: flex; flex-direction: column; gap: 8px; border: 2px dashed var(--coral); border-radius: 14px; padding: 10px; }
 .confirm .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.album { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.album .card { border: 2px solid var(--ink); border-radius: 12px; padding: 4px; text-align: center; font-size: .7rem; line-height: 1.3; background: var(--wall); min-width: 0; }
+.album .card b { display: block; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.album svg { width: 100%; max-width: 64px; height: auto; }
 
-/* mini game, lives inside the room */
+/* sheets (menus) */
+.sheet { position: absolute; inset: 0; z-index: 15; background: rgba(58,46,57,.35); display: flex; align-items: flex-end; }
+.sheet-card { width: 100%; max-height: 82%; background: var(--shell); border-top: 3px solid var(--ink); border-radius: 26px 26px 0 0; padding: 16px 14px 14px; display: flex; flex-direction: column; gap: 10px; animation: slide .22s ease-out; }
+@keyframes slide { from { transform: translateY(40%); opacity: 0; } }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sheet-head h3 { margin: 0; font-size: 1.1rem; font-weight: 800; }
+.tabs { display: flex; gap: 6px; }
+.tab { flex: 1; border: 2px solid var(--ink); border-radius: 999px; background: var(--shell); padding: 6px; font-weight: 800; font-size: .85rem; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--shell); }
+.list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; padding-block: 2px; }
+.row { display: grid; grid-template-columns: 2.4rem 1fr auto; align-items: center; gap: 10px; border: 2px solid var(--line); border-radius: 14px; padding: 8px 10px; }
+.row .em { font-size: 1.8rem; text-align: center; line-height: 1; }
+.row .tx { min-width: 0; }
+.row .tx b { display: block; font-size: .95rem; }
+.row .tx span { font-size: .74rem; color: var(--ink-soft); }
+.mini { border: 2px solid var(--ink); border-radius: 12px; background: var(--honey); font-weight: 800; font-size: .85rem; padding: 6px 12px; cursor: pointer; box-shadow: 0 3px 0 var(--ink); white-space: nowrap; }
+.mini:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.mini:disabled { opacity: .45; cursor: default; box-shadow: none; }
+.mini.on { background: var(--coral); color: #fff; }
+.empty { text-align: center; color: var(--ink-soft); font-size: .85rem; padding: 12px; }
+
+/* mini games, live inside the room */
 .game { position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; pointer-events: none; }
-.game .top { display: flex; justify-content: space-between; font-family: var(--font-dot); font-size: 1rem; background: rgba(255,253,248,.9); border: 2.5px solid var(--ink); border-radius: 12px; padding: 4px 10px; }
-.game .q { align-self: center; font-weight: 800; font-size: 1.05rem; background: var(--shell); border: 2.5px solid var(--ink); border-radius: 12px; padding: 4px 12px; }
+.game .top { display: flex; justify-content: space-between; gap: 8px; font-family: var(--font-dot); font-size: 1rem; background: rgba(255,253,248,.92); border: 2.5px solid var(--ink); border-radius: 12px; padding: 4px 10px; }
+.game .q { align-self: center; font-weight: 800; font-size: .95rem; background: var(--shell); border: 2.5px solid var(--ink); border-radius: 12px; padding: 4px 12px; text-align: center; }
 .game .arrows { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; pointer-events: auto; }
-.game .arrows button { font-size: 1.6rem; padding: 6px; border: 2.5px solid var(--ink); border-radius: 14px; background: #FFE6A3; box-shadow: 0 4px 0 var(--ink); cursor: pointer; font-weight: 800; }
+.game .arrows button { font-size: 1.6rem; padding: 6px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--honey); box-shadow: 0 4px 0 var(--ink); cursor: pointer; font-weight: 800; }
 .game .arrows button:disabled { opacity: .5; }
 .mark { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: 4rem; font-weight: 800; z-index: 9; animation: pop .25s ease-out; }
 
@@ -202,9 +257,12 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
     <header class="head">
       <div class="who">
         <h1 id="petName">…</h1>
-        <div class="sub"><span id="stageLbl"></span><span id="ageLbl"></span><span id="wtLbl"></span></div>
+        <div class="sub"><span id="stageLbl"></span><span id="ageLbl"></span><span id="wtLbl"></span><span id="persLbl"></span></div>
       </div>
-      <div class="hearts" id="hearts" aria-label="けんこう"></div>
+      <div class="right">
+        <div class="hearts" id="hearts" aria-label="けんこう"></div>
+        <div class="coins" id="coins" aria-label="コイン">🪙 0</div>
+      </div>
     </header>
 
     <section class="meters" aria-label="ステータス">
@@ -216,9 +274,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 
     <div class="room" id="room">
       <div class="window" id="win"><div class="sky-orb" id="orb"></div></div>
-      <div class="frame" id="frame">はじめて<br>のひ</div>
+      <div class="frame" id="frame"></div>
       <div class="rug"></div>
+      <div id="furn"></div>
       <div id="poops"></div>
+      <button class="gift" id="gift" aria-label="プレゼントを あける" hidden>🎁</button>
       <div class="petpos" id="petpos" role="button" tabindex="0" aria-label="なでる">
         <div class="petflip" id="petflip"><div class="petbob" id="petbob"></div></div>
       </div>
@@ -228,24 +288,30 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
     <div class="lcd" aria-live="polite"><span id="lcd">…</span></div>
 
     <nav class="pad" id="pad">
-      <button class="act" data-act="feed"><span class="ic">🍚</span>ごはん</button>
-      <button class="act" data-act="snack"><span class="ic">🍪</span>おやつ</button>
+      <button class="act" data-act="food"><span class="ic">🍚</span>ごはん</button>
       <button class="act" data-act="play"><span class="ic">🎾</span>あそぶ</button>
-      <button class="act" data-act="bath"><span class="ic">🛁</span>おふろ</button>
+      <button class="act" data-act="bath"><span class="ic" id="bathIc">🛁</span><span id="bathLbl">おふろ</span></button>
       <button class="act" data-act="clean"><span class="ic">🧹</span>そうじ</button>
       <button class="act" data-act="med"><span class="ic">💊</span>くすり</button>
       <button class="act" data-act="light"><span class="ic" id="lightIc">💡</span><span id="lightLbl">でんき</span></button>
+      <button class="act" data-act="shop"><span class="ic">🏪</span>ショップ</button>
       <button class="act" data-act="info"><span class="ic">📒</span>きろく</button>
     </nav>
 
-    <section class="overlay" id="setup" hidden>
-      <h2>どっちを そだてる？</h2>
-      <p>えらんで なまえを つけてね。<br>じかんが たつと おなかが すいたり、うんちを したりするよ。</p>
-      <div class="choices">
-        <button class="choice" id="pickDog" aria-pressed="true"></button>
-        <button class="choice" id="pickCat" aria-pressed="false"></button>
+    <section class="sheet" id="sheet" hidden>
+      <div class="sheet-card" role="dialog" aria-labelledby="sheetTitle">
+        <div class="sheet-head"><h3 id="sheetTitle"></h3><span class="coins" id="sheetCoins"></span></div>
+        <div class="tabs" id="sheetTabs"></div>
+        <div class="list" id="sheetList"></div>
+        <button class="big ghost" id="sheetClose">とじる</button>
       </div>
-      <div class="swatches" id="swatches"></div>
+    </section>
+
+    <section class="overlay" id="setup" hidden>
+      <h2>どの子を そだてる？</h2>
+      <p>えらんで なまえを つけてね。</p>
+      <div class="choices" id="choices"></div>
+      <div class="colors-box"><div class="swatches" id="swatches"></div><div class="cname" id="colorName"></div></div>
       <label class="field" for="nameInput">なまえ
         <input id="nameInput" maxlength="10" autocomplete="off" value="ポチ">
       </label>
@@ -256,11 +322,13 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
       <h2 id="infoTitle">きろく</h2>
       <dl class="rows" id="infoRows"></dl>
       <p id="infoTip"></p>
+      <h3>ずかん</h3>
+      <div class="album" id="album"></div>
       <button class="big ghost" id="closeInfo">とじる</button>
-      <button class="big ghost" id="resetAsk" style="font-size:.9rem">はじめから やりなおす</button>
+      <button class="big ghost" id="resetAsk" style="font-size:.9rem">べつの子を むかえる</button>
       <div class="confirm" id="resetBox" hidden>
-        <p>いまの子との おわかれに なります。ほんとうに いい？</p>
-        <div class="btns"><button class="big ghost" id="resetNo">やめる</button><button class="big" id="resetYes">やりなおす</button></div>
+        <p>いまの子は ずかんに のこして、おわかれに なります。ほんとうに いい？</p>
+        <div class="btns"><button class="big ghost" id="resetNo">やめる</button><button class="big" id="resetYes">むかえる</button></div>
       </div>
     </section>
 
@@ -277,51 +345,189 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 (() => {
 'use strict';
 const SAVE_KEY = 'pocket-wannyan-v1';
-const PALETTES = {
-  dog: {
-    shiba:  { base: '#E8A15C', dark: '#B86F33', light: '#FFF4E4', eye: '#2B2230', label: 'しば' },
-    white:  { base: '#F4EDE2', dark: '#C9AE8C', light: '#FFFFFF', eye: '#2B2230', label: 'しろ' },
-    choco:  { base: '#8A5A3B', dark: '#5A3622', light: '#EBD6BF', eye: '#1C1418', label: 'チョコ' },
-  },
-  cat: {
-    tora:   { base: '#F2A65A', dark: '#C9752E', light: '#FFF1E0', eye: '#2B2230', label: 'ちゃトラ' },
-    gray:   { base: '#A9B3BF', dark: '#6F7986', light: '#EEF1F4', eye: '#2B2230', label: 'グレー' },
-    black:  { base: '#3B3A40', dark: '#222126', light: '#5C5B63', eye: '#F7D154', pupil: true, label: 'くろ' },
-  },
+const META_KEY = 'pocket-wannyan-meta';
+const INK = '#2B2230';
+
+/* ---------- species ---------- */
+// Each animal has its own care quirks, based on how the real animal lives.
+const SPECIES = {
+  dog: { label: 'いぬ', voice: 'ワン', name: 'ポチ', kid: 'こいぬ', adult: 'おとないぬ', trick: 'おすわり！ おて！',
+    meal: { icon: '🍖', name: 'ドッグフード' }, fav: { icon: '🦴', name: 'ほね' },
+    bath: { label: 'おふろ', icon: '🛁', mood: 6, text: 'シャンプーで ピカピカ！', style: 'bubbles' },
+    special: { id: 'walk', icon: '🦮', name: 'さんぽ', desc: 'そとを おさんぽ。いぬは まいにち さんぽが ひつよう' },
+    idles: ['しっぽ ふりふり♪', 'くんくん…', 'ほりほり', 'あそぼ！'],
+    life: 'さんぽが だいすき。しばらく いかないと ごきげんが さがりやすい',
+    colors: {
+      shiba: { base: '#E8A15C', dark: '#B86F33', light: '#FFF4E4', eye: INK, label: 'しば' },
+      white: { base: '#F4EDE2', dark: '#C9AE8C', light: '#FFFFFF', eye: INK, label: 'しろ' },
+      choco: { base: '#8A5A3B', dark: '#5A3622', light: '#EBD6BF', eye: '#1C1418', label: 'チョコ' },
+      golden: { base: '#E9C36A', label: 'ゴールデン' },
+      gray: { base: '#A7A3A8', label: 'グレー' },
+      black: { base: '#3A3236', label: 'くろ' },
+    } },
+  cat: { label: 'ねこ', voice: 'ニャー', name: 'タマ', kid: 'こねこ', adult: 'おとなねこ', trick: 'ゴロゴロ… すりすり',
+    meal: { icon: '🥫', name: 'キャットフード' }, fav: { icon: '🐟', name: 'さかな' },
+    bath: { label: 'ブラシ', icon: '🪮', mood: 4, text: 'ブラッシングで つやつや。ねこは じぶんでも けづくろい するよ', style: 'brush' },
+    special: { id: 'jarashi', icon: '🪶', name: 'ねこじゃらし', desc: 'きぶん しだいで あそんでくれる…かも' },
+    idles: ['ぺろぺろ（けづくろい）', 'ガリガリ（つめとぎ）', 'のび〜', '…（まどの そとを みてる）', 'ゴロゴロ'],
+    life: 'きまぐれ。なでても プイッと されることも。でも ごきげんは へりにくい',
+    colors: {
+      tora: { base: '#F2A65A', dark: '#C9752E', light: '#FFF1E0', eye: INK, label: 'ちゃトラ' },
+      gray: { base: '#A9B3BF', dark: '#6F7986', light: '#EEF1F4', eye: INK, label: 'グレー' },
+      black: { base: '#3B3A40', dark: '#222126', light: '#5C5B63', eye: '#F7D154', pupil: true, faceDark: true, label: 'くろ' },
+      white: { base: '#F7F4EF', label: 'しろ' },
+      cream: { base: '#EBD3B0', label: 'クリーム' },
+      silver: { base: '#C8CCD2', label: 'シルバー' },
+    } },
+  rabbit: { label: 'うさぎ', voice: 'ぷぅ', name: 'ミミ', kid: 'こうさぎ', adult: 'おとなうさぎ', trick: 'ぴょーん！（ビンキー）',
+    meal: { icon: '🌾', name: 'ぼくそう' }, fav: { icon: '🥕', name: 'にんじん' },
+    bath: { label: 'ブラシ', icon: '🪮', mood: 5, text: 'うさぎは ぬれるのが にがて。ブラッシングで きれいに', style: 'brush' },
+    special: { id: 'heyanpo', icon: '🐾', name: 'へやんぽ', desc: 'へやの なかを じゆうに おさんぽ。うれしいと ジャンプ！' },
+    idles: ['はなを ひくひく', 'ぷぅぷぅ', 'かおを くしくし', '…（みみを ぴくっ）'],
+    life: 'ごはんは ぼくそうが きほん。ぬれるのは にがてなので ブラッシングで おていれ',
+    colors: {
+      white: { base: '#FBF8F4', dark: '#E2D3C9', light: '#FFFFFF', eye: '#C2364A', label: 'しろ' },
+      brown: { base: '#B8875E', dark: '#8A5E3B', light: '#F1E2D2', eye: INK, label: 'ちゃいろ' },
+      gray: { base: '#9AA0A8', dark: '#6E747C', light: '#E6E8EB', eye: INK, label: 'グレー' },
+      cream: { base: '#EBD3B0', label: 'クリーム' },
+      black: { base: '#3A3236', label: 'くろ' },
+      orange: { base: '#E8A15C', label: 'オレンジ' },
+    } },
+  hamster: { label: 'ハムスター', voice: 'キュッ', name: 'ハム', kid: 'ちびハム', adult: 'おとなハム', trick: 'ほっぺ パンパン！',
+    meal: { icon: '🥜', name: 'ペレット' }, fav: { icon: '🌻', name: 'ひまわりのたね' },
+    bath: { label: 'すなあび', icon: '🏖️', mood: 6, text: 'すなあびで さっぱり！ ハムスターは みずあびしないよ', style: 'sand' },
+    special: { id: 'wheel', icon: '🎡', name: 'まわしぐるま', desc: 'くるくる はしる。よるは もっと げんき' },
+    idles: ['ほおぶくろに たねを ためてる', 'かおを くしくし', 'カリカリ…', 'ちょこちょこ'],
+    life: 'よるに げんきな どうぶつ。ひるは ねむくなりやすく、よるは なかなか ねない',
+    nocturnal: true,
+    colors: {
+      golden: { base: '#F2B866', dark: '#C98A3A', light: '#FFF5E6', eye: INK, label: 'ゴールデン' },
+      djungarian: { base: '#C9C6C1', dark: '#8F8B86', light: '#FFFFFF', eye: INK, label: 'ジャンガリアン' },
+      cream: { base: '#F6E2C0', dark: '#D9BF94', light: '#FFFBF3', eye: INK, label: 'クリーム' },
+      white: { base: '#FAF7F2', label: 'パールホワイト' },
+      choco: { base: '#8A5A3B', label: 'チョコ' },
+      blue: { base: '#AEB8C9', label: 'ブルーサファイア' },
+    } },
+  penguin: { label: 'ペンギン', voice: 'クワッ', name: 'ペンタ', kid: 'ひなペンギン', adult: 'おとなペンギン', trick: 'ペタペタ ダンス♪',
+    meal: { icon: '🐟', name: 'あじ' }, fav: { icon: '🦐', name: 'えび' },
+    bath: { label: 'みずあび', icon: '💦', mood: 15, text: 'つめたい みず だいすき！', style: 'bubbles' },
+    special: { id: 'swim', icon: '🏊', name: 'プールで およぐ', desc: 'すいすい およいで さかなを さがす' },
+    idles: ['ペタペタ', 'はねを ぱたぱた', 'ふるふる', 'くちばしで けづくろい'],
+    life: 'みずが だいすき。みずあびすると とても よろこぶ',
+    colors: {
+      emperor: { base: '#3E4A61', dark: '#2B3446', light: '#FFFFFF', eye: INK, feet: '#F5A623', label: 'コウテイ' },
+      blue: { base: '#5B8FD6', dark: '#3F6DB0', light: '#FFFFFF', eye: INK, feet: '#F5A623', label: 'ブルー' },
+      pink: { base: '#E58FB1', dark: '#C46E92', light: '#FFFFFF', eye: INK, feet: '#F5A623', label: 'ピンク' },
+      black: { base: '#2E2C33', label: 'くろ' },
+      gray: { base: '#8E97A3', label: 'ひなグレー' },
+    } },
+  panda: { label: 'パンダ', voice: 'メェ〜', name: 'ササ', kid: 'こパンダ', adult: 'おとなパンダ', trick: 'ころりん！', secret: true,
+    meal: { icon: '🎋', name: 'たけ' }, fav: { icon: '🍎', name: 'りんご' },
+    bath: { label: 'おふろ', icon: '🛁', mood: 4, text: 'さっぱり！', style: 'bubbles' },
+    special: { id: 'roll', icon: '🌀', name: 'でんぐりがえし', desc: 'ころころ ころがって あそぶ' },
+    idles: ['もぐもぐ（たけを たべてる）', 'ごろん', 'ぼーっ…', 'ふあぁ〜'],
+    life: 'いちにちの はんぶんは ねている のんびりや。すぐ ねむくなる',
+    sleepy: true,
+    colors: {
+      panda: { base: '#F7F6F0', dark: '#2E2C33', light: '#FFFFFF', eye: '#FFFFFF', pupil: true, feet: '#2E2C33', label: 'パンダ' },
+      brown: { base: '#7A5640', label: 'チンリン（ちゃいろ）' },
+    } },
 };
-const DEFAULT_NAME = { dog: 'ポチ', cat: 'タマ' };
-const STAGE_NAMES = { dog: ['こいぬ(あかちゃん)', 'こいぬ', 'おとないぬ'], cat: ['こねこ(あかちゃん)', 'こねこ', 'おとなねこ'] };
-const VOICE = { dog: 'ワン', cat: 'ニャー' };
+// Fantasy colors every animal can wear.
+const FANCY = {
+  sakura: { base: '#F9B7C9', label: 'さくら' }, mint: { base: '#A8E6CF', label: 'ミント' },
+  lavender: { base: '#C9B6F2', label: 'ラベンダー' }, sky: { base: '#9AD3F5', label: 'そらいろ' },
+  lemon: { base: '#FFE07A', label: 'レモン' }, peach: { base: '#FFC2A1', label: 'ピーチ' },
+};
+for (const s of Object.values(SPECIES)) for (const [k, v] of Object.entries(FANCY)) if (!s.colors[k]) s.colors[k] = { ...v, fancy: true };
+const PERSONALITIES = {
+  'くいしんぼう': { hunger: 1.3, tip: 'すぐ おなかが すく。すきな たべものが だいすき' },
+  'あまえんぼう': { happy: 1.3, tip: 'さみしがり。なでると とても よろこぶ' },
+  'やんちゃ': { energy: 1.2, tip: 'あそびの コインが 1.5ばい' },
+  'のんびり': { all: 0.85, tip: 'なにごとも ゆっくり' },
+  'きれいずき': { clean: 1.3, tip: 'おふろが だいすき' },
+};
 const MIN_PER_YEAR = 30;          // 30 real minutes = 1さい
 const STAGE_AT = [0, 30, 120];     // minutes: baby → child → adult
 
+/* ---------- shop ---------- */
+const FOODS = {
+  fav:   { price: 12, hunger: 25, happy: 20, w: 0.15 },
+  cake:  { icon: '🍰', name: 'ケーキ', price: 30, hunger: 15, happy: 35, w: 0.4 },
+  veg:   { icon: '🥦', name: 'やさい', price: 8, hunger: 20, health: 8, happy: -3, w: 0.05 },
+  milk:  { icon: '🥛', name: 'ミルク', price: 6, hunger: 12, energy: 15, w: 0.05 },
+  drink: { icon: '🧃', name: 'げんきドリンク', price: 25, hunger: 3, energy: 50, w: 0 },
+};
+const HATS = {
+  ribbon: { icon: '🎀', name: 'リボン', price: 40 },
+  flower: { icon: '🌸', name: 'おはな', price: 50 },
+  cap:    { icon: '🧢', name: 'キャップ', price: 60 },
+  shades: { icon: '🕶️', name: 'サングラス', price: 80, eyes: true },
+  silk:   { icon: '🎩', name: 'シルクハット', price: 120 },
+  crown:  { icon: '👑', name: 'おうかん', price: 250 },
+};
+const FURN = {
+  plant: { icon: '🪴', name: 'かんようしょくぶつ', price: 30, tip: 'へやが よごれにくい', style: 'left:2%;bottom:27%;font-size:2.2rem' },
+  ball:  { icon: '⚽', name: 'ボール', price: 60, tip: 'ごきげんが へりにくい', style: 'left:40%;bottom:27%;font-size:1.3rem' },
+  radio: { icon: '📻', name: 'ラジオ', price: 90, tip: 'ときどき おどりだす', style: 'right:29%;bottom:30%;font-size:1.6rem', cls: 'radio' },
+  bed:   { icon: '🛏️', name: 'ふかふかベッド', price: 100, tip: 'ねると げんきが はやく もどる', style: 'right:2%;bottom:24%;font-size:2.4rem' },
+};
+const foodInfo = (key, species) => key === 'fav' ? { ...FOODS.fav, ...SPECIES[species].fav } : FOODS[key];
+
 const $ = (id) => document.getElementById(id);
-let S = null;
-let anim = null;      // { expr, until }
-let busy = false;     // eating / bath / game in progress
-let petKey = '';
+let S = null;   // the current pet
+let M = null;   // things that carry over between pets: coins, items, album
+let anim = null, busy = false, petKey = '', furnKey = '';
 let walkX = 0, facing = 1, nextWander = 0;
 let bubbleTimer = 0, chatterAt = 0, lastSave = 0;
+const sp = () => SPECIES[S.species];
 
 /* ---------- state ---------- */
+function newMeta() { return { coins: 30, inv: {}, hats: [], hat: null, furn: [], album: [], unlocked: {}, bonusDay: '' }; }
 function newPet(species, color, name) {
   const t = Date.now();
-  return { v: 1, species, color, name, born: t, last: t,
+  const ps = Object.keys(PERSONALITIES);
+  return { v: 2, species, color, name, born: t, last: t,
     hunger: 80, happy: 80, clean: 100, energy: 90, health: 100,
-    weight: species === 'dog' ? 1.2 : 0.8, poop: 0, poopClock: 3, sick: false, asleep: false,
-    neglect: 0, stage: 0, variant: null, alive: true, snacks: [], fed: 0, played: 0, wins: 0 };
+    weight: { dog: 1.2, cat: 0.8, rabbit: 0.6, hamster: 0.1, penguin: 2.0, panda: 3.0 }[species],
+    poop: 0, poopClock: 3, sick: false, asleep: false, neglect: 0, stage: 0, variant: null, alive: true,
+    snacks: [], fed: 0, played: 0, wins: 0, best: 0, personality: ps[Math.floor(Math.random() * ps.length)],
+    gift: false, giftAt: t + 4 * 60000, giftX: 30, archived: false, walkAt: t };
 }
-function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
-function loadSaved() { try { const r = localStorage.getItem(SAVE_KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+function save() {
+  try { if (S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); localStorage.setItem(META_KEY, JSON.stringify(M)); } catch (e) {}
+}
+function loadJSON(k) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+function normalize(s) {
+  if (!s) return null;
+  if (!SPECIES[s.species] || !validColor(s.species, s.color)) return null;
+  const d = newPet(s.species, s.color, s.name);
+  for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
+  return s;
+}
 const clamp = (v) => Math.max(0, Math.min(100, v));
 const ageMin = () => (Date.now() - S.born) / 60000;
 const stageOf = (m) => (m >= STAGE_AT[2] ? 2 : m >= STAGE_AT[1] ? 1 : 0);
+const pers = () => PERSONALITIES[S.personality] || {};
+const has = (f) => M.furn.includes(f);
+const isNight = () => { const h = new Date().getHours(); return h >= 19 || h < 6; };
+const walkOverdue = () => S.species === 'dog' && Date.now() - (S.walkAt || 0) > 45 * 60000;
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 
 function simulate(dt, offline, events) {
-  const d = dt * (offline ? 0.5 : 1);
-  if (S.asleep) { S.energy += 5 * d; S.hunger -= 0.5 * d; S.happy -= 0.2 * d; }
-  else { S.hunger -= 1.6 * d; S.happy -= 1.2 * d; S.energy -= 0.8 * d; }
-  S.clean -= (0.5 + S.poop * 0.7) * d;
+  const P = pers(), all = P.all || 1;
+  const d = dt * (offline ? 0.5 : 1) * all;
+  const L = SPECIES[S.species];
+  // species habits: dogs miss their walks, cats keep their own mood, hamsters live at night, pandas doze a lot
+  let happyRate = (P.happy || 1) * (has('ball') ? 0.8 : 1);
+  let energyRate = P.energy || 1;
+  if (walkOverdue()) happyRate *= 1.4;
+  if (S.species === 'cat') happyRate *= 0.85;
+  if (L.nocturnal) { if (isNight()) happyRate *= 0.8; else energyRate *= 1.4; }
+  if (L.sleepy) energyRate *= 1.3;
+  if (S.asleep) { S.energy += 5 * d / all * (has('bed') ? 1.5 : 1); S.hunger -= 0.5 * d; S.happy -= 0.2 * d; }
+  else { S.hunger -= 1.6 * d * (P.hunger || 1); S.happy -= 1.2 * d * happyRate; S.energy -= 0.8 * d * energyRate; }
+  S.clean -= (0.5 * (P.clean || 1) + S.poop * 0.7) * d * (has('plant') ? 0.85 : 1);
   if (!S.asleep) {
     S.poopClock += d;
     if (S.poopClock >= 8) { S.poopClock = 0; if (S.poop < 4) { S.poop++; events.push('poop'); } }
@@ -338,6 +544,7 @@ function simulate(dt, offline, events) {
   for (const k of ['hunger', 'happy', 'clean', 'energy', 'health']) S[k] = clamp(S[k]);
   if (offline) S.health = Math.max(S.health, 10);
   if (S.asleep && S.energy >= 100) { S.asleep = false; events.push('wake'); }
+  if (!S.gift && !S.asleep && Date.now() > S.giftAt) { S.gift = true; S.giftX = [8, 74, 22, 62][Math.floor(Math.random() * 4)]; events.push('gift'); }
   if (S.health <= 0) S.alive = false;
 }
 function catchUp() {
@@ -350,62 +557,137 @@ function catchUp() {
   return events;
 }
 
-/* ---------- pet drawing ---------- */
-function petSVG(species, colorKey, stage, expr, variant) {
-  const p = PALETTES[species][colorKey];
-  const scale = [0.66, 0.84, 1][stage];
-  const eyeR = [9, 8, 7][stage];
-  const ink = '#2B2230';
-  const ex = [80, 120], ey = 86;
-  let eyes = '';
-  if (expr === 'sleep') eyes = ex.map(x => `<path d="M${x - 7} ${ey} Q${x} ${ey + 6} ${x + 7} ${ey}" stroke="${ink}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`).join('');
-  else if (expr === 'smile' || expr === 'joy') eyes = ex.map(x => `<path d="M${x - 7} ${ey + 3} Q${x} ${ey - 7} ${x + 7} ${ey + 3}" stroke="${ink}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`).join('');
-  else if (expr === 'sick') eyes = ex.map(x => `<path d="M${x - 6} ${ey - 5} L${x + 6} ${ey + 5} M${x + 6} ${ey - 5} L${x - 6} ${ey + 5}" stroke="${ink}" stroke-width="3.5" stroke-linecap="round"/>`).join('');
-  else {
-    const r = expr === 'sad' ? eyeR - 2 : eyeR;
-    eyes = ex.map(x => `<circle cx="${x}" cy="${ey}" r="${r}" fill="${p.eye}"/>` +
-      (p.pupil ? `<ellipse cx="${x}" cy="${ey}" rx="2.6" ry="${r - 1.5}" fill="${ink}"/>` : '') +
-      `<circle cx="${x + 2.5}" cy="${ey - 3}" r="2.6" fill="#fff"/>`).join('');
-    if (expr === 'sad') eyes += `<path d="M70 72 L88 77 M130 72 L112 77" stroke="${species === 'cat' && colorKey === 'black' ? '#9a98a3' : ink}" stroke-width="3" stroke-linecap="round"/>`;
-  }
-  const mouthCol = colorKey === 'black' ? '#d8d6de' : ink;
-  let mouth;
-  if (expr === 'eat') mouth = `<g class="chomp" style="transform-origin:100px 113px;transform-box:view-box"><ellipse cx="100" cy="114" rx="8" ry="7" fill="#C94F5D" stroke="${ink}" stroke-width="2"/></g>`;
-  else if (expr === 'joy') mouth = `<path d="M90 109 Q100 128 110 109 Z" fill="#E86A6A" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"/>`;
-  else if (expr === 'sad' || expr === 'sick') mouth = `<path d="M92 118 Q100 110 108 118" stroke="${mouthCol}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
-  else if (expr === 'sleep') mouth = `<ellipse cx="100" cy="114" rx="3.5" ry="2.5" fill="${mouthCol}"/>`;
-  else mouth = `<path d="M91 111 Q95.5 117 100 111 Q104.5 117 109 111" stroke="${mouthCol}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+/* ---------- colors ---------- */
+const hex2rgb = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgb2hex = (r) => '#' + r.map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => { const x = hex2rgb(a), y = hex2rgb(b); return rgb2hex(x.map((v, i) => v + (y[i] - v) * t)); };
+const lum = (h) => { const [r, g, b] = hex2rgb(h); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+function derive(species, base) {
+  if (species === 'panda') return { base: '#F7F6F0', dark: base, light: '#FFFFFF', eye: '#FFFFFF', pupil: true, feet: base };
+  const p = { base, dark: mix(base, '#000000', 0.28), light: mix(base, '#FFFFFF', 0.72), eye: INK };
+  if (species === 'penguin') { p.light = '#FFFFFF'; p.feet = '#F5A623'; }
+  else if (lum(base) < 0.3) { p.faceDark = true; p.eye = '#FFFFFF'; p.pupil = true; p.light = mix(base, '#FFFFFF', 0.25); }
+  return p;
+}
+function getPal(species, color) {
+  const s = SPECIES[species];
+  if (typeof color === 'string' && color[0] === '#') return { ...derive(species, color), label: 'オリジナル' };
+  const c = s.colors[color] || Object.values(s.colors)[0];
+  return c.dark ? c : { ...derive(species, c.base), ...c };
+}
+const validColor = (species, color) => typeof color === 'string' && (/^#[0-9a-fA-F]{6}$/.test(color) || !!SPECIES[species].colors[color]);
 
-  let ears, tail, snout, extras = '';
-  if (species === 'dog') {
-    tail = `<g class="tail" style="transform-origin:140px 140px;transform-box:view-box"><path d="M138 142 Q172 132 162 102 Q158 92 150 100" stroke="${p.base}" stroke-width="13" fill="none" stroke-linecap="round"/><path d="M138 142 Q172 132 162 102 Q158 92 150 100" stroke="${ink}" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".25"/></g>`;
-    ears = `<ellipse cx="55" cy="80" rx="15" ry="30" transform="rotate(22 55 80)" fill="${p.dark}" stroke="${ink}" stroke-width="3"/><ellipse cx="145" cy="80" rx="15" ry="30" transform="rotate(-22 145 80)" fill="${p.dark}" stroke="${ink}" stroke-width="3"/>`;
-    snout = `<ellipse cx="100" cy="106" rx="22" ry="16" fill="${p.light}"/><ellipse cx="100" cy="99" rx="7.5" ry="5.5" fill="${ink}"/><circle cx="102" cy="97.5" r="1.8" fill="#fff"/>`;
-    if (stage === 2) extras += `<path d="M66 128 Q100 142 134 128" stroke="#E2453C" stroke-width="8" fill="none" stroke-linecap="round"/><circle cx="100" cy="140" r="7" fill="#F5C842" stroke="${ink}" stroke-width="2.5"/>`;
-  } else {
-    tail = `<g class="tail" style="transform-origin:140px 155px;transform-box:view-box"><path d="M138 156 Q188 150 176 104 Q172 92 164 98" stroke="${p.base}" stroke-width="11" fill="none" stroke-linecap="round"/><path d="M138 156 Q188 150 176 104 Q172 92 164 98" stroke="${ink}" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".25"/></g>`;
-    ears = `<path d="M56 66 L64 20 L94 44 Z" fill="${p.base}" stroke="${ink}" stroke-width="3" stroke-linejoin="round"/><path d="M144 66 L136 20 L106 44 Z" fill="${p.base}" stroke="${ink}" stroke-width="3" stroke-linejoin="round"/><path d="M64 54 L67 32 L83 45 Z" fill="#F49AA6"/><path d="M136 54 L133 32 L117 45 Z" fill="#F49AA6"/>`;
-    const wh = colorKey === 'black' ? '#c9c7d0' : ink;
-    snout = `<path d="M95 100 L105 100 L100 106 Z" fill="#F07C8C" stroke="${ink}" stroke-width="1.5" stroke-linejoin="round"/>` +
-      `<g stroke="${wh}" stroke-width="2" stroke-linecap="round" opacity=".7"><path d="M64 102 L40 98"/><path d="M64 108 L40 110"/><path d="M136 102 L160 98"/><path d="M136 108 L160 110"/></g>`;
-    if (stage === 2) extras += `<g transform="translate(138 40) rotate(18)"><path d="M0 0 L-14 -9 L-14 9 Z M0 0 L14 -9 L14 9 Z" fill="#FF6F9E" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"/><circle r="4.5" fill="#FF6F9E" stroke="${ink}" stroke-width="2.5"/></g>`;
-    if (colorKey === 'tora') extras += `<g stroke="${p.dark}" stroke-width="4" stroke-linecap="round"><path d="M92 42 L92 54"/><path d="M100 40 L100 54"/><path d="M108 42 L108 54"/></g>`;
+/* ---------- pet drawing (soft "vinyl toy" shading) ---------- */
+let svgSeq = 0;
+function petSVG(species, colorKey, stage, expr, variant) {
+  const p = getPal(species, colorKey);
+  const u = 'pv' + (++svgSeq);
+  const defs = [], gmap = {};
+  const G = (c) => {
+    if (!gmap[c]) {
+      const id = `${u}g${Object.keys(gmap).length}`;
+      gmap[c] = id;
+      defs.push(`<radialGradient id="${id}" cx="38%" cy="30%" r="78%"><stop offset="0" stop-color="${mix(c, '#FFFFFF', 0.5)}"/><stop offset=".55" stop-color="${c}"/><stop offset="1" stop-color="${mix(c, '#000000', 0.2)}"/></radialGradient>`);
+    }
+    return `url(#${gmap[c]})`;
+  };
+  defs.push(`<filter id="${u}b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3.5"/></filter>`,
+            `<filter id="${u}s" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"/></filter>`,
+            `<linearGradient id="${u}eye" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.pupil ? p.eye : '#1E1622'}"/><stop offset="1" stop-color="${p.pupil ? mix(p.eye, '#000000', 0.15) : '#6E4F84'}"/></linearGradient>`);
+  const OL = mix(p.base, INK, 0.55);
+  const st = `stroke="${OL}" stroke-width="2.5"`;
+  const scale = [0.66, 0.84, 1][stage];
+  const R = [12, 11, 10][stage];
+  const ex = [78, 122], ey = 90;
+  const lid = species === 'panda' || p.faceDark ? '#FFFFFF' : INK;
+  const soft = p.faceDark ? '#d8d6de' : INK;
+  let eyes = '';
+  if (expr === 'sleep') eyes = ex.map(x => `<path d="M${x - 8} ${ey} Q${x} ${ey + 7} ${x + 8} ${ey}" stroke="${lid}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`).join('');
+  else if (expr === 'smile' || expr === 'joy') eyes = ex.map(x => `<path d="M${x - 8} ${ey + 3} Q${x} ${ey - 8} ${x + 8} ${ey + 3}" stroke="${lid}" stroke-width="4" fill="none" stroke-linecap="round"/>`).join('');
+  else if (expr === 'sick') eyes = ex.map(x => `<path d="M${x - 6} ${ey - 5} L${x + 6} ${ey + 5} M${x + 6} ${ey - 5} L${x - 6} ${ey + 5}" stroke="${lid}" stroke-width="3.5" stroke-linecap="round"/>`).join('');
+  else {
+    const r = expr === 'sad' ? R - 2 : R;
+    eyes = ex.map(x => `<ellipse cx="${x}" cy="${ey}" rx="${r}" ry="${r * 1.12}" fill="url(#${u}eye)"/>` +
+      (p.pupil ? `<ellipse cx="${x}" cy="${ey + 1}" rx="${r * 0.48}" ry="${r * 0.8}" fill="${INK}"/>` : '') +
+      `<circle cx="${x + r * 0.34}" cy="${ey - r * 0.42}" r="${r * 0.4}" fill="#fff"/><circle cx="${x - r * 0.36}" cy="${ey + r * 0.42}" r="${r * 0.17}" fill="#fff" opacity=".85"/>`).join('');
+    if (expr === 'sad') eyes += `<path d="M64 74 L86 80 M136 74 L114 80" stroke="${soft}" stroke-width="3" stroke-linecap="round"/>`;
   }
-  if (variant === 'star') extras += `<path d="M78 40 L84 22 L92 34 L100 16 L108 34 L116 22 L122 40 Z" fill="#F5C842" stroke="${ink}" stroke-width="3" stroke-linejoin="round"/>`;
-  const sick = expr === 'sick' ? `<g opacity=".8"><path d="M78 58 L78 68 M88 56 L88 68 M98 55 L98 68" stroke="#5B7FD6" stroke-width="3" stroke-linecap="round"/><path d="M146 70 Q152 80 146 84 Q140 80 146 70 Z" fill="#8FD3E8" stroke="${ink}" stroke-width="2"/></g>` : '';
-  const cheeks = expr === 'sick' ? '' : `<ellipse cx="66" cy="104" rx="8" ry="5" fill="#F49AA6" opacity=".7"/><ellipse cx="134" cy="104" rx="8" ry="5" fill="#F49AA6" opacity=".7"/>`;
-  return `<svg class="pet-svg ${species} ${expr}" viewBox="0 0 200 200" aria-hidden="true">
-  <ellipse cx="100" cy="190" rx="${50 * scale}" ry="${7 * scale}" fill="#000" opacity=".12"/>
+  const my = species === 'penguin' ? 9 : 0;
+  let mouth;
+  if (expr === 'eat') mouth = `<g class="chomp" style="transform-origin:100px ${114 + my}px;transform-box:view-box"><ellipse cx="100" cy="${115 + my}" rx="7" ry="6.5" fill="#C94F5D" stroke="${INK}" stroke-width="2"/></g>`;
+  else if (expr === 'joy') mouth = `<path d="M91 ${110 + my} Q100 ${127 + my} 109 ${110 + my} Z" fill="#E86A6A" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/><ellipse cx="100" cy="${120 + my}" rx="4" ry="2.5" fill="#FF9CA8"/>`;
+  else if (expr === 'sad' || expr === 'sick') mouth = `<path d="M93 ${119 + my} Q100 ${112 + my} 107 ${119 + my}" stroke="${soft}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  else if (expr === 'sleep') mouth = `<ellipse cx="100" cy="${115 + my}" rx="3" ry="2.2" fill="${soft}"/>`;
+  else mouth = species === 'penguin' ? '' : `<path d="M92 112 Q96 117 100 112 Q104 117 108 112" stroke="${soft}" stroke-width="2.8" fill="none" stroke-linecap="round"/>`;
+  const whiskers = (len) => `<g stroke="${soft}" stroke-width="1.8" stroke-linecap="round" opacity=".5"><path d="M62 104 L${62 - len} 100"/><path d="M62 110 L${62 - len} 112"/><path d="M138 104 L${138 + len} 100"/><path d="M138 110 L${138 + len} 112"/></g>`;
+  const neck = (c) => `<path d="M88 128 L100 135 L88 142 Z M112 128 L100 135 L112 142 Z" fill="${G(c)}" stroke="${mix(c, INK, .5)}" stroke-width="2" stroke-linejoin="round"/><circle cx="100" cy="135" r="4.5" fill="${G(c)}" stroke="${mix(c, INK, .5)}" stroke-width="2"/>`;
+  const tailPath = (d, w) => `<path d="${d}" stroke="${OL}" stroke-width="${w + 5}" fill="none" stroke-linecap="round"/><path d="${d}" stroke="${p.base}" stroke-width="${w}" fill="none" stroke-linecap="round"/><path d="${d}" stroke="#fff" stroke-width="${w * 0.3}" fill="none" stroke-linecap="round" opacity=".3" transform="translate(-2 -2)"/>`;
+  const pink = '#F7A9B8';
+
+  let back = '', earsB = '', earsF = '', face = '', nose = '', arms = '', extras = '';
+  const adult = stage === 2;
+  switch (species) {
+    case 'dog':
+      back = `<g class="tail" style="transform-origin:140px 140px;transform-box:view-box">${tailPath('M138 142 Q172 132 162 102 Q158 92 150 100', 13)}</g>`;
+      earsF = `<ellipse cx="54" cy="82" rx="16" ry="30" transform="rotate(22 54 82)" fill="${G(p.dark)}" ${st}/><ellipse cx="146" cy="82" rx="16" ry="30" transform="rotate(-22 146 82)" fill="${G(p.dark)}" ${st}/>`;
+      nose = `<ellipse cx="100" cy="108" rx="22" ry="15" fill="${G(p.light)}"/><ellipse cx="100" cy="101" rx="7.5" ry="5.5" fill="${G('#3A2E39')}"/><ellipse cx="102" cy="99" rx="2.5" ry="1.6" fill="#fff" opacity=".9"/>`;
+      if (adult) extras = `<path d="M66 128 Q100 142 134 128" stroke="#E2453C" stroke-width="8" fill="none" stroke-linecap="round"/><circle cx="100" cy="140" r="7" fill="${G('#F5C842')}" stroke="#8A6A10" stroke-width="2"/>`;
+      break;
+    case 'cat':
+      back = `<g class="tail" style="transform-origin:140px 155px;transform-box:view-box">${tailPath('M138 156 Q188 150 176 104 Q172 92 164 98', 11)}</g>`;
+      earsB = `<path d="M56 68 L62 22 L94 46 Z" fill="${G(p.base)}" ${st} stroke-linejoin="round"/><path d="M144 68 L138 22 L106 46 Z" fill="${G(p.base)}" ${st} stroke-linejoin="round"/><path d="M64 56 L66 34 L83 46 Z" fill="${pink}"/><path d="M136 56 L134 34 L117 46 Z" fill="${pink}"/>`;
+      nose = `<path d="M95 102 L105 102 L100 107 Z" fill="#F07C8C" stroke-linejoin="round"/>` + whiskers(22);
+      if (colorKey === 'tora') face = `<g stroke="${p.dark}" stroke-width="4" stroke-linecap="round" opacity=".8"><path d="M92 42 L92 54"/><path d="M100 40 L100 54"/><path d="M108 42 L108 54"/></g>`;
+      if (adult) extras = `<g transform="translate(138 42) rotate(18)"><path d="M0 0 L-14 -9 L-14 9 Z M0 0 L14 -9 L14 9 Z" fill="${G('#FF6F9E')}" stroke="#A33A62" stroke-width="2" stroke-linejoin="round"/><circle r="4.5" fill="${G('#FF6F9E')}" stroke="#A33A62" stroke-width="2"/></g>`;
+      break;
+    case 'rabbit': {
+      back = `<circle cx="148" cy="166" r="13" fill="${G(p.light)}" ${st}/>`;
+      const ear = (cx, cy, rot) => `<ellipse cx="${cx}" cy="${cy}" rx="13" ry="36" transform="rotate(${rot} ${cx} ${cy})" fill="${G(p.base)}" ${st}/><ellipse cx="${cx}" cy="${cy + 2}" rx="6" ry="26" transform="rotate(${rot} ${cx} ${cy + 2})" fill="${pink}"/>`;
+      earsB = `<g class="ears-b">${ear(78, 30, -10)}${adult ? ear(128, 38, 35) : ear(122, 30, 10)}</g>`;
+      nose = `<path d="M96 102 L104 102 L100 107 Z" fill="#F07C8C"/><path d="M100 107 L100 111" stroke="${soft}" stroke-width="2.5" stroke-linecap="round"/>` + whiskers(15);
+      if (adult) extras = `<path d="M66 128 Q100 144 134 128" stroke="#FF8FB1" stroke-width="9" fill="none" stroke-linecap="round"/><path d="M120 134 L130 152" stroke="#FF8FB1" stroke-width="8" stroke-linecap="round"/>`;
+      break;
+    }
+    case 'hamster': {
+      earsB = `<g class="ears-b"><circle cx="62" cy="50" r="15" fill="${G(p.base)}" ${st}/><circle cx="62" cy="50" r="7" fill="${pink}"/><circle cx="138" cy="50" r="15" fill="${G(p.base)}" ${st}/><circle cx="138" cy="50" r="7" fill="${pink}"/></g>`;
+      const puff = expr === 'eat' ? 25 : 19;
+      face = `<ellipse cx="70" cy="108" rx="${puff}" ry="${puff - 5}" fill="${G(p.light)}"/><ellipse cx="130" cy="108" rx="${puff}" ry="${puff - 5}" fill="${G(p.light)}"/><path d="M100 48 L100 64" stroke="${p.dark}" stroke-width="5" stroke-linecap="round" opacity=".8"/>`;
+      nose = `<circle cx="100" cy="102" r="3.5" fill="#F07C8C"/>` + whiskers(13);
+      if (adult) extras = neck('#5BB4E5');
+      break;
+    }
+    case 'penguin':
+      arms = `<ellipse class="flip-l" cx="56" cy="150" rx="11" ry="27" transform="rotate(22 56 150)" fill="${G(p.base)}" ${st}/><ellipse class="flip-r" cx="144" cy="150" rx="11" ry="27" transform="rotate(-22 144 150)" fill="${G(p.base)}" ${st}/>`;
+      face = `<path d="M100 74 C88 60 58 66 60 94 C62 118 82 128 100 128 C118 128 138 118 140 94 C142 66 112 60 100 74 Z" fill="${G('#FFFFFF')}"/>`;
+      nose = `<path d="M90 103 L110 103 L100 114 Z" fill="${G('#F5A623')}" stroke="#A86A10" stroke-width="2" stroke-linejoin="round"/>`;
+      if (adult) extras = neck('#E2453C');
+      break;
+    case 'panda':
+      earsB = `<circle cx="60" cy="48" r="17" fill="${G(p.dark)}" ${st}/><circle cx="140" cy="48" r="17" fill="${G(p.dark)}" ${st}/>`;
+      arms = `<ellipse cx="60" cy="150" rx="13" ry="24" transform="rotate(20 60 150)" fill="${G(p.dark)}" ${st}/><ellipse cx="140" cy="150" rx="13" ry="24" transform="rotate(-20 140 150)" fill="${G(p.dark)}" ${st}/>`;
+      face = `<ellipse cx="76" cy="92" rx="15" ry="19" transform="rotate(35 76 92)" fill="${p.dark}"/><ellipse cx="124" cy="92" rx="15" ry="19" transform="rotate(-35 124 92)" fill="${p.dark}"/>`;
+      nose = `<ellipse cx="100" cy="104" rx="6.5" ry="4.5" fill="${G('#3A2E39')}"/>`;
+      if (adult) extras = `<path d="M128 140 L150 112" stroke="#6BAF5A" stroke-width="5" stroke-linecap="round"/><ellipse cx="152" cy="108" rx="10" ry="4" transform="rotate(-40 152 108)" fill="#8CCB6E"/>`;
+      break;
+  }
+  if (variant === 'star') extras += `<path d="M80 40 L85 24 L92 34 L100 18 L108 34 L115 24 L120 40 Z" fill="${G('#F5C842')}" stroke="#8A6A10" stroke-width="2.5" stroke-linejoin="round"/>`;
+  const sick = expr === 'sick' ? `<g opacity=".8"><path d="M78 58 L78 68 M88 56 L88 68 M98 55 L98 68" stroke="#5B7FD6" stroke-width="3" stroke-linecap="round"/><path d="M146 70 Q152 80 146 84 Q140 80 146 70 Z" fill="#8FD3E8" stroke="${INK}" stroke-width="2"/></g>` : '';
+  const cheeks = expr === 'sick' ? '' : `<g filter="url(#${u}s)" opacity="${expr === 'joy' ? .85 : .6}"><ellipse cx="63" cy="109" rx="10" ry="6" fill="#FF7F9A"/><ellipse cx="137" cy="109" rx="10" ry="6" fill="#FF7F9A"/></g>`;
+  const shine = `<ellipse cx="80" cy="58" rx="20" ry="10" transform="rotate(-25 80 58)" fill="#fff" opacity=".45" filter="url(#${u}b)"/>`;
+  const feet = p.feet || p.base;
+  return `<svg class="pet-svg ${species} ${expr}" viewBox="0 0 200 200" aria-hidden="true"><defs>${defs.join('')}</defs>
+  <ellipse cx="100" cy="190" rx="${52 * scale}" ry="${8 * scale}" fill="#3A2E39" opacity=".22" filter="url(#${u}s)"/>
   <g transform="translate(100 190) scale(${scale}) translate(-100 -190)" stroke-linejoin="round">
-    ${tail}
-    <ellipse cx="100" cy="148" rx="48" ry="36" fill="${p.base}" stroke="${ink}" stroke-width="3"/>
-    <ellipse cx="100" cy="156" rx="27" ry="21" fill="${p.light}"/>
-    <ellipse cx="76" cy="180" rx="13" ry="9" fill="${p.base}" stroke="${ink}" stroke-width="3"/>
-    <ellipse cx="124" cy="180" rx="13" ry="9" fill="${p.base}" stroke="${ink}" stroke-width="3"/>
-    ${species === 'cat' ? ears : ''}
-    <circle cx="100" cy="88" r="50" fill="${p.base}" stroke="${ink}" stroke-width="3"/>
-    ${species === 'dog' ? ears : ''}
-    ${cheeks}${eyes}${snout}${mouth}${sick}${extras}
+    ${back}
+    <ellipse cx="100" cy="150" rx="46" ry="34" fill="${G(p.base)}" ${st}/>
+    <ellipse cx="100" cy="157" rx="26" ry="20" fill="${G(p.light)}"/>
+    <ellipse cx="82" cy="134" rx="14" ry="7" fill="#fff" opacity=".35" filter="url(#${u}s)"/>
+    ${arms}
+    <ellipse cx="77" cy="181" rx="13" ry="9" fill="${G(feet)}" ${st}/>
+    <ellipse cx="123" cy="181" rx="13" ry="9" fill="${G(feet)}" ${st}/>
+    ${earsB}
+    <ellipse cx="100" cy="88" rx="54" ry="50" fill="${G(p.base)}" ${st}/>
+    ${earsF}${face}${shine}${cheeks}${eyes}${nose}${mouth}${sick}${extras}
   </g></svg>`;
 }
 
@@ -421,10 +703,11 @@ function say(text, ms = 2400) {
 }
 function lcd(text) { $('lcd').textContent = text; }
 function setAnim(expr, ms) { anim = { expr, until: Date.now() + ms }; renderPet(); }
-function floatAt(char, xPct, yPct) {
+function floatAt(text, xPct, yPct, color) {
   const f = document.createElement('div');
-  f.className = 'float'; f.textContent = char;
+  f.className = 'float'; f.textContent = text;
   f.style.left = xPct + '%'; f.style.top = yPct + '%';
+  if (color) f.style.color = color;
   $('room').appendChild(f);
   setTimeout(() => f.remove(), 1200);
 }
@@ -435,6 +718,14 @@ function petCenterPct() {
 function heartSVG(fill) {
   return `<svg viewBox="0 0 24 24"><path d="M12 21 C4 15 2 11 2 8 A5 5 0 0 1 12 6 A5 5 0 0 1 22 8 C22 11 20 15 12 21 Z" fill="${fill}" stroke="#3A2E39" stroke-width="2" stroke-linejoin="round"/></svg>`;
 }
+function addCoins(n) {
+  if (!n) return;
+  M.coins = Math.max(0, M.coins + n);
+  const c = $('coins');
+  c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump');
+  if (n > 0) { const pc = petCenterPct(); floatAt(`+${n}🪙`, pc.x - 6, pc.y - 4, '#B07A00'); }
+}
+function bark(extra) { return sp().voice + (extra || '！'); }
 
 function currentExpr() {
   if (anim && Date.now() < anim.until) return anim.expr;
@@ -448,18 +739,27 @@ function currentExpr() {
 function renderPet(force) {
   const st = stageOf(ageMin());
   const expr = currentExpr();
-  const key = [S.species, S.color, st, expr, S.variant].join('|');
+  const key = [S.species, S.color, st, expr, S.variant, M.hat, $('petpos').offsetWidth].join('|');
   if (key === petKey && !force) return;
   petKey = key;
-  $('petbob').innerHTML = petSVG(S.species, S.color, st, expr, S.variant);
+  let html = petSVG(S.species, S.color, st, expr, S.variant);
+  const hat = M.hat && HATS[M.hat];
+  if (hat) {
+    const s = [0.66, 0.84, 1][st], w = $('petpos').offsetWidth || 180;
+    const y = hat.eyes ? (190 - 104 * s) / 2 : (190 - 150 * s) / 2;
+    html += `<div class="hat${hat.eyes ? ' eyes' : ''}" style="top:${y}%;font-size:${Math.round(w * (hat.eyes ? 0.3 : 0.24) * s)}px">${hat.icon}</div>`;
+  }
+  $('petbob').innerHTML = html;
 }
 
 function render() {
   const m = ageMin(), st = stageOf(m);
   $('petName').textContent = S.name;
-  $('stageLbl').textContent = STAGE_NAMES[S.species][st];
+  $('stageLbl').textContent = [sp().kid + '(あかちゃん)', sp().kid, sp().adult][st];
   $('ageLbl').textContent = Math.floor(m / MIN_PER_YEAR) + 'さい';
   $('wtLbl').textContent = S.weight.toFixed(1) + 'kg';
+  $('persLbl').textContent = S.personality;
+  $('coins').textContent = '🪙 ' + M.coins;
   for (const k of ['hunger', 'happy', 'clean', 'energy']) {
     const el = $('m-' + k);
     el.querySelector('.fill').style.width = S[k] + '%';
@@ -468,19 +768,26 @@ function render() {
   const h = Math.ceil(S.health / 20);
   $('hearts').innerHTML = Array.from({ length: 5 }, (_, i) => heartSVG(i < h ? '#FF6F61' : '#EADFD3')).join('');
   $('hearts').setAttribute('aria-label', `けんこう ${h}/5`);
-  // poop
   const poops = $('poops');
   if (poops.children.length !== S.poop) {
     poops.innerHTML = '';
-    const slots = [6, 80, 18, 68];
+    const slots = [4, 82, 16, 70];
     for (let i = 0; i < S.poop; i++) {
       const d = document.createElement('div');
       d.className = 'poop'; d.textContent = '💩'; d.style.left = slots[i] + '%';
       poops.appendChild(d);
     }
   }
-  // needs
-  const need = { feed: S.hunger < 30, play: S.happy < 30 && !S.asleep, bath: S.clean < 30, clean: S.poop > 0, med: S.sick, light: !S.asleep && S.energy < 20 };
+  const fk = M.furn.join(',');
+  if (fk !== furnKey) {
+    furnKey = fk;
+    $('furn').innerHTML = M.furn.map(k => `<div class="furn ${FURN[k].cls || ''}" style="${FURN[k].style}">${FURN[k].icon}</div>`).join('');
+  }
+  const g = $('gift');
+  g.hidden = !S.gift || busy;
+  g.style.left = S.giftX + '%';
+  $('bathIc').textContent = sp().bath.icon; $('bathLbl').textContent = sp().bath.label;
+  const need = { food: S.hunger < 30, play: (S.happy < 30 || walkOverdue()) && !S.asleep, bath: S.clean < 30, clean: S.poop > 0, med: S.sick, light: !S.asleep && S.energy < 20 };
   document.querySelectorAll('.act').forEach(b => b.classList.toggle('need', !!need[b.dataset.act]));
   $('room').classList.toggle('lights-off', S.asleep);
   $('petpos').classList.toggle('asleep', S.asleep);
@@ -492,7 +799,7 @@ function render() {
   renderSky();
   renderPet();
   const days = Math.floor(m / (60 * 24));
-  $('frame').innerHTML = days > 0 ? `${days}にちめ` : `${S.name}<br>${Math.floor(m)}ふん`;
+  $('frame').innerHTML = days > 0 ? `${S.name}<br>${days}にちめ` : `${S.name}<br>${Math.floor(m)}ふん`;
 }
 
 function renderSky() {
@@ -511,8 +818,7 @@ function wander() {
   if (busy || S.asleep || Date.now() < nextWander) return;
   nextWander = Date.now() + 3000 + Math.random() * 4000;
   if (Math.random() < 0.35) return;
-  const roomW = $('room').clientWidth;
-  const range = roomW * 0.26;
+  const range = $('room').clientWidth * 0.26;
   const target = Math.round((Math.random() * 2 - 1) * range);
   if (Math.abs(target - walkX) < 10) return;
   facing = target > walkX ? 1 : -1;
@@ -526,51 +832,95 @@ function placePet(walk) {
   if (walk) { pos.classList.add('walking'); setTimeout(() => pos.classList.remove('walking'), 1600); }
 }
 function goCenter() { walkX = 0; placePet(false); }
+function trick() {
+  const pos = $('petpos');
+  pos.classList.add('spin'); setTimeout(() => pos.classList.remove('spin'), 850);
+  setAnim('joy', 1200); say(sp().trick);
+}
 
-/* ---------- actions ---------- */
-function bark(extra) { return VOICE[S.species] + (extra || '！'); }
+/* ---------- care ---------- */
+function eat(food, done) {
+  if (busy) return;
+  busy = true; goCenter(); facing = 1; placePet(false);
+  const it = document.createElement('div');
+  it.className = 'item'; it.textContent = food;
+  it.style.left = '62%'; it.style.bottom = '16%';
+  $('room').appendChild(it);
+  setAnim('eat', 1600);
+  setTimeout(() => { it.style.transform = 'scale(.6)'; it.style.transition = 'transform .6s'; }, 600);
+  setTimeout(() => { it.remove(); busy = false; done(); render(); save(); }, 1600);
+}
+function feedBasic() {
+  if (S.hunger >= 95) { setAnim('normal', 1500); return say('もう おなか いっぱい'); }
+  eat(sp().meal.icon, () => {
+    S.hunger = clamp(S.hunger + 28); S.weight += 0.1; S.poopClock += 1.5; S.fed++;
+    lcd(`${S.name}は ${sp().meal.name}を たべた`);
+  });
+}
+function feedSnack() {
+  const t = Date.now();
+  S.snacks = (S.snacks || []).filter(x => t - x < 10 * 60000);
+  eat('🍪', () => {
+    S.snacks.push(t);
+    S.happy = clamp(S.happy + 15); S.hunger = clamp(S.hunger + 5); S.weight += 0.2;
+    if (S.snacks.length > 3) { S.health = clamp(S.health - 8); lcd('おやつの たべすぎ…ちょっと ぐあいが わるそう'); say('うっぷ…'); }
+    else { lcd(`${S.name}は おやつで ごきげん！`); setAnim('joy', 1400); }
+  });
+}
+function feedItem(key) {
+  const f = foodInfo(key, S.species);
+  if (!M.inv[key]) return;
+  if (S.hunger >= 95 && f.hunger >= 15) { setAnim('normal', 1500); return say('もう おなか いっぱい'); }
+  M.inv[key]--;
+  eat(f.icon, () => {
+    S.hunger = clamp(S.hunger + (f.hunger || 0)); S.energy = clamp(S.energy + (f.energy || 0));
+    S.health = clamp(S.health + (f.health || 0)); S.weight += f.w || 0; S.fed++; S.poopClock += 1;
+    let happy = f.happy || 0;
+    if (key === 'fav' && S.personality === 'くいしんぼう') happy += 10;
+    S.happy = clamp(S.happy + happy);
+    if (key === 'fav') { setAnim('joy', 1600); say('だいすき！'); lcd(`${S.name}は ${f.name}に むちゅう！`); }
+    else if (happy < 0) { setAnim('sad', 1000); say('うーん…'); lcd(`${f.name}は からだに いいけど ちょっと にがて`); }
+    else { setAnim('smile', 1200); lcd(`${S.name}は ${f.name}を たべた`); }
+  });
+}
 const actions = {
-  feed() {
+  food() {
     if (S.asleep) return say('…Zzz');
-    if (S.hunger >= 95) { setAnim('normal', 1500); return say('もう おなか いっぱい'); }
-    eat(S.species === 'dog' ? '🍖' : '🐟', () => {
-      S.hunger = clamp(S.hunger + 28); S.weight += 0.1; S.poopClock += 1.5; S.fed++;
-      lcd(`${S.name}は ごはんを たべた`);
-    });
-  },
-  snack() {
-    if (S.asleep) return say('…Zzz');
-    const t = Date.now();
-    S.snacks = (S.snacks || []).filter(x => t - x < 10 * 60000);
-    eat('🍪', () => {
-      S.snacks.push(t);
-      S.happy = clamp(S.happy + 15); S.hunger = clamp(S.hunger + 5); S.weight += 0.2;
-      if (S.snacks.length > 3) { S.health = clamp(S.health - 8); lcd('おやつの たべすぎ…ちょっと ぐあいが わるそう'); say('うっぷ…'); }
-      else { lcd(`${S.name}は おやつで ごきげん！`); setAnim('joy', 1400); }
-    });
+    openSheet('food');
   },
   play() {
     if (S.asleep) return say('…Zzz');
     if (S.sick) return say('ぐあい わるい…');
-    if (S.energy < 15) { setAnim('sad', 1500); return say('つかれた…'); }
-    startGame();
+    openSheet('play');
   },
   bath() {
     if (S.asleep) return say('…Zzz');
+    const B = sp().bath;
     busy = true; goCenter();
-    for (let i = 0; i < 14; i++) setTimeout(() => {
-      const b = document.createElement('div');
-      const s = 10 + Math.random() * 22;
-      b.className = 'bub'; b.style.width = b.style.height = s + 'px';
-      b.style.left = (30 + Math.random() * 40) + '%'; b.style.top = (50 + Math.random() * 30) + '%';
-      $('room').appendChild(b); setTimeout(() => b.remove(), 1700);
-    }, i * 90);
-    const catHatesIt = S.species === 'cat';
-    setAnim(catHatesIt ? 'sad' : 'joy', 1800);
-    say(catHatesIt ? 'ニャ゛ー！' : 'ワンワン♪');
+    if (B.style === 'brush') {
+      const it = document.createElement('div');
+      it.className = 'item brush'; it.textContent = B.icon;
+      it.style.left = '58%'; it.style.bottom = '30%';
+      $('room').appendChild(it); setTimeout(() => it.remove(), 1800);
+      for (let i = 0; i < 6; i++) setTimeout(() => { const c = petCenterPct(); floatAt('✨', c.x - 14 + Math.random() * 24, c.y + 10 + Math.random() * 20); }, i * 260);
+    } else {
+      const sand = B.style === 'sand';
+      for (let i = 0; i < 14; i++) setTimeout(() => {
+        const b = document.createElement('div');
+        const sz = sand ? 4 + Math.random() * 6 : 10 + Math.random() * 22;
+        b.className = 'bub'; b.style.width = b.style.height = sz + 'px';
+        if (sand) { b.style.background = '#E8CF94'; b.style.borderColor = '#C9A85F'; }
+        b.style.left = (30 + Math.random() * 40) + '%'; b.style.top = (50 + Math.random() * 30) + '%';
+        $('room').appendChild(b); setTimeout(() => b.remove(), 1700);
+      }, i * 90);
+      $('petpos').classList.add('spin'); setTimeout(() => $('petpos').classList.remove('spin'), 850);
+    }
+    const loves = S.personality === 'きれいずき';
+    setAnim('joy', 1800);
+    say(bark('♪'));
     setTimeout(() => {
-      S.clean = 100; S.happy = clamp(S.happy + (catHatesIt ? -6 : 6));
-      lcd(catHatesIt ? 'ピカピカ。でも ねこは おふろが にがて…' : 'ピカピカに なった！');
+      S.clean = 100; S.happy = clamp(S.happy + B.mood + (loves ? 10 : 0));
+      lcd(B.text);
       busy = false; render(); save();
     }, 1800);
   },
@@ -592,32 +942,206 @@ const actions = {
       if (S.energy < 60) { S.happy = clamp(S.happy - 10); say('まだ ねむい…'); lcd('むりやり おこしちゃった'); }
       else { say('おはよう！'); lcd(`${S.name}が おきた`); }
     } else {
-      const h = new Date().getHours(), night = h >= 20 || h < 6;
-      if (S.energy > 80 && !night) { say('まだ ねむくない！'); return; }
+      const night = isNight();
+      if (sp().nocturnal && night && S.energy > 30) { say('よるは これから！'); return lcd(`${sp().label}は よるに げんきな どうぶつ。ひるまに ねかせてあげよう`); }
+      if (S.energy > 80 && !night && !sp().nocturnal && !sp().sleepy) { say('まだ ねむくない！'); return; }
       S.asleep = true; goCenter(); lcd(`でんきを けした。${S.name}は ねむった`);
     }
     render(); save();
   },
+  shop() { openSheet('shop'); },
   info() { openInfo(); },
 };
-function eat(food, done) {
+
+/* ---------- sheets ---------- */
+let sheetMode = null, shopTab = 'food';
+function openSheet(mode) { sheetMode = mode; renderSheet(); $('sheet').hidden = false; }
+function closeSheet() { $('sheet').hidden = true; sheetMode = null; }
+function row(icon, title, sub, btnLabel, btnAttrs, disabled, on) {
+  return `<div class="row"><div class="em">${icon}</div><div class="tx"><b>${title}</b><span>${sub}</span></div><button class="mini${on ? ' on' : ''}" ${btnAttrs}${disabled ? ' disabled' : ''}>${btnLabel}</button></div>`;
+}
+function effectText(f) {
+  const parts = [];
+  if (f.hunger) parts.push(`おなか+${f.hunger}`);
+  if (f.happy) parts.push(`ごきげん${f.happy > 0 ? '+' : ''}${f.happy}`);
+  if (f.energy) parts.push(`げんき+${f.energy}`);
+  if (f.health) parts.push(`けんこう+${f.health}`);
+  return parts.join(' ');
+}
+function renderSheet() {
+  const list = $('sheetList'), tabs = $('sheetTabs');
+  $('sheetCoins').textContent = '🪙 ' + M.coins;
+  tabs.innerHTML = '';
+  if (sheetMode === 'food') {
+    $('sheetTitle').textContent = 'なにを あげる？';
+    let html = row(sp().meal.icon, sp().meal.name, 'いつもの ごはん・おなか+28', 'あげる', 'data-feed="basic"') +
+               row('🍪', 'おやつ', 'ごきげん+15（たべすぎ ちゅうい）', 'あげる', 'data-feed="snack"');
+    for (const k of Object.keys(FOODS)) {
+      const n = M.inv[k] || 0; if (!n) continue;
+      const f = foodInfo(k, S.species);
+      html += row(f.icon, `${f.name} ×${n}`, effectText(f) + (k === 'fav' ? '・だいこうぶつ' : ''), 'あげる', `data-feed="${k}"`);
+    }
+    if (!Object.values(M.inv).some(n => n > 0)) html += `<div class="empty">ショップで とくべつな たべものが かえるよ</div>`;
+    list.innerHTML = html;
+  } else if (sheetMode === 'play') {
+    $('sheetTitle').textContent = 'なにして あそぶ？';
+    const tired = S.energy < 15;
+    const X = sp().special;
+    list.innerHTML =
+      row(X.icon, X.name, X.desc + (walkOverdue() ? '・<b style="color:var(--coral);display:inline">いきたがってる！</b>' : ''), tired ? 'つかれてる' : 'いく', 'data-special="1"', tired) +
+      row('↔️', 'どっちむくかな？', `${S.name}が むく ほうこうを あてよう（5かい）`, tired ? 'つかれてる' : 'あそぶ', 'data-game="dir"', tired) +
+      row('🧺', 'おやつキャッチ', `ゆびで うごかして キャッチ！ 🌶️は さけてね（ベスト ${S.best || 0}）`, tired ? 'つかれてる' : 'あそぶ', 'data-game="catch"', tired);
+  } else if (sheetMode === 'shop') {
+    $('sheetTitle').textContent = 'ショップ';
+    tabs.innerHTML = [['food', 'たべもの'], ['hat', 'きせかえ'], ['furn', 'へや']].map(([k, l]) =>
+      `<button class="tab" role="tab" data-tab="${k}" aria-selected="${shopTab === k}">${l}</button>`).join('');
+    let html = '';
+    if (shopTab === 'food') {
+      for (const k of Object.keys(FOODS)) {
+        const f = foodInfo(k, S.species);
+        html += row(f.icon, `${f.name}（${f.price}🪙）`, effectText(f) + ` ・もってる ${M.inv[k] || 0}`, 'かう', `data-buy="food:${k}"`, M.coins < f.price);
+      }
+    } else if (shopTab === 'hat') {
+      for (const [k, h] of Object.entries(HATS)) {
+        const owned = M.hats.includes(k), worn = M.hat === k;
+        if (owned) html += row(h.icon, h.name, worn ? 'つけてる' : 'もってる', worn ? 'はずす' : 'つける', `data-wear="${k}"`, false, worn);
+        else html += row(h.icon, `${h.name}（${h.price}🪙）`, 'あたまに つける', 'かう', `data-buy="hat:${k}"`, M.coins < h.price);
+      }
+    } else {
+      for (const [k, f] of Object.entries(FURN)) {
+        const owned = has(k);
+        html += row(f.icon, owned ? f.name : `${f.name}（${f.price}🪙）`, f.tip, owned ? 'おいてある' : 'かう', `data-buy="furn:${k}"`, owned || M.coins < f.price);
+      }
+    }
+    list.innerHTML = html;
+  }
+}
+function onSheetClick(e) {
+  const t = e.target.closest('button'); if (!t || t.disabled) return;
+  if (t.dataset.tab) { shopTab = t.dataset.tab; return renderSheet(); }
+  if (t.dataset.feed) {
+    closeSheet();
+    const k = t.dataset.feed;
+    return k === 'basic' ? feedBasic() : k === 'snack' ? feedSnack() : feedItem(k);
+  }
+  if (t.dataset.special) { closeSheet(); return doSpecial(); }
+  if (t.dataset.game) { closeSheet(); return t.dataset.game === 'dir' ? startDir() : startCatch(); }
+  if (t.dataset.wear) {
+    M.hat = M.hat === t.dataset.wear ? null : t.dataset.wear;
+    if (M.hat) { setAnim('joy', 1200); say('にあう？'); }
+    renderSheet(); render(); return save();
+  }
+  if (t.dataset.buy) {
+    const [kind, k] = t.dataset.buy.split(':');
+    const price = kind === 'food' ? foodInfo(k, S.species).price : kind === 'hat' ? HATS[k].price : FURN[k].price;
+    if (M.coins < price) return;
+    M.coins -= price;
+    if (kind === 'food') { M.inv[k] = (M.inv[k] || 0) + 1; lcd(`${foodInfo(k, S.species).name}を かった`); }
+    if (kind === 'hat') { M.hats.push(k); M.hat = k; lcd(`${HATS[k].name}を かって つけてあげた`); setAnim('joy', 1200); say('にあう？'); }
+    if (kind === 'furn') { M.furn.push(k); lcd(`${FURN[k].name}を へやに おいた`); setAnim('joy', 1200); }
+    renderSheet(); render(); save();
+  }
+}
+
+/* ---------- each animal's own activity ---------- */
+function goOut(awayMs, back) {
+  const pos = $('petpos'), W = $('room').clientWidth;
+  facing = 1; walkX = W * 0.95; placePet(true);
+  setTimeout(() => {
+    pos.style.transition = 'none'; walkX = -W * 0.95; placePet(false);
+    void pos.offsetWidth;
+    setTimeout(() => {
+      pos.style.transition = ''; walkX = 0; facing = 1; placePet(true);
+      setTimeout(back, 1650);
+    }, awayMs);
+  }, 1650);
+}
+function findSomething(where) {
+  const r = Math.random();
+  if (r < 0.45) { const n = 3 + Math.floor(Math.random() * 8); addCoins(n); return `${where}で ${n}コイン ひろった！`; }
+  if (r < 0.6) { M.inv.fav = (M.inv.fav || 0) + 1; return `${where}で ${sp().fav.name}を みつけた！`; }
+  return '';
+}
+function hopTimes(n, gap, done) {
+  const pos = $('petpos'), range = $('room').clientWidth * 0.26;
+  let i = 0;
+  const step = () => {
+    if (i++ >= n) return done();
+    const target = Math.round((Math.random() * 2 - 1) * range);
+    facing = target > walkX ? 1 : -1; walkX = target; placePet(false);
+    pos.classList.remove('jump'); void pos.offsetWidth; pos.classList.add('jump');
+    setAnim('joy', gap);
+    setTimeout(step, gap);
+  };
+  step();
+}
+function doSpecial() {
   if (busy) return;
-  busy = true; goCenter(); facing = 1; placePet(false);
-  const it = document.createElement('div');
-  it.className = 'item'; it.textContent = food;
-  it.style.left = '62%'; it.style.bottom = '16%';
-  $('room').appendChild(it);
-  setAnim('eat', 1600);
-  setTimeout(() => { it.style.transform = 'scale(.6)'; it.style.transition = 'transform .6s'; }, 600);
-  setTimeout(() => { it.remove(); busy = false; done(); render(); save(); }, 1600);
+  const X = sp().special;
+  busy = true;
+  const end = (happy, msg, line) => {
+    $('petpos').classList.remove('jump', 'walking', 'spin');
+    S.happy = clamp(S.happy + happy); S.energy = clamp(S.energy - 12); S.hunger = clamp(S.hunger - 5); S.played++;
+    busy = false; goCenter();
+    setAnim('joy', 1600); say(line || bark('♪')); lcd(msg);
+    render(); save();
+  };
+  const prop = (icon, style) => { const it = document.createElement('div'); it.className = 'item'; it.textContent = icon; it.style.cssText += style; $('room').appendChild(it); return it; };
+  switch (X.id) {
+    case 'walk':
+      lcd(`${S.name}と さんぽに でかけた…`); say('さんぽ！ さんぽ！');
+      goOut(2600, () => {
+        S.walkAt = Date.now(); S.clean = clamp(S.clean - 12); S.weight = Math.max(0.05, S.weight - 0.1);
+        const f = findSomething('こうえん');
+        end(28, f || 'さんぽ たのしかった！ ちょっと よごれたかも', 'ただいま！');
+      });
+      break;
+    case 'swim':
+      lcd(`${S.name}は プールへ…`); say('クワッ！');
+      goOut(2600, () => {
+        S.clean = clamp(S.clean + 25); S.hunger = clamp(S.hunger + 8);
+        const f = findSomething('プール');
+        end(22, f || 'すいすい およいで、さかなも たべてきた！', 'すいすい〜');
+      });
+      break;
+    case 'jarashi': {
+      if (Math.random() < 0.3 && S.personality !== 'あまえんぼう') {
+        busy = false; setAnim('normal', 1500); say('…プイッ'); return lcd('きょうは きぶんじゃ ないみたい。ねこは きまぐれ');
+      }
+      goCenter();
+      const it = prop('🪶', 'left:60%;top:30%;transition:transform .35s');
+      let k = 0; const t = setInterval(() => { it.style.transform = `translate(${(k % 2 ? -1 : 1) * 30}px, ${k % 2 ? 10 : -10}px) rotate(${k % 2 ? -30 : 30}deg)`; k++; }, 350);
+      hopTimes(4, 600, () => { clearInterval(t); it.remove(); end(22, 'ねこじゃらしに むちゅう！', 'ニャッ！'); });
+      break;
+    }
+    case 'heyanpo':
+      lcd(`${S.name}が へやの なかを はしりまわってる`);
+      hopTimes(5, 650, () => end(22, 'うれしくて ジャンプ！（ビンキー）', 'ぷぅ♪'));
+      break;
+    case 'wheel': {
+      goCenter();
+      const night = isNight();
+      const it = prop('🎡', 'left:50%;bottom:14%;font-size:5rem;transform:translateX(-50%);z-index:2;animation:wheel 1.2s linear infinite');
+      $('petpos').classList.add('walking');
+      lcd('くるくる くるくる…');
+      setTimeout(() => { it.remove(); S.weight = Math.max(0.05, S.weight - 0.05); end(night ? 30 : 18, night ? 'よるの まわしぐるまは さいこう！' : 'いっぱい はしった！'); }, 3200);
+      break;
+    }
+    case 'roll': {
+      goCenter();
+      let n = 0; const pos = $('petpos');
+      const t = setInterval(() => { pos.classList.remove('spin'); void pos.offsetWidth; pos.classList.add('spin'); if (++n >= 3) { clearInterval(t); setTimeout(() => end(20, 'ころころ ころりん！', 'メェ〜♪'), 900); } }, 900);
+      break;
+    }
+  }
 }
 
 /* ---------- mini game: どっちむくかな ---------- */
-function startGame() {
+function startDir() {
   busy = true; goCenter();
   const g = document.createElement('div');
   g.className = 'game';
-  g.innerHTML = `<div class="top"><span>どっちむくかな？</span><span id="gScore">0/5</span></div><div class="q" id="gQ">${S.name}は どっちを むく？</div><div class="arrows"><button data-d="-1" aria-label="ひだり">◀</button><button data-d="1" aria-label="みぎ">▶</button></div>`;
+  g.innerHTML = `<div class="top"><span>どっちむくかな？</span><span id="gScore">0/0</span></div><div class="q">${S.name}は どっちを むく？</div><div class="arrows"><button data-d="-1" aria-label="ひだり">◀</button><button data-d="1" aria-label="みぎ">▶</button></div>`;
   $('room').appendChild(g);
   let round = 0, wins = 0, locked = false;
   g.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
@@ -634,74 +1158,226 @@ function startGame() {
     $('gScore').textContent = `${wins}/${round}`;
     setTimeout(() => {
       mk.remove(); $('petpos').classList.remove('jump');
-      if (round >= 5) return endGame(g, wins);
+      if (round >= 5) return endDir(g, wins);
       locked = false; g.querySelectorAll('button').forEach(x => x.disabled = false);
     }, 900);
   }));
 }
-function endGame(g, wins) {
+function endDir(g, wins) {
   g.remove(); busy = false;
   S.happy = clamp(S.happy + 8 + wins * 6); S.energy = clamp(S.energy - 12); S.hunger = clamp(S.hunger - 5);
-  S.weight = Math.max(0.5, S.weight - 0.15); S.played++; S.wins += wins;
-  if (wins >= 3) { setAnim('joy', 2000); say(bark('！たのしい！')); lcd(`${wins}かい あたり！ ${S.name}は おおよろこび`); }
-  else { setAnim('smile', 1500); say(bark('♪')); lcd(`${wins}かい あたり。また あそぼうね`); }
+  S.weight = Math.max(0.05, S.weight - 0.1); S.played++; S.wins += wins;
+  const coins = Math.round((2 + wins * 3) * (S.personality === 'やんちゃ' ? 1.5 : 1));
+  addCoins(coins);
+  if (wins === 5) { setAnim('joy', 2000); say('ぜんぶ あたり！'); lcd(`パーフェクト！ ${coins}コイン ゲット`); }
+  else if (wins >= 3) { setAnim('joy', 2000); say(bark('！たのしい！')); lcd(`${wins}かい あたり！ ${coins}コイン ゲット`); }
+  else { setAnim('smile', 1500); say(bark('♪')); lcd(`${wins}かい あたり。${coins}コイン ゲット`); }
+  render(); save();
+}
+
+/* ---------- mini game: おやつキャッチ ---------- */
+function startCatch() {
+  busy = true;
+  const room = $('room'), pos = $('petpos');
+  room.classList.add('catching');
+  walkX = 0; placePet(false);
+  const g = document.createElement('div');
+  g.className = 'game';
+  g.innerHTML = `<div class="top"><span>⏱<b id="cTime">25</b></span><span>🍬<b id="cScore">0</b></span><span id="cLives">❤❤❤</span></div><div class="q" id="cHint">ゆびで うごかして キャッチ！</div><div></div>`;
+  room.appendChild(g);
+  const DURATION = 25;
+  let score = 0, lives = 3, t0 = performance.now(), last = t0, spawnIn = 0.6, items = [], targetX = 0, running = true;
+  const fav = sp().fav.icon, goods = [fav, '🍎', '🍙', '🍬', fav];
+  const W = () => room.clientWidth, H = () => room.clientHeight;
+  const move = (e) => { const r = room.getBoundingClientRect(); targetX = e.clientX - r.left - r.width / 2; };
+  const key = (e) => { if (e.key === 'ArrowLeft') targetX -= W() * 0.18; if (e.key === 'ArrowRight') targetX += W() * 0.18; };
+  room.addEventListener('pointerdown', move); room.addEventListener('pointermove', move);
+  document.addEventListener('keydown', key);
+  setTimeout(() => { const h = $('cHint'); if (h) h.style.visibility = 'hidden'; }, 2500);
+  function spawn(el) {
+    const r = Math.random(), badP = Math.min(0.32, 0.14 + el * 0.008);
+    const kind = r < 0.1 ? 'star' : r < 0.1 + badP ? 'bad' : 'good';
+    const e = document.createElement('div');
+    e.className = 'drop';
+    e.textContent = kind === 'star' ? '⭐' : kind === 'bad' ? '🌶️' : goods[Math.floor(Math.random() * goods.length)];
+    room.appendChild(e);
+    items.push({ el: e, x: 6 + Math.random() * (W() - 44), y: -40, v: 0.32 + Math.random() * 0.18 + el * 0.012, kind });
+  }
+  function hit(it) {
+    const c = petCenterPct();
+    if (it.kind === 'bad') { lives--; setAnim('sad', 700); say('からい！', 700); floatAt('🔥', c.x - 4, c.y); }
+    else { const n = it.kind === 'star' ? 3 : 1; score += n; setAnim('joy', 400); floatAt('+' + n, c.x - 3, c.y, '#FF6F61'); }
+    $('cScore').textContent = score;
+    $('cLives').textContent = '❤'.repeat(Math.max(0, lives)) + '♡'.repeat(3 - Math.max(0, lives));
+  }
+  function frame(now) {
+    if (!running) return;
+    const dt = Math.min(50, now - last) / 1000; last = now;
+    const el = (now - t0) / 1000;
+    const pw = pos.offsetWidth, half = W() / 2 - pw * 0.35;
+    targetX = Math.max(-half, Math.min(half, targetX));
+    const prev = walkX;
+    walkX += (targetX - walkX) * Math.min(1, dt * 12);
+    if (Math.abs(walkX - prev) > 0.6) facing = walkX > prev ? 1 : -1;
+    placePet(false);
+    spawnIn -= dt;
+    if (spawnIn <= 0) { spawnIn = Math.max(0.33, 0.75 - el * 0.016); spawn(el); }
+    const petCx = W() / 2 + walkX, top = H() * 0.48, bottom = H() * 0.78;
+    for (const it of items) {
+      it.y += it.v * dt * H();
+      it.el.style.transform = `translate(${it.x}px, ${it.y}px)`;
+      if (!it.done && it.y > top && it.y < bottom && Math.abs(it.x + 16 - petCx) < pw * 0.38) { it.done = true; hit(it); }
+      if (it.y > H()) it.done = true;
+    }
+    items = items.filter(it => { if (it.done) { it.el.remove(); return false; } return true; });
+    $('cTime').textContent = Math.max(0, Math.ceil(DURATION - el));
+    if (el >= DURATION || lives <= 0) return finish(lives <= 0);
+    requestAnimationFrame(frame);
+  }
+  function finish(burnt) {
+    running = false;
+    items.forEach(it => it.el.remove());
+    room.removeEventListener('pointerdown', move); room.removeEventListener('pointermove', move);
+    document.removeEventListener('keydown', key);
+    g.remove(); room.classList.remove('catching'); busy = false;
+    goCenter();
+    const newBest = score > (S.best || 0);
+    if (newBest) S.best = score;
+    S.played++;
+    S.happy = clamp(S.happy + 6 + Math.min(30, score * 2)); S.energy = clamp(S.energy - 15);
+    S.hunger = clamp(S.hunger + Math.min(15, score)); S.weight += 0.05;
+    const coins = Math.round(score * (S.personality === 'やんちゃ' ? 1.5 : 1));
+    addCoins(coins);
+    setAnim(burnt ? 'sad' : 'joy', 1800);
+    say(burnt ? 'からかった…' : newBest ? 'ベスト きろく！' : bark('！'));
+    lcd(`${score}こ キャッチ！ ${coins}コイン ゲット${newBest ? '・ベストこうしん！' : ''}`);
+    render(); save();
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- gift ---------- */
+function openGift() {
+  if (!S.gift || busy) return;
+  S.gift = false;
+  S.giftAt = Date.now() + (8 + Math.random() * 10) * 60000;
+  const r = Math.random();
+  if (r < 0.55) {
+    const n = 5 + Math.floor(Math.random() * 16);
+    addCoins(n); lcd(`プレゼントの なかみは ${n}コイン！`);
+  } else {
+    const keys = Object.keys(FOODS), k = keys[Math.floor(Math.random() * keys.length)];
+    M.inv[k] = (M.inv[k] || 0) + 1;
+    const f = foodInfo(k, S.species);
+    lcd(`プレゼントの なかみは ${f.name}！`);
+    const c = petCenterPct(); floatAt(f.icon, c.x - 4, c.y);
+  }
+  setAnim('joy', 1200); say('わーい！');
   render(); save();
 }
 
 /* ---------- overlays ---------- */
 let pick = { species: 'dog', color: 'shiba' }, nameTouched = false;
 function renderSetup() {
-  $('pickDog').innerHTML = petSVG('dog', pick.species === 'dog' ? pick.color : 'shiba', 1, 'smile') + 'いぬ';
-  $('pickCat').innerHTML = petSVG('cat', pick.species === 'cat' ? pick.color : 'tora', 1, 'smile') + 'ねこ';
-  $('pickDog').setAttribute('aria-pressed', pick.species === 'dog');
-  $('pickCat').setAttribute('aria-pressed', pick.species === 'cat');
-  const sw = $('swatches'); sw.innerHTML = '';
-  for (const [k, p] of Object.entries(PALETTES[pick.species])) {
+  const wrap = $('choices');
+  wrap.innerHTML = '';
+  for (const [k, s] of Object.entries(SPECIES)) {
+    const locked = s.secret && !M.unlocked[k];
     const b = document.createElement('button');
-    b.className = 'sw'; b.style.background = p.base; b.title = p.label; b.setAttribute('aria-label', p.label);
+    b.className = 'choice' + (locked ? ' locked' : '');
+    const color = pick.species === k ? pick.color : Object.keys(s.colors)[0];
+    b.innerHTML = petSVG(k, color, 1, locked ? 'normal' : 'smile') + (locked ? '？？？<small>だれかを おとなまで そだてると…</small>' : s.label);
+    b.setAttribute('aria-pressed', pick.species === k);
+    if (locked) b.disabled = true;
+    else b.onclick = () => { pick = { species: k, color: Object.keys(s.colors)[0] }; renderSetup(); };
+    wrap.appendChild(b);
+  }
+  const sw = $('swatches'); sw.innerHTML = '';
+  for (const [k, c] of Object.entries(SPECIES[pick.species].colors)) {
+    const p = getPal(pick.species, k);
+    const b = document.createElement('button');
+    b.className = 'sw'; b.style.backgroundColor = pick.species === 'panda' ? p.dark : p.base;
+    b.title = p.label; b.setAttribute('aria-label', p.label);
     b.setAttribute('aria-pressed', k === pick.color);
     b.onclick = () => { pick.color = k; renderSetup(); };
     sw.appendChild(b);
   }
-  if (!nameTouched) $('nameInput').value = DEFAULT_NAME[pick.species];
+  const custom = pick.color[0] === '#';
+  const cl = document.createElement('label');
+  cl.className = 'sw custom'; cl.title = 'じぶんで えらぶ';
+  cl.setAttribute('aria-pressed', custom);
+  if (custom) cl.style.background = pick.color;
+  cl.innerHTML = `<span aria-hidden="true">${custom ? '' : '＋'}</span><input type="color" id="customColor" aria-label="じぶんで いろを えらぶ" value="${custom ? pick.color : '#F2A65A'}">`;
+  cl.querySelector('input').addEventListener('change', (e) => { pick.color = e.target.value; renderSetup(); });
+  sw.appendChild(cl);
+  $('colorName').textContent = custom ? 'オリジナルカラー' : getPal(pick.species, pick.color).label + (SPECIES[pick.species].colors[pick.color].fancy ? '（ファンタジー）' : '');
+  if (!nameTouched) $('nameInput').value = SPECIES[pick.species].name;
 }
 function openSetup() { pick = { species: 'dog', color: 'shiba' }; nameTouched = false; renderSetup(); $('setup').hidden = false; }
+function archive(reason) {
+  if (!S || S.archived) return;
+  S.archived = true;
+  M.album.unshift({ name: S.name, species: S.species, color: S.color, variant: S.variant, stage: stageOf(ageMin()),
+    age: Math.floor(ageMin() / MIN_PER_YEAR), reason, date: Date.now() });
+  M.album = M.album.slice(0, 40);
+}
+function albumCard(a, now) {
+  const d = new Date(a.date);
+  const note = now ? 'いっしょに くらしてる' : a.reason === 'trip' ? 'たびに でた' : 'おわかれ';
+  return `<div class="card">${petSVG(a.species, a.color, a.stage, now ? 'smile' : 'normal', a.variant)}<b>${a.name}</b>${a.age}さい・${now ? note : `${d.getMonth() + 1}/${d.getDate()} ${note}`}</div>`;
+}
 function openInfo() {
+  closeSheet();
   const m = ageMin();
   const born = new Date(S.born);
   const rows = [
-    ['しゅるい', (S.species === 'dog' ? 'いぬ' : 'ねこ') + '・' + PALETTES[S.species][S.color].label],
+    ['しゅるい', sp().label + '・' + getPal(S.species, S.color).label],
+    ['せいかく', S.personality],
     ['ねんれい', `${Math.floor(m / MIN_PER_YEAR)}さい（${Math.floor(m)}ふん）`],
     ['たいじゅう', S.weight.toFixed(1) + 'kg'],
     ['うまれた日', `${born.getMonth() + 1}/${born.getDate()} ${born.getHours()}:${String(born.getMinutes()).padStart(2, '0')}`],
     ['ごはんの かいすう', S.fed + 'かい'],
-    ['あそんだ かいすう', `${S.played}かい（あたり ${S.wins}）`],
+    ['あそんだ かいすう', S.played + 'かい'],
+    ['キャッチ ベスト', (S.best || 0) + 'こ'],
     ['おせわ ミス', Math.floor(S.neglect) + 'ふん'],
   ];
   $('infoTitle').textContent = `${S.name}の きろく`;
   $('infoRows').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
   const st = stageOf(m);
-  $('infoTip').textContent = st < 2
+  $('infoTip').textContent = sp().life + '。' + (PERSONALITIES[S.personality]?.tip || '') + '。' + (st < 2
     ? `あと ${Math.ceil(STAGE_AT[st + 1] - m)}ふんで おおきくなるよ。おせわミスが すくないと とくべつな すがたに…？`
-    : (S.variant === 'star' ? 'おせわ ばっちり！ キラキラの おうかんを もらったよ。' : 'りっぱな おとなに なったね。');
+    : (S.variant === 'star' ? 'おせわ ばっちり！ キラキラの おうかんを もらったよ。' : 'りっぱな おとなに なったね。'));
+  const cur = { name: S.name, species: S.species, color: S.color, variant: S.variant, stage: st, age: Math.floor(m / MIN_PER_YEAR) };
+  const seen = new Set([S.species, ...M.album.map(a => a.species)]);
+  const kinds = Object.keys(SPECIES).length;
+  $('album').innerHTML = albumCard(cur, true) + M.album.map(a => albumCard(a)).join('') +
+    `<div class="card" style="display:grid;place-items:center;background:var(--shell)">あった どうぶつ<b style="font-size:1.2rem">${seen.size} / ${kinds}</b></div>`;
   $('resetBox').hidden = true;
   $('info').hidden = false;
 }
 function showEnding() {
   const m = ageMin();
+  archive('trip');
   $('endTitle').textContent = `${S.name}は たびに でました`;
   $('endPic').innerHTML = petSVG(S.species, S.color, stageOf(m), 'sad', S.variant);
-  $('endText').textContent = `おせわが たりなくて、${S.name}は あたらしい おうちを さがしに いきました。${Math.floor(m / MIN_PER_YEAR)}さいまで いっしょに すごしたよ。つぎは もっと たくさん あそんであげてね。`;
+  $('endText').textContent = `おせわが たりなくて、${S.name}は あたらしい おうちを さがしに いきました。${Math.floor(m / MIN_PER_YEAR)}さいまで いっしょに すごしたよ。ずかんに のこしておくね。コインや かった ものは つぎの子に ひきつがれます。`;
   $('ending').hidden = false;
+  save();
 }
 
 /* ---------- loop ---------- */
 function handleEvents(evts) {
   for (const e of evts) {
-    if (e === 'poop') { lcd(`${S.name}が うんちを した`); }
+    if (e === 'poop') lcd(`${S.name}が うんちを した`);
     if (e === 'sick') { lcd(`${S.name}の ようすが へん…くすりを あげよう`); say('うぅ…'); }
     if (e === 'wake') { lcd(`${S.name}が めを さました`); say('おはよう！'); }
+    if (e === 'gift') lcd('あれ？ へやに プレゼントが おちてる！');
   }
+}
+function dailyBonus() {
+  if (M.bonusDay === today()) return false;
+  M.bonusDay = today(); M.coins += 20;
+  return true;
 }
 function tick() {
   if (!S || !S.alive) return;
@@ -712,12 +1388,18 @@ function tick() {
   const st = stageOf(ageMin());
   if (st !== S.stage) {
     S.stage = st;
-    if (st === 2) S.variant = S.neglect < 15 ? 'star' : 'normal';
-    lcd(`${S.name}が ${STAGE_NAMES[S.species][st]}に せいちょうした！`);
+    let extra = '';
+    if (st === 2) {
+      S.variant = S.neglect < 15 ? 'star' : 'normal';
+      if (!M.unlocked.panda) { M.unlocked.panda = true; extra = '・ひみつの どうぶつが ずかんに あらわれた！'; }
+      addCoins(50);
+    }
+    lcd(`${S.name}が ${[sp().kid, sp().kid, sp().adult][st]}に せいちょうした！${extra}`);
     say(bark('！'), 3000); setAnim('joy', 2500);
     $('petpos').classList.add('jump'); setTimeout(() => $('petpos').classList.remove('jump'), 1000);
   }
-  if (!S.alive) { save(); render(); return showEnding(); }
+  if (!S.alive) { render(); return showEnding(); }
+  if (dailyBonus()) { lcd('きょうの ログインボーナス 20コイン！'); addCoins(0); }
   wander();
   if (!busy && !S.asleep && Date.now() > chatterAt) {
     chatterAt = Date.now() + 9000 + Math.random() * 8000;
@@ -728,6 +1410,10 @@ function tick() {
     else if (S.happy < 30) line = 'あそんで！';
     else if (S.energy < 20) line = 'ねむい…';
     else if (S.clean < 30) line = 'からだが かゆい';
+    else if (S.happy > 75 && Math.random() < (has('radio') ? 0.5 : 0.25)) { trick(); if (has('radio')) S.happy = clamp(S.happy + 3); }
+    else if (walkOverdue()) line = 'さんぽ いきたい！';
+    else if (sp().nocturnal && !isNight() && Math.random() < 0.4) line = 'ふあぁ…（ひるは ねむい）';
+    else if (Math.random() < 0.6) line = sp().idles[Math.floor(Math.random() * sp().idles.length)];
     else if (Math.random() < 0.5) line = bark(['！', '♪', '～'][Math.floor(Math.random() * 3)]);
     if (line) say(line);
   }
@@ -736,24 +1422,29 @@ function tick() {
 }
 
 function start(data) {
-  S = (data && data.S) || loadSaved();
-  window.claude?.hot?.snapshot?.(() => ({ S }));
+  M = (data && data.M) || loadJSON(META_KEY) || newMeta();
+  M = Object.assign(newMeta(), M);
+  S = normalize((data && data.S) || loadJSON(SAVE_KEY));
+  window.claude?.hot?.snapshot?.(() => ({ S, M }));
   wire();
   if (!S) { openSetup(); return; }
   if (!S.alive) { render(); return showEnding(); }
   const evts = catchUp();
+  const bonus = dailyBonus();
   render();
-  lcd(evts.length || S.hunger < 40 ? `おかえり！ ${S.name}が まってたよ` : `${S.name}は げんきに してるよ`);
+  if (bonus) lcd('きょうの ログインボーナス 20コイン！');
+  else lcd(evts.length || S.hunger < 40 ? `おかえり！ ${S.name}が まってたよ` : `${S.name}は げんきに してるよ`);
   say(bark('！'));
 }
 function begin() {
-  const name = ($('nameInput').value || '').trim() || DEFAULT_NAME[pick.species];
+  const name = ($('nameInput').value || '').trim() || SPECIES[pick.species].name;
   S = newPet(pick.species, pick.color, name);
+  dailyBonus();
   save(); petKey = ''; walkX = 0; goCenter();
   $('setup').hidden = true; $('ending').hidden = true;
   $('poops').innerHTML = '';
   render();
-  lcd(`${name}が やってきた！ よろしくね`);
+  lcd(`${name}が やってきた！ せいかくは「${S.personality}」みたい`);
   say(bark('！'));
 }
 let wired = false;
@@ -768,21 +1459,25 @@ function wire() {
     if (!S || busy) return;
     if (S.asleep) return say('…Zzz');
     const t = Date.now();
-    if (t - (S.lastPet || 0) > 1500) { S.lastPet = t; S.happy = clamp(S.happy + 3); }
+    if (S.species === 'cat' && S.personality !== 'あまえんぼう' && Math.random() < 0.25) { setAnim('normal', 900); return say('…プイッ', 1200); }
+    if (t - (S.lastPet || 0) > 1500) { S.lastPet = t; S.happy = clamp(S.happy + (S.personality === 'あまえんぼう' ? 6 : 3)); }
     const c = petCenterPct();
     floatAt('💗', c.x - 4, c.y);
     setAnim('joy', 900); say(bark('♪'), 1200); render();
   };
   $('petpos').addEventListener('click', pet);
   $('petpos').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pet(); } });
-  $('pickDog').onclick = () => { pick = { species: 'dog', color: 'shiba' }; renderSetup(); };
-  $('pickCat').onclick = () => { pick = { species: 'cat', color: 'tora' }; renderSetup(); };
+  $('gift').addEventListener('click', openGift);
+  $('sheetList').addEventListener('click', onSheetClick);
+  $('sheetTabs').addEventListener('click', onSheetClick);
+  $('sheetClose').onclick = closeSheet;
+  $('sheet').addEventListener('click', (e) => { if (e.target === $('sheet')) closeSheet(); });
   $('nameInput').addEventListener('input', () => { nameTouched = true; });
   $('startBtn').onclick = begin;
   $('closeInfo').onclick = () => { $('info').hidden = true; };
   $('resetAsk').onclick = () => { $('resetBox').hidden = false; };
   $('resetNo').onclick = () => { $('resetBox').hidden = true; };
-  $('resetYes').onclick = () => { $('info').hidden = true; openSetup(); };
+  $('resetYes').onclick = () => { archive('bye'); save(); $('info').hidden = true; openSetup(); };
   $('againBtn').onclick = () => { $('ending').hidden = true; openSetup(); };
   document.addEventListener('visibilitychange', () => { if (!document.hidden && S && S.alive) { handleEvents(catchUp()); render(); } });
   setInterval(tick, 1000);
