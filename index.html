@@ -247,6 +247,18 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 .game .arrows button:disabled { opacity: .5; }
 .mark { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: 4rem; font-weight: 800; z-index: 9; animation: pop .25s ease-out; }
 
+/* 3D mode: the WebGL canvas draws the room and pet; DOM layers stay on top for speech, items and games */
+.three-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; touch-action: pan-y; cursor: grab; }
+.room.three { background: #DDF1E6; }
+.room.three::after, .room.three .window, .room.three .frame, .room.three .rug, .room.three #furn { display: none; }
+.room.three .petpos { transform: none !important; transition: none !important; bottom: auto; }
+.room.three .petbob { animation: none !important; }
+.room.three.catching .petpos { width: auto; }
+.pet-img { display: block; width: 100%; max-width: 92px; height: auto; }
+.album .pet-img { max-width: 64px; margin: 0 auto; }
+#endPic .pet-img { max-width: 100%; }
+.hint3d { position: absolute; right: 8px; bottom: 6px; z-index: 5; font-family: var(--font-dot); font-size: .7rem; color: var(--ink-soft); background: rgba(255,253,248,.8); border-radius: 8px; padding: 1px 6px; pointer-events: none; transition: opacity 1s; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
 }
@@ -341,6 +353,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
   </main>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
 <script>
 (() => {
 'use strict';
@@ -691,6 +704,493 @@ function petSVG(species, colorKey, stage, expr, variant) {
   </g></svg>`;
 }
 
+/* ---------- 3D (three.js): the room and the pet as soft vinyl-toy models ---------- */
+const P3 = (() => {
+  const T = window.THREE;
+  const api = { ok: false };
+  if (!T) return api;
+  try { const c = document.createElement('canvas'); if (!(c.getContext('webgl2') || c.getContext('webgl'))) return api; } catch (e) { return api; }
+
+  const SPH = new T.SphereGeometry(1, 32, 24);
+  const V = (x, y, z) => new T.Vector3(x, y, z);
+  const mat = (c, o = {}) => new T.MeshStandardMaterial({ color: c, roughness: o.r ?? 0.5, metalness: 0, transparent: o.op != null, opacity: o.op ?? 1, emissive: o.em || 0x000000, emissiveIntensity: o.ei ?? 0 });
+  const basic = (c, o = {}) => new T.MeshBasicMaterial({ color: c, transparent: o.op != null, opacity: o.op ?? 1 });
+  function ell(m, r, pos, sc = [1, 1, 1], rot) {
+    const me = new T.Mesh(SPH, m);
+    me.scale.set(r * sc[0], r * sc[1], r * sc[2]);
+    if (pos) me.position.set(...pos);
+    if (rot) me.rotation.set(...rot);
+    me.castShadow = true;
+    return me;
+  }
+  function geoMesh(geo, m, pos, rot) {
+    const me = new T.Mesh(geo, m);
+    if (pos) me.position.set(...pos);
+    if (rot) me.rotation.set(...rot);
+    me.castShadow = true;
+    return me;
+  }
+  const emojiTex = {};
+  function emojiSprite(ch, size) {
+    if (!emojiTex[ch]) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d');
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '104px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      g.fillText(ch, 64, 72);
+      emojiTex[ch] = new T.CanvasTexture(c);
+    }
+    const s = new T.Sprite(new T.SpriteMaterial({ map: emojiTex[ch], transparent: true }));
+    s.scale.set(size, size, size);
+    return s;
+  }
+
+  /* ----- pet model ----- */
+  // Head ellipsoid radii; faces sit on its front surface.
+  const HA = 0.67, HB = 0.59, HC = 0.59;
+  const onHead = (x, y, inset = 0) => HC * Math.sqrt(Math.max(0.02, 1 - (x / HA) ** 2 - (y / HB) ** 2)) - inset;
+
+  function buildPet(species, colorKey, stage, variant, hatKey) {
+    const p = getPal(species, colorKey);
+    const S3 = [0.62, 0.8, 1][stage];
+    const root = new T.Group();
+    const inner = new T.Group(); root.add(inner);
+    const mBase = mat(p.base), mDark = mat(p.dark), mLight = mat(p.light);
+    const mFeet = mat(p.feet || p.base);
+    const mInk = mat('#1E1622', { r: 0.15 }), mWhite = basic('#FFFFFF');
+    const mPink = mat('#F7A9B8'), mNose = mat('#F07C8C', { r: 0.3 });
+    const mCheek = mat('#FF7F9A', { op: 0.55, r: 0.9 });
+    const lidColor = species === 'panda' || p.faceDark ? '#FFFFFF' : '#2B2230';
+    const mLid = basic(lidColor);
+    const parts = { root, inner, species, S3, eyes: { open: [], happy: [], closed: [], x: [], sad: [] }, mouth: {} };
+
+    // body
+    const hamster = species === 'hamster';
+    const bodyR = hamster ? 0.62 : 0.55;
+    inner.add(ell(mBase, bodyR, [0, 0.52, 0], [1, 0.86, 0.9]));
+    inner.add(ell(mLight, 0.38, [0, 0.48, 0.3], [1, 0.95, 0.55]));
+    inner.add(ell(mFeet, 0.17, [-0.25, 0.08, 0.26], [1, 0.62, 1.35]));
+    inner.add(ell(mFeet, 0.17, [0.25, 0.08, 0.26], [1, 0.62, 1.35]));
+
+    // head
+    const head = new T.Group();
+    head.position.set(0, hamster ? 1.08 : 1.25, 0.04);
+    if (stage === 0) head.scale.setScalar(1.1);
+    inner.add(head); parts.head = head;
+    head.add(ell(mBase, 1, [0, 0, 0], [HA, HB, HC]));
+    // soft rim highlight
+    head.add(ell(mat('#FFFFFF', { op: 0.18, r: 1 }), 0.2, [-0.22, 0.3, 0.42], [1.2, 0.6, 0.4]));
+
+    // eyes
+    const ex = 0.24, ey = 0.02;
+    const pupilEye = !!p.pupil;
+    for (const sx of [-1, 1]) {
+      const x = sx * ex, z = onHead(x, ey, 0.03);
+      const open = new T.Group(); open.position.set(x, ey, z);
+      const R = 0.1;
+      if (pupilEye) {
+        open.add(ell(mat(p.eye, { r: 0.25 }), R, [0, 0, 0], [1, 1.2, 0.5]));
+        open.add(ell(mInk, R * 0.55, [0, -0.005, 0.03], [0.85, 1.4, 0.5]));
+      } else {
+        open.add(ell(mInk, R, [0, 0, 0], [1, 1.25, 0.55]));
+      }
+      open.add(ell(mWhite, 0.036, [0.035, 0.05, 0.05]));
+      open.add(ell(mWhite, 0.018, [-0.032, -0.045, 0.05]));
+      head.add(open); parts.eyes.open.push(open);
+      const arc = new T.TorusGeometry(0.075, 0.02, 8, 20, Math.PI);
+      const happy = geoMesh(arc, mLid, [x, ey - 0.02, z + 0.03]);
+      head.add(happy); parts.eyes.happy.push(happy);
+      const closed = geoMesh(arc, mLid, [x, ey + 0.03, z + 0.03], [0, 0, Math.PI]);
+      head.add(closed); parts.eyes.closed.push(closed);
+      const xg = new T.Group(); xg.position.set(x, ey, z + 0.03);
+      const bar = new T.BoxGeometry(0.16, 0.028, 0.02);
+      xg.add(geoMesh(bar, mLid, [0, 0, 0], [0, 0, Math.PI / 4]));
+      xg.add(geoMesh(bar, mLid, [0, 0, 0], [0, 0, -Math.PI / 4]));
+      head.add(xg); parts.eyes.x.push(xg);
+      const brow = geoMesh(new T.BoxGeometry(0.13, 0.022, 0.02), mLid, [x, ey + 0.17, onHead(x, ey + 0.17, 0) + 0.01], [0, 0, sx * -0.35]);
+      head.add(brow); parts.eyes.sad.push(brow);
+    }
+    // cheeks
+    for (const sx of [-1, 1]) { const x = sx * 0.4, y = -0.13; head.add(ell(mCheek, 0.1, [x, y, onHead(x, y, 0.02)], [1, 0.6, 0.3])); }
+
+    // mouth (penguins talk from under the beak)
+    const my = species === 'penguin' ? -0.3 : species === 'dog' ? -0.29 : -0.21;
+    const mz = species === 'dog' ? 0.6 : onHead(0, my, 0) + 0.01;
+    const mMouthLine = basic(p.faceDark ? '#d8d6de' : '#2B2230');
+    const small = new T.TorusGeometry(0.035, 0.011, 8, 12, Math.PI);
+    const w = new T.Group(); w.position.set(0, my, mz);
+    w.add(geoMesh(small, mMouthLine, [-0.035, 0, 0], [0, 0, Math.PI]));
+    w.add(geoMesh(small, mMouthLine, [0.035, 0, 0], [0, 0, Math.PI]));
+    head.add(w); parts.mouth.normal = w;
+    const mRed = mat('#D9505F', { r: 0.4 });
+    const joy = ell(mRed, 0.075, [0, my - 0.02, mz], [1.1, 0.9, 0.4]); head.add(joy); parts.mouth.joy = joy;
+    const eat = ell(mRed, 0.07, [0, my - 0.02, mz], [1, 1, 0.4]); head.add(eat); parts.mouth.eat = eat;
+    const sad = geoMesh(new T.TorusGeometry(0.05, 0.012, 8, 12, Math.PI), mMouthLine, [0, my - 0.04, mz]); head.add(sad); parts.mouth.sad = sad;
+    const sleep = ell(mMouthLine, 0.025, [0, my, mz], [1, 0.7, 0.4]); head.add(sleep); parts.mouth.sleep = sleep;
+    if (species === 'penguin') parts.mouth.normal.visible = false, parts.mouth.normalHidden = true;
+
+    const whiskers = (len) => {
+      const g = new T.CylinderGeometry(0.006, 0.006, len, 6);
+      const m = basic(p.faceDark ? '#cfcdd6' : '#2B2230', { op: 0.55 });
+      for (const sx of [-1, 1]) for (const k of [0, 1]) head.add(geoMesh(g, m, [sx * (0.42 + len / 2 - 0.05), -0.11 - k * 0.06, 0.4], [0, sx * 0.35, Math.PI / 2 + sx * (k ? -0.12 : 0.12)]));
+    };
+    const neckBow = (c) => {
+      const m = mat(c), g = new T.ConeGeometry(0.09, 0.16, 16);
+      inner.add(geoMesh(g, m, [-0.09, 0.95, 0.4], [0, 0, Math.PI / 2]));
+      inner.add(geoMesh(g, m, [0.09, 0.95, 0.4], [0, 0, -Math.PI / 2]));
+      inner.add(ell(m, 0.05, [0, 0.95, 0.42]));
+    };
+    const adult = stage === 2;
+    const tailPivot = new T.Group(); tailPivot.position.set(0, 0.5, -0.42); inner.add(tailPivot);
+
+    switch (species) {
+      case 'dog': {
+        for (const sx of [-1, 1]) {
+          const ear = new T.Group(); ear.position.set(sx * 0.55, 0.22, 0); ear.rotation.z = sx * 0.3;
+          ear.add(ell(mDark, 0.2, [0, -0.2, 0], [0.75, 1.5, 0.42]));
+          head.add(ear); (parts.ears = parts.ears || []).push(ear);
+        }
+        head.add(ell(mLight, 1, [0, -0.17, 0.46], [0.25, 0.17, 0.17]));
+        head.add(ell(mat('#2B2230', { r: 0.2 }), 1, [0, -0.08, 0.62], [0.075, 0.058, 0.05]));
+        head.add(ell(mWhite, 0.018, [0.02, -0.06, 0.668]));
+        const tail = ell(mBase, 0.1, [0, 0.2, -0.05], [1, 2.4, 1], [-0.6, 0, 0]);
+        tailPivot.add(tail); parts.tail = tailPivot; parts.tailSpeed = 14;
+        if (adult) {
+          inner.add(geoMesh(new T.TorusGeometry(0.34, 0.05, 12, 32), mat('#E2453C'), [0, 0.98, 0.04], [Math.PI / 2 - 0.15, 0, 0]));
+          inner.add(ell(mat('#F5C842', { r: 0.25 }), 0.075, [0, 0.9, 0.4]));
+        }
+        break;
+      }
+      case 'cat': {
+        const cone = new T.ConeGeometry(0.19, 0.36, 24), coneIn = new T.ConeGeometry(0.11, 0.24, 24);
+        for (const sx of [-1, 1]) {
+          const ear = new T.Group(); ear.position.set(sx * 0.36, 0.5, -0.02); ear.rotation.z = sx * -0.38;
+          ear.add(geoMesh(cone, mBase, [0, 0, 0]));
+          ear.add(geoMesh(coneIn, mPink, [0, -0.03, 0.08]));
+          head.add(ear); (parts.ears = parts.ears || []).push(ear);
+        }
+        head.add(ell(mNose, 1, [0, -0.11, onHead(0, -0.11, 0) + 0.01], [0.05, 0.035, 0.03]));
+        whiskers(0.3);
+        if (colorKey === 'tora') for (const dx of [-0.1, 0, 0.1]) head.add(ell(mDark, 1, [dx, 0.4, onHead(dx, 0.4, 0.01)], [0.025, 0.08, 0.02]));
+        for (let i = 0; i < 6; i++) {
+          const a = i * 0.32;
+          tailPivot.add(ell(mBase, 0.1 - i * 0.008, [0, Math.sin(a) * 0.55, -0.05 - (1 - Math.cos(a)) * 0.55 - i * 0.04]));
+        }
+        parts.tail = tailPivot; parts.tailSpeed = 3;
+        if (adult) {
+          const m = mat('#FF6F9E'), g = new T.ConeGeometry(0.08, 0.15, 16);
+          const bow = new T.Group(); bow.position.set(0.32, 0.42, 0.2);
+          bow.add(geoMesh(g, m, [-0.08, 0, 0], [0, 0, Math.PI / 2])); bow.add(geoMesh(g, m, [0.08, 0, 0], [0, 0, -Math.PI / 2])); bow.add(ell(m, 0.045, [0, 0, 0.01]));
+          head.add(bow);
+        }
+        break;
+      }
+      case 'rabbit': {
+        for (const sx of [-1, 1]) {
+          const ear = new T.Group(); ear.position.set(sx * 0.2, 0.5, -0.05);
+          ear.rotation.z = sx * -0.12;
+          if (adult && sx === 1) { ear.rotation.z = -1.1; ear.position.set(0.3, 0.42, -0.05); }
+          ear.add(ell(mBase, 0.13, [0, 0.38, 0], [1, 3, 0.6]));
+          ear.add(ell(mPink, 0.13, [0, 0.36, 0.05], [0.55, 2.4, 0.3]));
+          head.add(ear); (parts.ears = parts.ears || []).push(ear);
+        }
+        head.add(ell(mNose, 1, [0, -0.1, onHead(0, -0.1, 0) + 0.01], [0.045, 0.032, 0.03]));
+        whiskers(0.22);
+        tailPivot.add(ell(mLight, 0.15, [0, -0.05, -0.05]));
+        if (adult) inner.add(geoMesh(new T.TorusGeometry(0.34, 0.06, 12, 32), mat('#FF8FB1'), [0, 0.98, 0.04], [Math.PI / 2 - 0.15, 0, 0]));
+        break;
+      }
+      case 'hamster': {
+        for (const sx of [-1, 1]) {
+          const ear = new T.Group(); ear.position.set(sx * 0.4, 0.44, 0.02);
+          ear.add(ell(mBase, 0.14, [0, 0, 0], [1, 1, 0.5]));
+          ear.add(ell(mPink, 0.08, [0, 0, 0.05], [1, 1, 0.4]));
+          head.add(ear); (parts.ears = parts.ears || []).push(ear);
+        }
+        parts.pouches = [];
+        for (const sx of [-1, 1]) { const pch = ell(mLight, 1, [sx * 0.3, -0.17, 0.38], [0.22, 0.18, 0.17]); head.add(pch); parts.pouches.push(pch); }
+        head.add(ell(mDark, 1, [0, 0.42, onHead(0, 0.42, 0.01)], [0.035, 0.12, 0.025]));
+        head.add(ell(mNose, 0.035, [0, -0.08, onHead(0, -0.08, 0) + 0.01]));
+        whiskers(0.2);
+        if (adult) neckBow('#5BB4E5');
+        break;
+      }
+      case 'penguin': {
+        head.add(ell(mat('#FFFFFF'), 1, [0, -0.05, 0.27], [0.5, 0.44, 0.36]));
+        head.add(geoMesh(new T.ConeGeometry(0.08, 0.2, 20), mat('#F5A623', { r: 0.35 }), [0, -0.15, 0.68], [Math.PI / 2, 0, 0]));
+        parts.flips = [];
+        for (const sx of [-1, 1]) {
+          const f = new T.Group(); f.position.set(sx * 0.5, 0.7, 0);
+          f.add(ell(mBase, 0.13, [sx * 0.04, -0.22, 0], [1, 2.5, 0.6]));
+          f.rotation.z = sx * 0.3;
+          inner.add(f); parts.flips.push(f);
+        }
+        if (adult) neckBow('#E2453C');
+        break;
+      }
+      case 'panda': {
+        for (const sx of [-1, 1]) head.add(ell(mDark, 0.17, [sx * 0.42, 0.45, 0], [1, 1, 0.6]));
+        for (const sx of [-1, 1]) { const x = sx * ex; head.add(ell(mDark, 1, [x, ey - 0.02, onHead(x, ey, 0.05)], [0.15, 0.19, 0.08], [0, 0, sx * 0.6])); }
+        head.add(ell(mat('#2B2230', { r: 0.2 }), 1, [0, -0.12, onHead(0, -0.12, 0) + 0.01], [0.065, 0.045, 0.04]));
+        parts.flips = [];
+        for (const sx of [-1, 1]) {
+          const f = new T.Group(); f.position.set(sx * 0.48, 0.72, 0.05);
+          f.add(ell(mDark, 0.15, [0, -0.18, 0.05], [1, 1.9, 0.9]));
+          f.rotation.z = sx * 0.4;
+          inner.add(f); parts.flips.push(f);
+        }
+        break;
+      }
+    }
+    if (variant === 'star') {
+      const g = new T.Group(); g.position.set(0, HB - 0.02, 0);
+      const gold = mat('#F5C842', { r: 0.25, em: '#7a5a00', ei: 0.15 });
+      g.add(geoMesh(new T.CylinderGeometry(0.2, 0.23, 0.13, 20, 1, true), gold));
+      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; g.add(geoMesh(new T.ConeGeometry(0.05, 0.13, 10), gold, [Math.sin(a) * 0.2, 0.12, Math.cos(a) * 0.2])); }
+      g.rotation.z = 0.15;
+      head.add(g);
+    }
+    const hat = hatKey && HATS[hatKey];
+    if (hat) {
+      const sp3 = emojiSprite(hat.icon, hat.eyes ? 0.62 : 0.55);
+      sp3.position.set(0, hat.eyes ? 0.03 : HB + 0.12, hat.eyes ? 0.66 : 0);
+      head.add(sp3);
+    }
+    root.scale.setScalar(S3);
+    return parts;
+  }
+  function setExpr(parts, expr) {
+    const E = parts.eyes, Mo = parts.mouth;
+    const openEyes = expr === 'normal' || expr === 'sad' || expr === 'eat';
+    E.open.forEach(e => { e.visible = openEyes; e.scale.setScalar(expr === 'sad' ? 0.8 : 1); });
+    E.happy.forEach(e => e.visible = expr === 'smile' || expr === 'joy');
+    E.closed.forEach(e => e.visible = expr === 'sleep');
+    E.x.forEach(e => e.visible = expr === 'sick');
+    E.sad.forEach(e => e.visible = expr === 'sad' || expr === 'sick');
+    Mo.normal.visible = !Mo.normalHidden && (expr === 'normal' || expr === 'smile');
+    Mo.joy.visible = expr === 'joy';
+    Mo.eat.visible = expr === 'eat';
+    Mo.sad.visible = expr === 'sad' || expr === 'sick';
+    Mo.sleep.visible = expr === 'sleep';
+    if (parts.pouches) parts.pouches.forEach(p => p.scale.set(expr === 'eat' ? 0.29 : 0.22, expr === 'eat' ? 0.23 : 0.18, 0.17));
+    parts.expr = expr;
+  }
+  function dispose(obj) {
+    obj.traverse(o => {
+      if (o.geometry && o.geometry !== SPH) o.geometry.dispose();
+      if (o.material && !(o.material.map && Object.values(emojiTex).includes(o.material.map) && false)) o.material.dispose();
+    });
+  }
+  function addLights(scene, shadows) {
+    scene.add(new T.HemisphereLight(0xffffff, 0xd9b89a, 0.5));
+    const d = new T.DirectionalLight(0xfff1de, 0.62);
+    d.position.set(2.5, 6, 5);
+    if (shadows) {
+      d.castShadow = true; d.shadow.mapSize.set(1024, 1024);
+      Object.assign(d.shadow.camera, { left: -4, right: 4, top: 4, bottom: -2, near: 1, far: 20 });
+      d.shadow.radius = 4; d.shadow.bias = -0.002;
+    }
+    scene.add(d);
+    const rim = new T.DirectionalLight(0xd8ecff, 0.25); rim.position.set(-4, 3, -3); scene.add(rim);
+  }
+
+  /* ----- main scene ----- */
+  let renderer, scene, camera, roomEl, canvas;
+  let pet = null, lookKey = '', x = 0, rotY = 0, orbit = 0, drag = null, jumpT = -1, spinT = -1, lastT = 0;
+  let skyMat, orbMat, frameCtx, frameTex, frameText = '', furnGroup, furnKey = '';
+  const CAM_D = 6.2, CAM_Y = 2.2, LOOK = V(0, 0.95, 0);
+
+  function woodTexture() {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+    const g = c.getContext('2d');
+    for (let i = 0; i < 4; i++) {
+      g.fillStyle = ['#E7B98A', '#E2B282', '#EAC092', '#E4B585'][i];
+      g.fillRect(0, i * 64, 256, 64);
+      g.fillStyle = '#C99566'; g.fillRect(0, i * 64 + 61, 256, 3);
+      g.fillRect((i * 97) % 256, i * 64, 3, 64);
+    }
+    const t = new T.CanvasTexture(c);
+    t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(3, 3);
+    return t;
+  }
+  function buildRoom() {
+    const floor = new T.Mesh(new T.PlaneGeometry(16, 9), new T.MeshStandardMaterial({ map: woodTexture(), roughness: 0.8 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.z = 2; floor.receiveShadow = true; scene.add(floor);
+    const wall = new T.Mesh(new T.PlaneGeometry(16, 7), mat('#DDF1E6', { r: 0.95, em: '#DDF1E6', ei: 0.45 }));
+    wall.position.set(0, 3.5, -2.5); wall.receiveShadow = true; scene.add(wall);
+    scene.add(geoMesh(new T.BoxGeometry(16, 0.2, 0.08), mat('#FFFDF8'), [0, 0.1, -2.46]));
+    const rug = new T.Mesh(new T.CylinderGeometry(1.7, 1.7, 0.03, 64), mat('#F7C6CF', { r: 0.95 }));
+    rug.scale.z = 0.55; rug.position.set(0, 0.015, 0.25); rug.receiveShadow = true; scene.add(rug);
+    // window
+    const win = new T.Group(); win.position.set(-1.75, 2.15, -2.47); scene.add(win);
+    skyMat = basic('#9ED8F5');
+    win.add(new T.Mesh(new T.PlaneGeometry(1.5, 1.15), skyMat));
+    orbMat = basic('#FFE066');
+    const orb = new T.Mesh(new T.CircleGeometry(0.17, 32), orbMat); orb.position.set(-0.36, 0.24, 0.01); win.add(orb);
+    const fm = mat('#3A2E39', { r: 0.6 });
+    for (const [w, h, px, py] of [[1.62, 0.07, 0, 0.6], [1.62, 0.07, 0, -0.6], [0.07, 1.27, -0.78, 0], [0.07, 1.27, 0.78, 0], [1.5, 0.04, 0, 0], [0.04, 1.15, 0, 0]])
+      win.add(geoMesh(new T.BoxGeometry(w, h, 0.06), fm, [px, py, 0.03]));
+    // picture frame with the pet's name
+    const pf = new T.Group(); pf.position.set(1.85, 2.25, -2.47); scene.add(pf);
+    const fc = document.createElement('canvas'); fc.width = 192; fc.height = 240;
+    frameCtx = fc.getContext('2d'); frameTex = new T.CanvasTexture(fc);
+    pf.add(new T.Mesh(new T.PlaneGeometry(0.72, 0.9), new T.MeshBasicMaterial({ map: frameTex })));
+    for (const [w, h, px, py] of [[0.84, 0.07, 0, 0.48], [0.84, 0.07, 0, -0.48], [0.07, 1.03, -0.39, 0], [0.07, 1.03, 0.39, 0]])
+      pf.add(geoMesh(new T.BoxGeometry(w, h, 0.05), fm, [px, py, 0.03]));
+    furnGroup = new T.Group(); scene.add(furnGroup);
+  }
+  api.init = (room) => {
+    try {
+      roomEl = room;
+      renderer = new T.WebGLRenderer({ antialias: true, alpha: false });
+      renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+      renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+      canvas = renderer.domElement; canvas.className = 'three-cv';
+      room.insertBefore(canvas, room.firstChild);
+      scene = new T.Scene(); scene.background = new T.Color('#DDF1E6');
+      camera = new T.PerspectiveCamera(36, 1, 0.1, 50);
+      addLights(scene, true);
+      buildRoom();
+      const resize = () => { const w = room.clientWidth, h = room.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+      resize();
+      if (window.ResizeObserver) new ResizeObserver(resize).observe(room); else window.addEventListener('resize', resize);
+      canvas.addEventListener('pointerdown', (e) => { if (room.classList.contains('catching')) return; drag = { x: e.clientX, o: orbit }; });
+      window.addEventListener('pointermove', (e) => { if (drag) orbit = Math.max(-0.9, Math.min(0.9, drag.o - (e.clientX - drag.x) * 0.008)); });
+      window.addEventListener('pointerup', () => { drag = null; });
+      room.classList.add('three');
+      api.ok = true;
+      requestAnimationFrame(loop);
+    } catch (e) { api.ok = false; }
+    return api.ok;
+  };
+  const pxToWorld = () => {
+    const w = roomEl.clientWidth || 1, dist = camera.position.distanceTo(LOOK);
+    return (2 * dist * Math.tan(T.MathUtils.degToRad(camera.fov / 2)) * camera.aspect) / w;
+  };
+  api.setPet = (o) => {
+    const key = [o.species, o.color, o.stage, o.variant, o.hat].join('|');
+    if (key !== lookKey) {
+      lookKey = key;
+      if (pet) { scene.remove(pet.root); dispose(pet.root); }
+      pet = buildPet(o.species, o.color, o.stage, o.variant, o.hat);
+      pet.root.position.x = x;
+      scene.add(pet.root);
+    }
+    if (pet.expr !== o.expr) setExpr(pet, o.expr);
+  };
+  api.setSky = (sky, orb) => { if (skyMat) { skyMat.color.set(sky); orbMat.color.set(orb); } };
+  api.setFrame = (text) => {
+    if (!frameCtx || text === frameText) return;
+    frameText = text;
+    const g = frameCtx;
+    g.fillStyle = '#FFF6E0'; g.fillRect(0, 0, 192, 240);
+    g.fillStyle = '#3A2E39'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const lines = text.split('\n');
+    lines.forEach((l, i) => { g.font = `${i ? 30 : 36}px "DotGothic16", monospace`; g.fillText(l, 96, 120 + (i - (lines.length - 1) / 2) * 52, 176); });
+    frameTex.needsUpdate = true;
+  };
+  const FURN3D = { plant: [-2.6, -1.95, 1.1], ball: [-2.1, -0.4, 0.4], radio: [1.25, -2.15, 0.62], bed: [2.3, -1.75, 1.2] };
+  api.setFurn = (list) => {
+    const k = list.join(',');
+    if (k === furnKey || !furnGroup) return;
+    furnKey = k;
+    while (furnGroup.children.length) furnGroup.remove(furnGroup.children[0]);
+    for (const f of list) {
+      const [fx, fz, size] = FURN3D[f] || [0, -2, 0.6];
+      const s = emojiSprite(FURN[f].icon, size);
+      s.position.set(fx, size * 0.46, fz);
+      if (f === 'radio') s.userData.bounce = true;
+      furnGroup.add(s);
+    }
+  };
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min(0.05, (now - lastT) / 1000 || 0); lastT = now;
+    const t = now / 1000;
+    if (!drag) orbit += (0 - orbit) * Math.min(1, dt * 0.7);
+    camera.position.set(Math.sin(orbit) * CAM_D, CAM_Y, Math.cos(orbit) * CAM_D);
+    camera.lookAt(LOOK);
+    furnGroup.children.forEach(s => { if (s.userData.bounce) s.position.y = 0.3 + Math.abs(Math.sin(t * 6)) * 0.06; });
+    if (pet && S) {
+      const pos = $('petpos'), room = roomEl;
+      const catching = room.classList.contains('catching');
+      const tx = walkX * pxToWorld();
+      if (pos.style.transition === 'none' || catching) x = tx;
+      else x += (tx - x) * Math.min(1, dt * 2.6);
+      const moving = Math.abs(tx - x) > 0.04;
+      const dirGame = !!room.querySelector('.game .arrows');
+      const want = facing * (moving || dirGame || catching ? 1.2 : 0.32);
+      rotY += (want - rotY) * Math.min(1, dt * 9);
+      const s = pet.S3;
+      let y = 0, extra = 0;
+      if (moving && !catching) y = Math.abs(Math.sin(t * 9)) * 0.12 * s;
+      if (pos.classList.contains('jump')) { if (jumpT < 0) jumpT = t; const k = ((t - jumpT) % 0.5) / 0.5; y = Math.sin(k * Math.PI) * 0.65 * s; } else jumpT = -1;
+      if (pos.classList.contains('spin')) { if (spinT < 0) spinT = t; const k = Math.min(1, (t - spinT) / 0.8); extra = k * Math.PI * 2; y = Math.max(y, Math.sin(k * Math.PI) * 0.5 * s); } else spinT = -1;
+      pet.root.position.set(x, y, 0);
+      pet.root.rotation.y = rotY + extra;
+      const asleep = S.asleep, sadish = pet.expr === 'sad' || pet.expr === 'sick';
+      const br = asleep ? Math.sin(t * 1.6) * 0.035 : Math.sin(t * 3.4) * 0.018;
+      pet.inner.scale.set(1 - br * 0.5, (asleep ? 0.93 : 1) + br, 1 - br * 0.5);
+      pet.head.rotation.z = Math.sin(t * 1.3) * (asleep ? 0.02 : 0.07);
+      pet.head.rotation.x = asleep ? 0.28 : sadish ? 0.16 : Math.sin(t * 0.9) * 0.03;
+      if (pet.tail) pet.tail.rotation.y = Math.sin(t * pet.tailSpeed) * (asleep || sadish ? 0.05 : pet.tailSpeed > 5 ? 0.6 : 0.35);
+      if (pet.ears && pet.species === 'rabbit' && !asleep) { const tw = (t % 3.2) < 0.25 ? Math.sin(t * 40) * 0.12 : 0; pet.ears.forEach((e, i) => e.rotation.x = i ? tw : -tw); }
+      if (pet.ears && pet.species === 'dog') pet.ears.forEach((e, i) => e.rotation.z = (i ? 1 : -1) * (0.3 + (moving ? Math.sin(t * 18) * 0.15 : 0)));
+      if (pet.flips) { const fl = moving || pet.expr === 'joy' ? Math.sin(t * 14) * 0.35 : Math.sin(t * 2) * 0.05; pet.flips.forEach((f, i) => f.rotation.z = (i ? 1 : -1) * (0.3 + fl)); }
+      if (pet.expr === 'eat') pet.mouth.eat.scale.y = 0.07 * (0.3 + Math.abs(Math.sin(t * 12)) * 0.9);
+      placeDiv(pos);
+    }
+    renderer.render(scene, camera);
+  }
+  const _v = new T.Vector3();
+  function toPx(px, py, pz) {
+    _v.set(px, py, pz).project(camera);
+    return [(_v.x + 1) / 2 * roomEl.clientWidth, (1 - _v.y) / 2 * roomEl.clientHeight];
+  }
+  function placeDiv(pos) {
+    const s = pet.S3, ry = pet.root.position.y;
+    const [, top] = toPx(x, ry + 1.95 * s, 0);
+    const [, bot] = toPx(x, ry, 0.3 * s);
+    const [lx] = toPx(x - 0.72 * s, ry + 0.8 * s, 0);
+    const [rx] = toPx(x + 0.72 * s, ry + 0.8 * s, 0);
+    pos.style.left = lx + 'px'; pos.style.top = top + 'px';
+    pos.style.width = (rx - lx) + 'px'; pos.style.height = Math.max(10, bot - top) + 'px';
+  }
+
+  /* ----- thumbnails for menus and the album ----- */
+  let tR, tScene, tCam;
+  const thumbCache = {};
+  api.thumb = (species, color, stage, expr, variant) => {
+    const key = [species, color, stage, expr, variant].join('|');
+    if (thumbCache[key]) return thumbCache[key];
+    try {
+      if (!tR) {
+        tR = new T.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+        tR.setSize(220, 220, false); tR.setClearColor(0x000000, 0);
+        tScene = new T.Scene(); addLights(tScene, false);
+        tCam = new T.PerspectiveCamera(30, 1, 0.1, 30);
+      }
+      const p = buildPet(species, color, stage, variant, null);
+      setExpr(p, expr);
+      p.root.rotation.y = 0.35;
+      tScene.add(p.root);
+      const s = p.S3;
+      tCam.position.set(0, 1.25 * s + 0.6, 5.6 * s + 0.4); tCam.lookAt(0, 0.95 * s, 0);
+      tR.render(tScene, tCam);
+      const url = tR.domElement.toDataURL('image/png');
+      tScene.remove(p.root); dispose(p.root);
+      thumbCache[key] = url;
+      return url;
+    } catch (e) { return ''; }
+  };
+  return api;
+})();
+function petPic(species, color, stage, expr, variant) {
+  if (P3.ok) { const u = P3.thumb(species, color, stage, expr, variant); if (u) return `<img class="pet-img" src="${u}" alt="">`; }
+  return petSVG(species, color, stage, expr, variant);
+}
+
 /* ---------- ui helpers ---------- */
 function say(text, ms = 2400) {
   const pos = $('petpos');
@@ -742,6 +1242,7 @@ function renderPet(force) {
   const key = [S.species, S.color, st, expr, S.variant, M.hat, $('petpos').offsetWidth].join('|');
   if (key === petKey && !force) return;
   petKey = key;
+  if (P3.ok) { P3.setPet({ species: S.species, color: S.color, stage: st, variant: S.variant, hat: M.hat, expr }); return; }
   let html = petSVG(S.species, S.color, st, expr, S.variant);
   const hat = M.hat && HATS[M.hat];
   if (hat) {
@@ -778,6 +1279,7 @@ function render() {
       poops.appendChild(d);
     }
   }
+  if (P3.ok) P3.setFurn(M.furn);
   const fk = M.furn.join(',');
   if (fk !== furnKey) {
     furnKey = fk;
@@ -800,6 +1302,7 @@ function render() {
   renderPet();
   const days = Math.floor(m / (60 * 24));
   $('frame').innerHTML = days > 0 ? `${S.name}<br>${days}にちめ` : `${S.name}<br>${Math.floor(m)}ふん`;
+  if (P3.ok) P3.setFrame(days > 0 ? `${S.name}\n${days}にちめ` : `${S.name}\n${Math.floor(m)}ふん`);
 }
 
 function renderSky() {
@@ -808,6 +1311,7 @@ function renderSky() {
   if (h >= 5 && h < 9) sky = '#FFD9A8';
   else if (h >= 17 && h < 19) { sky = '#F7A072'; orb = '#FF8A5B'; }
   else if (h >= 19 || h < 5) { sky = '#2D3561'; orb = '#F4F1D0'; glow = '-5px 3px 0 0 #2D3561 inset'; }
+  if (P3.ok) P3.setSky(sky, orb);
   $('win').style.background = sky;
   $('orb').style.background = orb;
   $('orb').style.boxShadow = glow;
@@ -1222,7 +1726,7 @@ function startCatch() {
     placePet(false);
     spawnIn -= dt;
     if (spawnIn <= 0) { spawnIn = Math.max(0.33, 0.75 - el * 0.016); spawn(el); }
-    const petCx = W() / 2 + walkX, top = H() * 0.48, bottom = H() * 0.78;
+    const petCx = W() / 2 + walkX, top = pos.offsetTop - 20, bottom = pos.offsetTop + pos.offsetHeight * 0.65;
     for (const it of items) {
       it.y += it.v * dt * H();
       it.el.style.transform = `translate(${it.x}px, ${it.y}px)`;
@@ -1286,7 +1790,7 @@ function renderSetup() {
     const b = document.createElement('button');
     b.className = 'choice' + (locked ? ' locked' : '');
     const color = pick.species === k ? pick.color : Object.keys(s.colors)[0];
-    b.innerHTML = petSVG(k, color, 1, locked ? 'normal' : 'smile') + (locked ? '？？？<small>だれかを おとなまで そだてると…</small>' : s.label);
+    b.innerHTML = petPic(k, color, 1, locked ? 'normal' : 'smile') + (locked ? '？？？<small>だれかを おとなまで そだてると…</small>' : s.label);
     b.setAttribute('aria-pressed', pick.species === k);
     if (locked) b.disabled = true;
     else b.onclick = () => { pick = { species: k, color: Object.keys(s.colors)[0] }; renderSetup(); };
@@ -1324,7 +1828,7 @@ function archive(reason) {
 function albumCard(a, now) {
   const d = new Date(a.date);
   const note = now ? 'いっしょに くらしてる' : a.reason === 'trip' ? 'たびに でた' : 'おわかれ';
-  return `<div class="card">${petSVG(a.species, a.color, a.stage, now ? 'smile' : 'normal', a.variant)}<b>${a.name}</b>${a.age}さい・${now ? note : `${d.getMonth() + 1}/${d.getDate()} ${note}`}</div>`;
+  return `<div class="card">${petPic(a.species, a.color, a.stage, now ? 'smile' : 'normal', a.variant)}<b>${a.name}</b>${a.age}さい・${now ? note : `${d.getMonth() + 1}/${d.getDate()} ${note}`}</div>`;
 }
 function openInfo() {
   closeSheet();
@@ -1359,7 +1863,7 @@ function showEnding() {
   const m = ageMin();
   archive('trip');
   $('endTitle').textContent = `${S.name}は たびに でました`;
-  $('endPic').innerHTML = petSVG(S.species, S.color, stageOf(m), 'sad', S.variant);
+  $('endPic').innerHTML = petPic(S.species, S.color, stageOf(m), 'sad', S.variant);
   $('endText').textContent = `おせわが たりなくて、${S.name}は あたらしい おうちを さがしに いきました。${Math.floor(m / MIN_PER_YEAR)}さいまで いっしょに すごしたよ。ずかんに のこしておくね。コインや かった ものは つぎの子に ひきつがれます。`;
   $('ending').hidden = false;
   save();
@@ -1426,6 +1930,7 @@ function start(data) {
   M = Object.assign(newMeta(), M);
   S = normalize((data && data.S) || loadJSON(SAVE_KEY));
   window.claude?.hot?.snapshot?.(() => ({ S, M }));
+  if (!P3.ok && !P3.tried) { P3.tried = true; if (P3.init) P3.init($('room')); if (P3.ok) addHint(); }
   wire();
   if (!S) { openSetup(); return; }
   if (!S.alive) { render(); return showEnding(); }
@@ -1435,6 +1940,12 @@ function start(data) {
   if (bonus) lcd('きょうの ログインボーナス 20コイン！');
   else lcd(evts.length || S.hunger < 40 ? `おかえり！ ${S.name}が まってたよ` : `${S.name}は げんきに してるよ`);
   say(bark('！'));
+}
+function addHint() {
+  const h = document.createElement('div');
+  h.className = 'hint3d'; h.textContent = '← ドラッグで ぐるっと →';
+  $('room').appendChild(h);
+  setTimeout(() => { h.style.opacity = '0'; setTimeout(() => h.remove(), 1200); }, 6000);
 }
 function begin() {
   const name = ($('nameInput').value || '').trim() || SPECIES[pick.species].name;
