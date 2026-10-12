@@ -199,6 +199,25 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .coach-head b { font-weight: 400; color: var(--sign); letter-spacing: .2em; font-size: .9rem; }
 .coach-head small { color: var(--muted); font-size: .72rem; }
 .coach p { margin: 6px 0 0; font-size: .95rem; line-height: 1.75; white-space: pre-line; }
+.coach #coach-text { font-size: 1.15rem; letter-spacing: .08em; color: var(--fg); }
+.coach .coach-goal { font-size: 1rem !important; }
+.tut-dir { position: absolute; pointer-events: none; color: var(--sign); font-size: 1.45rem; background: rgba(8,9,11,.6); padding: 6px 14px; border-radius: 4px; letter-spacing: .1em; text-shadow: 0 0 10px #000, 0 2px 2px #000; display: flex; align-items: center; gap: 10px; animation: dirPulse 1s ease-in-out infinite; }
+.tut-dir b { font-weight: 400; font-size: 3.6rem; line-height: 1; }
+.tut-dir.r { right: 22px; top: 50%; transform: translateY(-50%); flex-direction: row-reverse; }
+.tut-dir.l { left: 22px; top: 50%; transform: translateY(-50%); }
+.tut-dir.b { left: 50%; bottom: 130px; transform: translateX(-50%); flex-direction: column; gap: 2px; }
+@keyframes dirPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+.rules { width: 100%; max-width: 640px; background: var(--panel); border: 1px solid var(--line); padding: 22px 24px 18px; }
+.rules h2 { margin: 0 0 4px; font-weight: 400; font-size: 1.35rem; letter-spacing: .12em; color: var(--sign); }
+.rules .lead { margin: 0 0 14px; font-size: 1rem; line-height: 1.8; }
+.rules svg { display: block; width: 100%; height: auto; max-width: 100%; }
+.rules .nav { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; gap: 10px; }
+.rules .nav span { color: var(--muted); font-size: .8rem; letter-spacing: .3em; }
+.rules .nav button { background: #16181c; border: 1px solid var(--line); padding: 6px 16px; cursor: pointer; font-size: .95rem; }
+.rules .nav button.go { border-color: var(--sign); color: var(--sign); }
+.rules .nav button:hover, .rules .nav button:focus-visible { border-color: var(--sign); color: var(--sign); outline: none; }
+.rules .slide { animation: promptIn .35s ease; }
+.rules svg text { font-family: var(--pixel); }
 .coach .coach-goal { color: var(--sign); font-size: .86rem; }
 .coach .coach-goal.done { color: #8fd18a; }
 .coach-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
@@ -284,6 +303,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
     <div class="coach-row"><button type="button" id="coach-next">次へ（Space）</button><button type="button" id="coach-skip">チュートリアルを終える</button></div>
   </div>
   <div class="hl" id="hl" hidden></div>
+  <div class="tut-dir" id="tut-dir" hidden><b id="tut-dir-a"></b><span id="tut-dir-t"></span></div>
   <div class="tut-result" id="tut-result"><b id="tr-big"></b><span id="tr-sub"></span></div>
   <div class="toast" id="toast" aria-live="polite"><small>異変図鑑に記録</small><b id="toast-name"></b></div>
   <div class="scare" id="scare"><canvas id="scare-face" width="64" height="64"></canvas></div>
@@ -397,6 +417,12 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
         <button type="button" id="gal-next">次 ▶</button>
         <button type="button" id="gal-back">図鑑へ戻る（Esc）</button>
       </nav>
+    </div>
+  </div>
+  <div class="screen dark" id="ov-rules" hidden>
+    <div class="rules" role="dialog" aria-label="ルール説明">
+      <div class="slide" id="rules-slide"></div>
+      <div class="nav"><button type="button" id="rules-back">← 戻る</button><span id="rules-dots"></span><button type="button" class="go" id="rules-next">次へ（Space）</button></div>
     </div>
   </div>
   <div class="screen dark" id="ov-intro" hidden><p class="intro" id="intro-text"></p></div>
@@ -1837,7 +1863,7 @@ function addCatalog(id) { const c = catalog(); c.add(id); store.set('bd2.catalog
 
 function setPhase(p) {
   S.phase = p;
-  ['title', 'pause', 'end', 'catalog', 'keypad', 'loading', 'note', 'intro', 'ending', 'gallery'].forEach(k => { $('ov-' + k).hidden = p !== k; });
+  ['title', 'pause', 'end', 'catalog', 'keypad', 'loading', 'note', 'intro', 'ending', 'gallery', 'rules'].forEach(k => { $('ov-' + k).hidden = p !== k; });
   $('game').dataset.phase = p;
   if (!S.tut) $('coach').hidden = true; else $('coach').hidden = p !== 'play';
   if (p !== 'play' && p !== 'keypad') setMemo(false);
@@ -1881,17 +1907,66 @@ function makeTutBase() {
   return f;
 }
 const TUT = [
-  { html: 'ようこそ。ここは練習用の小さな迷宮。<br>まずは、光の輪まで前へ歩こう。', goal: '<kbd>W</kbd> か <kbd>↑</kbd> で前へ', target: [0, 2], done: () => tAt(0, 2) },
-  { html: '曲がり角だ。右を向いて、次の光の輪まで進もう。', goal: '<kbd>D</kbd> / <kbd>→</kbd> で右を向いて、<kbd>W</kbd> で前へ', target: [2, 2], done: () => tAt(2, 2) },
-  { html: '左下の地図を見て。通った道は、少しずつ消えていく。<br>あなた自身も、通った道を忘れていく。', goal: '地図から道が消えるのを見届ける', hl: 'minimap', hlLabel: '消えていく地図', done: () => tMapFaded() },
-  { html: '覚えていられるのは、メモ帳だけ。<br>開いて、何か書いてみよう（例：「北→東」）。', goal: '<kbd>Tab</kbd> で開く → 1文字書く → <kbd>Tab</kbd> で閉じる', hl: 'btn-memo', hlLabel: 'メモ帳', done: () => S.tutWrote && !memoOpen },
-  { html: 'この先には鉄扉がある。開けるには4桁の番号が要る。<br>番号は、南の行き止まりの真鍮の板に刻まれている。', goal: '光の輪まで行き、板の正面で <kbd>Space</kbd>', target: [2, 4], done: () => S.codeRead },
-  { html: '番号は覚えた？　忘れそうならメモしよう。<br>鉄扉の前で調べて、番号を入れよう。', goal: '扉の正面で <kbd>Space</kbd> → 4桁を入力', target: [3, 2], done: () => S.doorOpen },
-  { html: '奥に下り階段がある。この階には何も起きていない。<br>だから「進む」が正解。', goal: '下り階段の上で <kbd>Space</kbd>', target: [4, 0], stairs: 'down' },
-  { html: '2周目。迷宮の形は、さっきと同じ。<br>でも……どこか、ちがわない？', goal: '異変に気づいたら、スタートの上り階段で <kbd>Space</kbd>（引き返す）', stairs: 'up', setup: 'statue', hl: 'exit-sign', hlLabel: '番号が1つ進んだ' },
-  { html: '危険な異変もある。奥から何かが走ってくる！<br>振り返って、走って、上り階段まで逃げろ。', goal: '<kbd>R</kbd> で振り返る → <kbd>Shift</kbd>＋<kbd>W</kbd> で走る → 上り階段で <kbd>Space</kbd>', stairs: 'up', setup: 'chase' },
-  { html: 'おみごと。これで全部。<br>本番では、番号が進むほど迷宮は広くなり、異変は見つけにくくなる。<br>8番を抜けて、外へ出よう。', goal: '<kbd>Space</kbd> で本番を始める', next: true }
+  { html: '歩いてみよう', goal: '<kbd>↑</kbd> か <kbd>W</kbd> で、光の輪まで進む', target: [0, 2], done: () => tAt(0, 2) },
+  { html: '曲がってみよう', goal: '<kbd>→</kbd> か <kbd>D</kbd> で右を向いて、光の輪まで進む', target: [2, 2], done: () => tAt(2, 2) },
+  { html: '地図は、すぐに消える', goal: '左下の地図を見ていて。歩いた道が消えていく', hl: 'minimap', hlLabel: 'ここを見て', done: () => tMapFaded() },
+  { html: '覚えるには、メモ', goal: '<kbd>Tab</kbd> でメモ帳を開く → 何か書く → <kbd>Tab</kbd> で閉じる', hl: 'btn-memo', hlLabel: 'メモ帳', done: () => S.tutWrote && !memoOpen },
+  { html: '扉の番号を見つけよう', goal: '光の輪まで行くと、金色の板がある。正面で <kbd>Space</kbd>', target: [2, 4], done: () => S.codeRead },
+  { html: '扉を開けよう', goal: '扉の前で <kbd>Space</kbd> → さっきの4桁を入力 → <kbd>Enter</kbd>', target: [3, 2], done: () => S.doorOpen },
+  { html: '何もなければ、進む', goal: 'この階には異変がない。下り階段の上で <kbd>Space</kbd>', target: [4, 0], stairs: 'down' },
+  { html: '異変があれば、戻る', goal: '2周目。前を見て。1周目にはいなかった人影がいる。<br>今立っている上り階段で、そのまま <kbd>Space</kbd>（引き返す）', stairs: 'up', setup: 'statue' },
+  { html: '危ない異変からは、逃げる', goal: '<kbd>R</kbd> で振り返る → <kbd>Shift</kbd> を押しながら <kbd>↑</kbd> で走る → 光の輪で <kbd>Space</kbd>', target: [0, 4], stairs: 'up', setup: 'chase' },
+  { html: 'これで全部', goal: '異変を見つけたら戻る。なければ進む。8番まで行けば出口。<br><kbd>Space</kbd> で本番を始める', next: true }
 ];
+const RULES = [
+  { h: 'これは「異変」をさがすゲーム', lead: '同じ迷宮を、何度も歩く。<br>ときどき一か所だけ、いつもと違うところがある。それが「異変」。',
+    svg: `<svg viewBox="0 0 600 230" aria-hidden="true">
+      <g transform="translate(20,10)"><rect width="260" height="180" fill="#121418" stroke="#2b2f36"/><path d="M0 0 L95 60 L165 60 L260 0 M0 180 L95 120 L165 120 L260 180 M95 60 V120 M165 60 V120" stroke="#5a5550" fill="none"/>
+      <rect x="40" y="70" width="8" height="34" fill="#4a3a28"/><ellipse cx="44" cy="62" rx="9" ry="14" fill="#ffb347"/><rect x="200" y="70" width="8" height="34" fill="#4a3a28"/><ellipse cx="204" cy="62" rx="9" ry="14" fill="#ffb347"/>
+      <text x="130" y="215" text-anchor="middle" fill="#e6c03f" font-size="20">ふだん</text></g>
+      <g transform="translate(320,10)"><rect width="260" height="180" fill="#121418" stroke="#c9473a" stroke-width="2"/><path d="M0 0 L95 60 L165 60 L260 0 M0 180 L95 120 L165 120 L260 180 M95 60 V120 M165 60 V120" stroke="#5a5550" fill="none"/>
+      <rect x="40" y="70" width="8" height="34" fill="#4a3a28"/><ellipse cx="44" cy="62" rx="9" ry="14" fill="#ff3322"/><rect x="200" y="70" width="8" height="34" fill="#4a3a28"/><ellipse cx="204" cy="62" rx="9" ry="14" fill="#ffb347"/>
+      <ellipse cx="130" cy="78" rx="9" ry="10" fill="#050505"/><path d="M118 90 L142 90 L146 128 L114 128 Z" fill="#050505"/><circle cx="126" cy="78" r="1.6" fill="#eee"/><circle cx="134" cy="78" r="1.6" fill="#eee"/>
+      <circle cx="44" cy="62" r="24" fill="none" stroke="#c9473a" stroke-width="2" stroke-dasharray="4 3"/><circle cx="130" cy="100" r="40" fill="none" stroke="#c9473a" stroke-width="2" stroke-dasharray="4 3"/>
+      <text x="130" y="215" text-anchor="middle" fill="#c9473a" font-size="20">異変（炎の色・人影）</text></g></svg>` },
+  { h: '異変があれば戻る。なければ進む', lead: 'スタート地点には「上り階段」、迷宮の奥には「下り階段」がある。<br>階段の上で <b style="font-weight:400;color:var(--sign)">Space</b> を押して選ぶ。',
+    svg: `<svg viewBox="0 0 600 230" aria-hidden="true">
+      <path d="M90 115 H510" stroke="#5a5550" stroke-width="10" stroke-linecap="round"/>
+      <circle cx="90" cy="115" r="42" fill="#121418" stroke="#e6c03f" stroke-width="3"/><text x="90" y="110" text-anchor="middle" fill="#e6c03f" font-size="18">上り</text><text x="90" y="132" text-anchor="middle" fill="#e6c03f" font-size="14">スタート</text>
+      <circle cx="510" cy="115" r="42" fill="#121418" stroke="#ddd8cb" stroke-width="3"/><text x="510" y="110" text-anchor="middle" fill="#ddd8cb" font-size="18">下り</text><text x="510" y="132" text-anchor="middle" fill="#ddd8cb" font-size="14">奥</text>
+      <path d="M150 55 H440" stroke="#8fd18a" stroke-width="4" marker-end="url(#ag)"/><text x="300" y="40" text-anchor="middle" fill="#8fd18a" font-size="17">何もない → 下り階段で「進む」</text>
+      <path d="M440 180 H150" stroke="#c9473a" stroke-width="4" marker-end="url(#ar)"/><text x="300" y="212" text-anchor="middle" fill="#c9473a" font-size="17">異変があった → 上り階段で「引き返す」</text>
+      <defs><marker id="ag" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#8fd18a"/></marker><marker id="ar" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#c9473a"/></marker></defs></svg>` },
+  { h: '正解すると、番号が1つ進む', lead: '0番から始まり、8番まで行けば外に出られる。<br>まちがえると、0番に戻される（迷宮の形も変わる）。',
+    svg: `<svg viewBox="0 0 600 200" aria-hidden="true">
+      ${Array.from({ length: 9 }, (_, i) => `<rect x="${18 + i * 63}" y="60" width="52" height="52" fill="${i === 8 ? '#e6c03f' : '#121418'}" stroke="${i === 8 ? '#e6c03f' : '#4a4f58'}" stroke-width="2"/><text x="${44 + i * 63}" y="96" text-anchor="middle" font-size="26" fill="${i === 8 ? '#15130b' : '#ddd8cb'}">${i}</text>`).join('')}
+      <text x="548" y="140" text-anchor="middle" fill="#e6c03f" font-size="16">出口</text>
+      <path d="M70 45 Q 300 0 520 45" stroke="#8fd18a" stroke-width="3" fill="none" marker-end="url(#ag2)"/><text x="300" y="20" text-anchor="middle" fill="#8fd18a" font-size="16">正解ごとに +1</text>
+      <path d="M480 128 Q 260 200 44 128" stroke="#c9473a" stroke-width="3" fill="none" marker-end="url(#ar2)"/><text x="260" y="190" text-anchor="middle" fill="#c9473a" font-size="16">まちがえたら 0 へ</text>
+      <defs><marker id="ag2" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#8fd18a"/></marker><marker id="ar2" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#c9473a"/></marker></defs></svg>` },
+  { h: 'あなたは、すぐに忘れる', lead: '歩いた道は、数秒で地図から消える。今の番号も消える。<br>でも、メモ帳に書いたことだけは消えない。',
+    svg: `<svg viewBox="0 0 600 210" aria-hidden="true">
+      <g transform="translate(60,20)"><rect width="170" height="150" fill="#07080a" stroke="#2b2f36"/>
+      <path d="M20 130 V80 H80" stroke="#ddd8cb" stroke-width="5" fill="none" opacity=".9"/><path d="M80 80 H120 V30" stroke="#ddd8cb" stroke-width="5" fill="none" opacity=".35"/><path d="M120 30 H150" stroke="#ddd8cb" stroke-width="5" fill="none" opacity=".1"/>
+      <text x="85" y="185" text-anchor="middle" fill="#8b8f96" font-size="17">地図は消える</text></g>
+      <text x="300" y="105" text-anchor="middle" fill="#e6c03f" font-size="34">→</text>
+      <g transform="translate(370,20)"><rect width="170" height="150" fill="#e6ddc4" stroke="#c6ba99"/>
+      ${[40, 68, 96, 124].map(y => `<line x1="14" y1="${y}" x2="156" y2="${y}" stroke="#c6ba99"/>`).join('')}
+      <text x="18" y="35" fill="#29271f" font-size="15">↑2 →右 松明</text><text x="18" y="63" fill="#29271f" font-size="15">番号 4 7 1 9</text><text x="18" y="91" fill="#29271f" font-size="15">壺は右の壁</text>
+      <text x="85" y="185" text-anchor="middle" fill="#e6c03f" font-size="17">メモは消えない（Tab）</text></g></svg>` }
+];
+function showRules(i) {
+  S.rulesI = i; const r = RULES[i];
+  const sl = $('rules-slide'); sl.innerHTML = `<h2>${r.h}</h2><p class="lead">${r.lead}</p>${r.svg}`;
+  sl.style.animation = 'none'; void sl.offsetWidth; sl.style.animation = '';
+  $('rules-dots').textContent = RULES.map((_, k) => k === i ? '●' : '○').join('');
+  $('rules-back').style.visibility = i ? 'visible' : 'hidden';
+  $('rules-next').textContent = i === RULES.length - 1 ? '練習してみる（Space）' : '次へ（Space）';
+  sound.turn();
+}
+function rulesNext() { if (S.rulesI < RULES.length - 1) showRules(S.rulesI + 1); else startTutorialPlay(); }
+$('rules-next').addEventListener('click', rulesNext);
+$('rules-back').addEventListener('click', () => { if (S.rulesI > 0) showRules(S.rulesI - 1); });
 const tAt = (x, y) => S.px === x && S.py === y && !S.anim;
 function tMapFaded() {
   if (performance.now() - S.tutT0 > 9000) return true;
@@ -1913,6 +1988,10 @@ function makeTutMarker() {
   scene.add(g); return g;
 }
 function startTutorial() {
+  setPhase('rules'); showRules(0);
+  setTimeout(() => $('rules-next').focus({ preventScroll: true }), 30);
+}
+function startTutorialPlay() {
   if (!tutMarker) tutMarker = makeTutMarker();
   S.tut = { i: 0 };
   S.diff = 'easy'; S.base = makeTutBase(); S.count = 0; S.lastAnom = null;
@@ -2000,8 +2079,10 @@ function tutCaught() {
   setTimeout(() => { if (S.tut && S.tut.i === i) tutGo(i); }, 1300);
 }
 function tutTick(now) {
-  const t = S.tut; if (!t) { if (tutMarker) tutMarker.visible = false; $('hl').hidden = true; return; }
+  const t = S.tut; if (!t) { if (tutMarker) tutMarker.visible = false; $('hl').hidden = true; $('tut-dir').hidden = true; tutArrows.forEach(m => { m.visible = false; }); return; }
   const st = TUT[t.i]; if (!st) return;
+  // 行き先までの床の矢印と、向きを変える合図
+  tutGuide(now, st);
   // 床の光の輪
   if (tutMarker) {
     const show = !!st.target && S.phase === 'play';
@@ -2027,6 +2108,40 @@ function tutTick(now) {
   if (!st.next && !st.stairs && !t.doneAt && st.done && st.done()) tutComplete();
   if (t.doneAt && now - t.doneAt > (st.stairs ? 2200 : 1100)) tutGo(t.i + 1);
 }
+let tutArrows = [];
+function tutGuide(now, st) {
+  const t = S.tut, show = st.target && S.phase === 'play' && !t.doneAt;
+  if (!tutArrows.length) {
+    const sh = new THREE.Shape(); sh.moveTo(0, 0.28); sh.lineTo(0.2, 0.04); sh.lineTo(0.07, 0.04); sh.lineTo(0.07, -0.22); sh.lineTo(-0.07, -0.22); sh.lineTo(-0.07, 0.04); sh.lineTo(-0.2, 0.04); sh.closePath();
+    const geo = new THREE.ShapeGeometry(sh);
+    for (let i = 0; i < 16; i++) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffd860, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); m.rotation.order = 'YXZ'; m.visible = false; scene.add(m); tutArrows.push(m); }
+  }
+  let path = [];
+  if (show) {
+    const key = S.px + ',' + S.py + ',' + st.target;
+    if (t.pathKey !== key) { t.pathKey = key; const { prev } = bfs(S.floor, S.px, S.py, !S.doorOpen); t.path = pathTo(prev, idx(st.target[0], st.target[1])); if (!t.path.length || t.path[0].x !== S.px || t.path[0].y !== S.py) t.path = []; }
+    path = t.path || [];
+  }
+  tutArrows.forEach((m, i) => {
+    if (i >= path.length - 1) { m.visible = false; return; }
+    const a = path[i], b = path[i + 1], d = dirBetween(a, b);
+    m.visible = true;
+    m.position.set((W2(a.x) + W2(b.x)) / 2, 0.03, (W2(a.y) + W2(b.y)) / 2);
+    m.rotation.set(-Math.PI / 2, ROT[d], 0);
+    m.material.opacity = 0.2 + 0.8 * Math.max(0, Math.sin(now / 170 - i * 0.9));
+  });
+  // 画面の端に「右を向く」などの合図
+  const el = $('tut-dir');
+  if (show && path.length > 1 && !S.anim) {
+    const rel = (dirBetween(path[0], path[1]) - S.dir + 4) % 4;
+    if (rel === 0) el.hidden = true;
+    else {
+      el.hidden = false; el.className = 'tut-dir ' + (rel === 1 ? 'r' : rel === 3 ? 'l' : 'b');
+      $('tut-dir-a').textContent = rel === 1 ? '→' : rel === 3 ? '←' : '↓';
+      $('tut-dir-t').textContent = rel === 1 ? '右を向く（→ / D）' : rel === 3 ? '左を向く（← / A）' : 'うしろ（R で振り返る）';
+    }
+  } else el.hidden = true;
+}
 function tutNext() {
   const t = S.tut; if (!t) return;
   if (t.i >= TUT.length - 1) { endTutorial(true); return; }
@@ -2034,7 +2149,8 @@ function tutNext() {
 }
 function endTutorial(start) {
   if (!S.tut) return;
-  S.tut = null; $('coach').hidden = true; $('hl').hidden = true; if (tutMarker) tutMarker.visible = false;
+  S.tut = null; $('coach').hidden = true; $('hl').hidden = true; $('tut-dir').hidden = true; if (tutMarker) tutMarker.visible = false;
+  tutArrows.forEach(m => { m.visible = false; });
   S.danger = null; if (chaserMesh) chaserMesh.visible = false;
   store.set('bd2.tutDone', '1');
   if (start) { const d = diffSel || 'normal'; store.set('bd2.diff', d); newRun(d); playIntro(INTROS[0]); store.set('bd2.seenIntro', '1'); }
@@ -2349,6 +2465,12 @@ document.addEventListener('keydown', e => {
   if (S.phase === 'note') { if ([' ', 'Enter', 'Escape', 'e', 'f'].includes(e.key)) { e.preventDefault(); closeNote(); } return; }
   if (S.phase === 'intro') { if ([' ', 'Enter', 'Escape'].includes(e.key)) { e.preventDefault(); skipIntro(); } return; }
   if (S.phase === 'ending') { if ([' ', 'Enter', 'Escape'].includes(e.key)) { e.preventDefault(); endCut(); } return; }
+  if (S.phase === 'rules') {
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); rulesNext(); }
+    else if (e.key === 'ArrowLeft' && S.rulesI > 0) { e.preventDefault(); showRules(S.rulesI - 1); }
+    else if (e.key === 'Escape') { e.preventDefault(); toTitle(); }
+    return;
+  }
   if (S.phase === 'gallery') {
     const k = e.key.toLowerCase();
     if (k === 'escape') { e.preventDefault(); closeGallery(); }
