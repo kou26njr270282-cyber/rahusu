@@ -146,6 +146,11 @@ table.res td.tm { font-variant-numeric: tabular-nums; text-align: right; opacity
 .classrow { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; justify-content: center; }
 .classrow .chip { font-size: 15px; padding: 6px 16px; }
 .trophies { margin-top: 10px; font-size: 13px; opacity: .9; text-align: center; min-height: 1em; }
+.tunerow { display: grid; grid-template-columns: 110px 1fr 70px; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; font-weight: 800; }
+.tunerow input { width: 100%; accent-color: var(--gold); }
+.tunerow output { text-align: right; font-variant-numeric: tabular-nums; color: var(--gold); }
+#p2Row .lbl { font-weight: 900; color: #4cc9ff; margin-right: 6px; font-size: 13px; }
+#p2Row .chip { font-size: 18px; padding: 2px 6px; }
 .resmode { text-align: center; font-weight: 800; font-size: 13px; opacity: .8; }
 table.res td.pt { text-align: right; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
 #touch { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
@@ -199,8 +204,22 @@ table.res td.pt { text-align: right; font-weight: 900; color: var(--gold); font-
   <h2 style="font-size:24px;opacity:1;margin-bottom:14px">モードをえらぼう</h2>
   <div class="modes" id="modeGrid"></div>
   <div class="classrow" id="classRow"></div>
+  <div class="classrow" id="playerRow"></div>
+  <div class="howto" id="p2help" style="margin-top:10px"></div>
   <div class="trophies" id="trophyRow"></div>
-  <div class="row"><button class="btn sec" id="btnModeBack" type="button">もどる</button></div>
+  <div class="row"><button class="btn sec" id="btnModeBack" type="button">もどる</button><button class="btn sec" id="btnTune" type="button">⚙️ そうさ感覚</button></div>
+</div>
+
+<div id="scrTune" class="overlay dim hidden">
+  <div class="selpanel" style="align-self:center">
+    <div class="selname" style="font-size:24px">そうさ感覚の調整</div>
+    <p style="font-size:12px;opacity:.85;margin:4px 0 10px">遊んでみて「曲がりにくい」「遅い」などがあれば、ここで変えられます。設定はこのブラウザに保存されます。</p>
+    <div id="tuneRows"></div>
+    <div class="row">
+      <button class="btn sec" id="btnTuneReset" type="button">もとにもどす</button>
+      <button class="btn" id="btnTuneDone" type="button">OK</button>
+    </div>
+  </div>
 </div>
 
 <div id="scrSelect" class="overlay hidden">
@@ -208,6 +227,7 @@ table.res td.pt { text-align: right; font-weight: 900; color: var(--gold); font-
     <div class="selhead"><div class="selname" id="selName"></div><div class="seltitle" id="selTitle"></div></div>
     <div class="quote" id="selQuote"></div>
     <div class="grid" id="charGrid"></div>
+    <div id="p2Row" class="hidden" style="margin-top:8px"></div>
     <div id="editor" class="hidden"></div>
     <div class="stats" id="charStats"></div>
     <div class="sep"></div>
@@ -349,6 +369,8 @@ const ITEMS = {
   bullet:  { emoji: '🌠', name: 'ながれぼし' },
   ghost:   { emoji: '👻', name: 'おばけ' },
   horn:    { emoji: '📯', name: 'ラッパ' },
+  jumbo:   { emoji: '🐘', name: 'ジャンボ' },
+  boomerang: { emoji: '🪃', name: 'ブーメラン' },
 };
 const TRAIL = { banana: 1, fake: 1, ball: 1, bomb: 1, triplebanana: 1, tripleball: 1 };
 const ITEM_KEYS = Object.keys(ITEMS);
@@ -907,6 +929,13 @@ function fakeBoxMesh() {
   const m = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), new THREE.MeshPhongMaterial({ map: boxTex, transparent: true, opacity: 0.9, shininess: 120, emissive: 0x551122, color: '#ffb0b0' }));
   m.castShadow = true; const g = new THREE.Group(); g.add(m); return g;
 }
+function boomMesh() {
+  const p = new PB();
+  p.add(GEO.box, '#ff9f1c', [3, 0, 1.6], [0, 0.5, 0], [7.5, 1.2, 2.2]);
+  p.add(GEO.box, '#ff9f1c', [-3, 0, 1.6], [0, -0.5, 0], [7.5, 1.2, 2.2]);
+  p.add(GEO.sph, '#ffffff', [0, 0, 3.2], 0, 1.4);
+  const g = new THREE.Group(); g.add(p.mesh(toonV())); return g;
+}
 function ballMesh() {
   const p = new PB();
   p.add(GEO.sph, '#3ddc97', [0, 0, 0], 0, 3.6);
@@ -1443,8 +1472,22 @@ let battleT = 0, endT = 0;
 let ghost = null;         // { frames, model } replay of the best time-attack run
 let rec = null, recT = 0; // current time-attack recording
 let prevRank = 7, rankCd = 0;
+let twoP = !!store.get('twoP');
+let selChar2 = store.get('char2') ?? 1;
+let player2 = null, humans = [];
+let sayTo = null;
+const cam2 = { a: 0, fov: 68, y: 0 };
+const camera2 = new THREE.PerspectiveCamera(68, 1, 1, 7000);
+const TUNE_DEFAULT = { steer: 1, speed: 1, drift: 1, ai: 1 };
+let TUNE = Object.assign({}, TUNE_DEFAULT, store.get('tune') || {});
+const KEYMAP = [
+  { l: ['KeyA'], r: ['KeyD'], u: ['KeyW'], d: ['KeyS'], dr: ['Space', 'ShiftLeft'], it: ['KeyQ', 'KeyE'] },
+  { l: ['ArrowLeft'], r: ['ArrowRight'], u: ['ArrowUp'], d: ['ArrowDown'], dr: ['ShiftRight', 'Slash'], it: ['Enter', 'Period'] },
+];
+const anyKey = list => list.some(c => keys[c]);
+function splitActive() { return twoP && player2 && humans.length === 2 && ['countdown', 'race', 'done', 'paused'].includes(state) && !(state === 'paused' && pausedFrom === 'result'); }
 
-function makeKart(c, isPlayer, slot) {
+function makeKart(c, isPlayer, slot, pid = 0) {
   const { pts, ang, n } = course;
   let idx, lat;
   if (course.battle) { idx = Math.floor(slot / 8 * n); lat = 0; }
@@ -1456,9 +1499,9 @@ function makeKart(c, isPlayer, slot) {
   const model = buildKart(c, course.battle); scene.add(model);
   const st = statsOf(c);
   return {
-    ch: c, st, isPlayer, model, x: p.x - Math.sin(a) * lat, y: p.y + Math.cos(a) * lat, h: course.hgt[idx], angle: a, speed: 0, slip: 0,
+    ch: c, st, isPlayer, pid, model, x: p.x - Math.sin(a) * lat, y: p.y + Math.cos(a) * lat, h: course.hgt[idx], angle: a, speed: 0, slip: 0,
     idx, total: (idx - n) * SP, lat, lastLap: 0, finished: false, finishTime: Infinity, rank: slot, steerVis: 0,
-    item: null, itemCount: 0, rollT: 0, spinT: 0, spinA: 0, boostT: 0, starT: 0, hopT: 0, smallT: 0, coins: 0, squash: 0, goldT: 0, shieldT: 0, inkT: 0,
+    item: null, itemCount: 0, rollT: 0, spinT: 0, spinA: 0, boostT: 0, starT: 0, hopT: 0, smallT: 0, bigT: 0, coins: 0, squash: 0, goldT: 0, shieldT: 0, inkT: 0,
     air: false, vy: 0, airT: 0, trick: false, trickT: 0, prevRamp: 0, cheerT: 0, lookBackT: 0, respawnT: 0,
     drifting: false, driftDir: 0, driftCharge: 0, driftHeld: false, wallCd: 0, wrongT: 0,
     balloons: 3, out: false, hits: 0, lapTimes: [], cannonT: -1, cannonLat: 0, held: [], heldKind: null, bulletT: 0, ghostT: 0, draftT: 0, glide: false,
@@ -1489,33 +1532,47 @@ function setupRace(ci, playerChar, demo = false, roster = null) {
     }
     rec = []; recT = 0;
   } else {
-    const pool = roster ? roster.filter(c => c.id !== playerChar.id) : CHARS.filter(c => c.id !== playerChar.id).sort(() => Math.random() - 0.5).slice(0, 7);
+    const two = twoP && !demo, p2c = two ? charAt2() : null;
+    const taken = [playerChar.id].concat(two ? [p2c.id] : []);
+    const pool = roster ? roster.filter(c => !taken.includes(c.id)) : CHARS.filter(c => !taken.includes(c.id)).sort(() => Math.random() - 0.5);
+    player2 = null;
     for (let s = 0, o = 0; s < 8; s++) {
-      if (s === 6) karts.push(player = makeKart(playerChar, !demo, s));
+      if (s === 6) karts.push(player = makeKart(playerChar, !demo, s, 0));
+      else if (s === 7 && two) karts.push(player2 = makeKart(p2c, true, s, 1));
       else karts.push(makeKart(pool[o++], false, s));
     }
     ghost = null; rec = null;
   }
+  humans = demo ? [] : player2 ? [player, player2] : [player];
+  for (const h of humans) h.prevRank = h.rank;
+  cam2.a = player2 ? player2.angle : 0; cam2.y = 0;
+  const big = !!player2; Object.assign(sun.shadow.camera, big ? { left: -320, right: 320, top: 320, bottom: -320 } : { left: -160, right: 160, top: 160, bottom: -160 }); sun.shadow.camera.updateProjectionMatrix();
   raceTime = 0; doneTimer = 0; finishOrder = 0; flashT = 0; battleT = 120; endT = 0; prevRank = player.rank; rankCd = 0;
   cam.a = player.angle; cam.y = 0;
 }
 function currentCourseIndex() { return mode === 'battle' ? 'arena' : mode === 'gp' ? gp.courses[gp.round] : selCourse; }
+const VS2 = { p1: 0, p2: 0 }; let raceSerial = 0, talliedSerial = -1;
 function startRace() {
-  store.set('char', selChar); store.set('course', selCourse); store.set('mode', mode); store.set('class', raceClass);
+  raceSerial++;
+  store.set('char', selChar); store.set('course', selCourse); store.set('mode', mode); store.set('class', raceClass); store.set('char2', selChar2); store.set('twoP', twoP);
+  if (mode === 'ta') twoP = false;
   if (mode === 'gp' && !gp) newGP();
   setupRace(currentCourseIndex(), charAt(selChar), false, gp ? gp.roster : null);
   countdown = 4.2; state = 'countdown';
   Sound.init(); Music.stop();
   showScreen(null);
   document.getElementById('topbtns').classList.remove('hidden');
-  if (isTouch) document.getElementById('touch').classList.remove('hidden');
+  if (isTouch && !twoP) document.getElementById('touch').classList.remove('hidden');
 }
+function charAt2() { let c = charAt(selChar2); if (c.id === charAt(selChar).id) c = CHARS.find(x => x.id !== c.id); return c; }
 function newGP() {
-  const me = charAt(selChar);
-  const roster = [me, ...CHARS.filter(c => c.id !== me.id).sort(() => Math.random() - 0.5).slice(0, 7)];
+  const me = charAt(selChar), ids = [me.id];
+  const lead = [me];
+  if (twoP && mode !== 'ta') { lead.push(charAt2()); ids.push(charAt2().id); }
+  const roster = [...lead, ...CHARS.filter(c => !ids.includes(c.id)).sort(() => Math.random() - 0.5).slice(0, 8 - lead.length)];
   gp = { round: 0, courses: [0, 1, 2, 3], roster, points: new Map(roster.map(c => [c.id, 0])) };
 }
-function say(text, color = '#fff', dur = 1.6) { messages.push({ text, color, t: dur, max: dur }); }
+function say(text, color = '#fff', dur = 1.6, to = sayTo) { messages.push({ text, color, t: dur, max: dur, to }); }
 
 // ============================================================
 //  input
@@ -1526,7 +1583,7 @@ let isTouch = matchMedia('(pointer: coarse)').matches;
 let itemPressed = false;
 window.addEventListener('keydown', e => {
   if (e.target && e.target.tagName === 'INPUT') return;
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code) && state !== 'select') e.preventDefault();
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Slash', 'Period', 'Quote'].includes(e.code) && state !== 'select') e.preventDefault();
   if (!keys[e.code] && ['KeyX', 'KeyZ', 'Enter'].includes(e.code)) itemPressed = true;
   if ((e.code === 'Escape' || e.code === 'KeyP') && !keys[e.code]) togglePause();
   keys[e.code] = true;
@@ -1542,7 +1599,11 @@ function bindTouch(id, prop) {
 }
 bindTouch('tl', 'left'); bindTouch('tr', 'right'); bindTouch('tbrake', 'brake'); bindTouch('tdrift', 'drift'); bindTouch('titem', 'item');
 window.addEventListener('touchstart', () => { isTouch = true; }, { once: true, passive: true });
-function playerInput() {
+function playerInput(pid = 0) {
+  if (twoP && player2) {
+    const m = KEYMAP[pid];
+    return { accel: anyKey(m.u), brake: anyKey(m.d), steer: (anyKey(m.r) ? 1 : 0) - (anyKey(m.l) ? 1 : 0), drift: anyKey(m.dr) };
+  }
   const left = keys.ArrowLeft || keys.KeyA || touchIn.left;
   const right = keys.ArrowRight || keys.KeyD || touchIn.right;
   const brake = keys.ArrowDown || keys.KeyS || touchIn.brake;
@@ -1582,7 +1643,7 @@ function aiInput(k, dt) {
       const it = k.item;
       const ok = it === 'rocket' || it === 'bomb' ? k.rank > 0 : it === 'thunder' ? k.rank > 2 : it === 'missile' ? k.rank > 1 : true;
       if (ok) useItem(k);
-      k.itemT = it === 'triple' ? 0.8 : it === 'golden' ? 0.6 : rand(1, 5);
+      k.itemT = it === 'triple' ? 0.8 : it === 'golden' ? 0.6 : it === 'boomerang' ? rand(1.2, 3) : rand(1, 5);
     }
   }
   if (k.held && k.held.length) {
@@ -1626,7 +1687,7 @@ function aiBattle(k, dt) {
       const ahead = foe && Math.abs(wrapAngle(Math.atan2(foe.y - k.y, foe.x - k.x) - k.angle)) < 0.6;
       const behind = foe && Math.abs(wrapAngle(Math.atan2(foe.y - k.y, foe.x - k.x) - k.angle)) > 2.3;
       let use = false;
-      if (['rocket', 'missile'].includes(it)) use = true; else if (['ball', 'bomb'].includes(it)) use = ahead && f2 < 450;
+      if (['rocket', 'missile'].includes(it)) use = true; else if (['ball', 'bomb', 'boomerang'].includes(it)) use = ahead && f2 < 450;
       else if (it === 'banana' || it === 'fake') use = behind && f2 < 160;
       else use = true;
       if (use) useItem(k);
@@ -1641,10 +1702,10 @@ function aiBattle(k, dt) {
 // ============================================================
 function rollItem(k) {
   const r = k.rank;
-  const w = course.battle ? { banana: 10, triplebanana: 6, fake: 8, ball: 16, tripleball: 10, rocket: 12, bomb: 10, boost: 8, star: 5, horn: 6, ghost: 6, ink: 3 }
-    : r <= 1 ? { banana: 20, triplebanana: 6, fake: 12, ball: 15, horn: 10, boost: 15, bomb: 4, tripleball: 2 }
-    : r <= 4 ? { boost: 14, triple: 10, tripleball: 10, rocket: 12, ball: 8, banana: 6, bomb: 8, ink: 6, ghost: 5, horn: 4, star: 4, golden: 4, missile: 3 }
-    : { triple: 14, golden: 12, star: 12, bullet: 12, rocket: 12, tripleball: 6, missile: 8, thunder: 6, ghost: 6, ink: 6, bomb: 3, boost: 3 };
+  const w = course.battle ? { banana: 10, triplebanana: 6, fake: 8, ball: 16, tripleball: 10, rocket: 12, bomb: 10, boost: 8, star: 5, horn: 6, ghost: 6, ink: 3, boomerang: 12, jumbo: 6 }
+    : r <= 1 ? { banana: 20, triplebanana: 6, fake: 12, ball: 15, horn: 10, boost: 15, bomb: 4, tripleball: 2, boomerang: 6 }
+    : r <= 4 ? { boost: 14, triple: 10, tripleball: 10, rocket: 12, ball: 8, banana: 6, bomb: 8, ink: 6, ghost: 5, horn: 4, star: 4, golden: 4, missile: 3, boomerang: 9, jumbo: 5 }
+    : { triple: 14, golden: 12, star: 12, bullet: 12, rocket: 12, tripleball: 6, missile: 8, thunder: 6, ghost: 6, ink: 6, bomb: 3, boost: 3, jumbo: 10, boomerang: 5 };
   let s = Math.random() * ITEM_KEYS.reduce((a, k2) => a + (w[k2] || 0), 0);
   for (const key of ITEM_KEYS) { s -= (w[key] || 0); if (s < 0) return key; }
   return 'boost';
@@ -1670,8 +1731,7 @@ function releaseOne(k, back) {
   const fx = Math.cos(k.angle), fy = Math.sin(k.angle);
   const forward = e.type === 'ball' || e.type === 'bomb' ? !back : false;
   if (e.type === 'banana' || e.type === 'fake') {
-    if (!back && k.isPlayer && (keys.ArrowUp || keys.KeyW) && (keys.ShiftLeft || keys.ShiftRight)) { e.thrown = true; e.vz = 70; e.z = 6; e.sp = k.speed + 120; e.a = k.angle; }
-    else { e.x = k.x - fx * 22; e.y = k.y - fy * 22; }
+    e.x = k.x - fx * 22; e.y = k.y - fy * 22;
   } else if (e.type === 'ball') {
     const a = forward ? k.angle : k.angle + Math.PI;
     e.a = a; e.x = k.x + Math.cos(a) * 18; e.y = k.y + Math.sin(a) * 18;
@@ -1683,12 +1743,12 @@ function releaseOne(k, back) {
   if (!k.held.length) { k.heldKind = null; }
 }
 function onItemDown(k) {
-  if (k.held && k.held.length && k.heldKind !== 'single') { releaseOne(k, (keys.ArrowDown || keys.KeyS || touchIn.brake) && k.isPlayer); return; }
+  if (k.held && k.held.length && k.heldKind !== 'single') { releaseOne(k, !!(k.isPlayer && k.lastInp && k.lastInp.brake)); return; }
   if (k.held && k.held.length) return;
   if (k.item && k.rollT <= 0 && TRAIL[k.item]) startHold(k); else useItem(k);
 }
 function onItemUp(k) {
-  if (k.held && k.held.length && k.heldKind === 'single') releaseOne(k, (keys.ArrowDown || keys.KeyS || touchIn.brake) && k.isPlayer);
+  if (k.held && k.held.length && k.heldKind === 'single') releaseOne(k, !!(k.isPlayer && k.lastInp && k.lastInp.brake));
 }
 function dropHeld(k) { if (k.held) for (const e of k.held) e.dead = true; k.held = []; k.heldKind = null; }
 const fx0 = k => Math.cos(k.angle), fy0 = k => Math.sin(k.angle);
@@ -1698,9 +1758,10 @@ function autoSteer(k) {
 }
 function useItem(k) {
   const it = k.item; if (!it || k.rollT > 0) return;
+  sayTo = k.isPlayer ? k : null;
   if (TRAIL[it]) { startHold(k); if (!k.isPlayer) k.itemT = rand(1, 4); return; }
   const fx = Math.cos(k.angle), fy = Math.sin(k.angle);
-  if (it === 'triple') { k.itemCount--; if (k.itemCount <= 0) k.item = null; }
+  if (it === 'triple' || it === 'boomerang') { k.itemCount--; if (k.itemCount <= 0) k.item = null; }
   else if (it === 'golden') { if (k.goldT <= 0) k.goldT = 7; }
   else k.item = null;
   if (it === 'boost' || it === 'triple' || it === 'golden') { k.boostT = Math.max(k.boostT, it === 'golden' ? 1.0 : 1.3); if (k.isPlayer) Sound.noise(0.5, 0.25, 600); }
@@ -1708,7 +1769,7 @@ function useItem(k) {
   else if (it === 'ghost') {
     k.ghostT = 6;
     const victims = karts.filter(o => o !== k && !o.out && o.item && o.rollT <= 0).sort((a, b) => a.rank - b.rank);
-    if (victims.length) { const v = victims[0]; k.item = v.item; k.itemCount = v.itemCount; v.item = null; if (v.isPlayer) say(`${k.ch.name}にアイテムを盗まれた！`, '#b388ff', 1.4); if (k.isPlayer) say(`${ITEMS[k.item].name}をゲット！`, '#b388ff', 1.2); }
+    if (victims.length) { const v = victims[0]; k.item = v.item; k.itemCount = v.itemCount; v.item = null; if (v.isPlayer) say(`${k.ch.name}にアイテムを盗まれた！`, '#b388ff', 1.4, v); if (k.isPlayer) say(`${ITEMS[k.item].name}をゲット！`, '#b388ff', 1.2); }
     if (k.isPlayer) Sound.beep(300, 0.6, 'sine', 0.15, -150);
   } else if (it === 'horn') {
     for (const e of entities) if (e.owner !== k && Math.hypot(e.x - k.x, e.y - k.y) < 90) { e.dead = true; explode(e.x, e.y, e.h || k.h); }
@@ -1716,6 +1777,16 @@ function useItem(k) {
     for (let i = 0; i < 48; i++) { const a = i / 48 * TAU; spawn(k.x + Math.cos(a) * 10, k.h + 8, k.y + Math.sin(a) * 10, Math.cos(a) * 160, 0, Math.sin(a) * 160, 0.45, i % 2 ? '#ffd23f' : '#ffffff', 6, 0); }
     Sound.beep(220, 0.5, 'sawtooth', 0.22, 60); Sound.noise(0.4, 0.3, 400);
     if (k.isPlayer) shakeT = 0.3;
+  }
+  else if (it === 'jumbo') {
+    k.bigT = 8; k.smallT = 0;
+    if (k.isPlayer) { say('ジャンボ！ ぶつかって ふっとばせ！', '#ff9f1c', 1.4); Sound.beep(160, 0.5, 'sawtooth', 0.18, 220); shakeT = 0.25; }
+  } else if (it === 'boomerang') {
+    const mesh = boomMesh(); scene.add(mesh);
+    const back = !!(k.isPlayer && k.lastInp && k.lastInp.brake);
+    const a = back ? k.angle + Math.PI : k.angle;
+    entities.push({ type: 'boom', x: k.x + Math.cos(a) * 16, y: k.y + Math.sin(a) * 16, a, sp: 520, idx: k.idx, owner: k, age: 0, hit: new Set([k]), mesh });
+    if (k.isPlayer) Sound.beep(700, 0.15, 'triangle', 0.1, -300);
   }
   else if (it === 'shield') { k.shieldT = 12; if (k.isPlayer) { Sound.beep(660, 0.12, 'triangle', 0.12); Sound.beep(990, 0.25, 'triangle', 0.1); } }
   else if (it === 'bomb') {
@@ -1725,13 +1796,13 @@ function useItem(k) {
   } else if (it === 'ink') {
     for (const o of karts) if (o !== k && !o.out && (course.battle || o.total > k.total - 50)) o.inkT = 4.5;
     Sound.noise(0.5, 0.3, 500, null, null, 'lowpass');
-    if (k.isPlayer) say('スミをはいた！', '#b388ff', 1.2); else if (player && player.inkT > 0) say(`${k.ch.name}のスミ！`, '#b388ff', 1.2);
+    if (k.isPlayer) say('スミをはいた！', '#b388ff', 1.2); for (const h of humans) if (h !== k && h.inkT > 0) say(`${k.ch.name}のスミ！`, '#b388ff', 1.2, h);
   } else if (it === 'missile') {
     const leader = course.battle ? karts.filter(o => o !== k && !o.out).sort((a, b) => b.balloons - a.balloons)[0] || null : karts.filter(o => o !== k && !o.finished).sort((a, b) => b.total - a.total)[0] || null;
     const mesh = missileMesh(); scene.add(mesh);
     entities.push({ type: 'missile', x: k.x + fx * 16, y: k.y + fy * 16, a: k.angle, idx: k.idx, target: leader, owner: k, age: 0, mesh, z: 18 });
     if (k.isPlayer) { Sound.beep(400, 0.5, 'sawtooth', 0.12, 800); say('1位をねらえ！', '#4cc9ff', 1); }
-    else if (leader === player) say('ミサイルが来る！', '#ff5d73', 1.4);
+    if (leader && leader.isPlayer) say('ミサイルが来る！', '#ff5d73', 1.4, leader);
   } else if (it === 'fake') {
     const mesh = fakeBoxMesh(); scene.add(mesh);
     entities.push({ type: 'fake', x: k.x - fx * 22, y: k.y - fy * 22, idx: k.idx, owner: k, age: 0, mesh });
@@ -1755,17 +1826,22 @@ function useItem(k) {
     for (const o of karts) if (o !== k && !o.out) { spinOut(o, true, k); o.smallT = 4; }
     flashT = 0.35; Sound.noise(0.8, 0.45, 300); Sound.beep(90, 0.6, 'sawtooth', 0.2, -40);
     if (k.isPlayer) say('カミナリ！', '#ffe14d', 1.2);
-    else if (player) say(`${k.ch.name}のカミナリ！`, '#ffe14d', 1.2);
+    for (const h of humans) if (h !== k) say(`${k.ch.name}のカミナリ！`, '#ffe14d', 1.2, h);
   }
 }
 function spinOut(k, silent, by) {
+  const prevTo = sayTo; sayTo = k.isPlayer ? k : null;
+  try { spinOutInner(k, silent, by); } finally { sayTo = prevTo; }
+}
+function spinOutInner(k, silent, by) {
   if (k.starT > 0 || k.spinT > 0 || k.out || k.respawnT > 0 || k.bulletT > 0 || k.ghostT > 0 || k.cannonT >= 0) return;
   if (k.held && k.held.length) { dropHeld(k); }
+  if (k.bigT > 0) { k.bigT = 0; k.speed *= 0.6; k.squash = 0.18; if (k.isPlayer) { Sound.beep(400, 0.3, 'square', 0.1, -300); say('ちぢんじゃった！', '#ff9f1c', 1, k); } for (let i = 0; i < 16; i++) spawn(k.x, k.h + 10, k.y, rand(-50, 50), rand(10, 60), rand(-50, 50), 0.5, '#ffffff', 5, 60); return; }
   if (k.shieldT > 0) { k.shieldT = 0; if (k.isPlayer) { Sound.beep(1200, 0.2, 'square', 0.1, -600); say('バリアでガード！', '#4cc9ff', 1); } for (let i = 0; i < 16; i++) spawn(k.x, k.h + 8, k.y, rand(-50, 50), rand(10, 60), rand(-50, 50), 0.5, '#7fe3ff', 4, 60); return; }
   k.spinT = 1.2; k.drifting = false; k.driftCharge = 0; k.boostT = 0; k.hopT = 0.3;
   if (by && by !== k) {
     by.hits++;
-    if (by.isPlayer) { say('HIT!', '#ff5d73', 0.8); Sound.beep(1400, 0.08, 'square', 0.1); Sound.beep(1900, 0.12, 'square', 0.08); }
+    if (by.isPlayer) { say('HIT!', '#ff5d73', 0.8, by); Sound.beep(1400, 0.08, 'square', 0.1); Sound.beep(1900, 0.12, 'square', 0.08); }
   }
   if (course.battle) {
     k.balloons--;
@@ -1775,7 +1851,7 @@ function spinOut(k, silent, by) {
     if (k.balloons <= 0) {
       k.out = true; k.item = null;
       for (let i = 0; i < 30; i++) spawn(k.x, k.h + 8, k.y, rand(-40, 40), rand(20, 60), rand(-40, 40), 0.9, '#888888', 7, 20);
-      say(k.isPlayer ? 'ふうせんが なくなった…' : `${k.ch.name} だつらく！`, k.isPlayer ? '#ff8fa3' : '#ffffff', 1.4);
+      say(k.isPlayer ? 'ふうせんが なくなった…' : `${k.ch.name} だつらく！`, k.isPlayer ? '#ff8fa3' : '#ffffff', 1.4, k.isPlayer ? k : null);
     }
   }
   const lost = Math.min(3, k.coins); k.coins -= lost;
@@ -1838,6 +1914,16 @@ function updateEntities(dt) {
       spawn(e.x - Math.cos(e.a) * 7, e.h + e.z, e.y - Math.sin(e.a) * 7, rand(-8, 8), rand(5, 15), rand(-8, 8), 0.6, '#7fe3ff', 6, -10);
       if (tgt && Math.hypot(tgt.x - e.x, tgt.y - e.y) < 16) { e.dead = true; blast(tgt.x, tgt.y, tgt.h, 34, e.owner); }
       if (e.age > 12) { e.dead = true; explode(e.x, e.y, e.h); }
+    } else if (e.type === 'boom') {
+      const o = e.owner;
+      if (e.age > 0.6) { e.a += clamp(wrapAngle(Math.atan2(o.y - e.y, o.x - e.x) - e.a), -7 * dt, 7 * dt); e.sp = Math.min(560, e.sp + 300 * dt); }
+      else e.sp = Math.max(260, e.sp - 400 * dt);
+      e.x += Math.cos(e.a) * e.sp * dt; e.y += Math.sin(e.a) * e.sp * dt;
+      const lat = latOf(e.x, e.y, e.idx);
+      if (Math.abs(lat) > WALL - 6 && e.age <= 0.6) { const ta = ang[e.idx]; e.a = wrapAngle(2 * ta - e.a); const over = lat - Math.sign(lat) * (WALL - 6); e.x -= -Math.sin(ta) * over; e.y -= Math.cos(ta) * over; }
+      if (e.age > 0.8 && Math.hypot(o.x - e.x, o.y - e.y) < 16) { e.dead = true; if (o.isPlayer) Sound.beep(1100, 0.08, 'triangle', 0.08); }
+      if (e.age > 3.2) { e.dead = true; explode(e.x, e.y, e.h); }
+      if (Math.floor(e.age * 12) !== Math.floor((e.age - dt) * 12)) spawn(e.x, e.h + 5, e.y, 0, 4, 0, 0.3, '#ffcf8a', 3, 0);
     } else if (e.type === 'ball') {
       e.x += Math.cos(e.a) * 400 * dt; e.y += Math.sin(e.a) * 400 * dt;
       const lat = latOf(e.x, e.y, e.idx);
@@ -1852,6 +1938,7 @@ function updateEntities(dt) {
       if (e.dead) break;
       if (k === e.owner && e.age < 0.6) continue;
       if (k.air && k.h > e.h + 8) continue;
+      if (e.type === 'boom') { if (!e.hit.has(k) && (k.x - e.x) ** 2 + (k.y - e.y) ** 2 < 15 * 15) { e.hit.add(k); spinOut(k, false, e.owner); Sound.beep(900, 0.05, 'square', 0.06); } continue; }
       if (e.type === 'bomb' || e.type === 'missile') { if (e.type === 'bomb' && e.z === 0 && (k.x - e.x) ** 2 + (k.y - e.y) ** 2 < 14 * 14) { e.dead = true; blast(e.x, e.y, e.h, 46, e.owner); } continue; }
       const r = e.type === 'banana' ? 11 : 13;
       if ((k.x - e.x) ** 2 + (k.y - e.y) ** 2 < r * r) { e.dead = true; if (e.type !== 'banana') explode(e.x, e.y, e.h); spinOut(k, false, e.owner); }
@@ -1863,11 +1950,12 @@ function updateEntities(dt) {
   for (const e of entities) {
     if (e.dead) { scene.remove(e.mesh); continue; }
     if (e.held && e.type === 'bomb') e.fuse = 2.2;
-    e.mesh.position.set(e.x, e.h + (e.thrown ? e.z : 0) + (e.type === 'rocket' ? 5 : e.type === 'ball' ? 3.6 : e.type === 'fake' ? 8 + Math.sin(clock * 2.5) : e.type === 'bomb' ? 4 + e.z : e.type === 'missile' ? e.z : 0), e.y);
+    e.mesh.position.set(e.x, e.h + (e.thrown ? e.z : 0) + (e.type === 'rocket' ? 5 : e.type === 'boom' ? 6 : e.type === 'ball' ? 3.6 : e.type === 'fake' ? 8 + Math.sin(clock * 2.5) : e.type === 'bomb' ? 4 + e.z : e.type === 'missile' ? e.z : 0), e.y);
     if (e.type === 'rocket' || e.type === 'missile') e.mesh.rotation.y = Math.PI / 2 - e.a;
     else if (e.type === 'fake') e.mesh.rotation.set(clock * 0.9, clock * 1.3, 0);
     else if (e.type === 'bomb') { const f = e.fuse < 0.8 ? (Math.sin(clock * 40) > 0 ? 1.25 : 1) : 1; e.mesh.scale.setScalar(f); }
     else if (e.type === 'ball') e.mesh.rotation.set(clock * 8, Math.PI / 2 - e.a, 0);
+    else if (e.type === 'boom') e.mesh.rotation.set(0, e.age * 22, 0);
     else e.mesh.rotation.y = e.age * 0.5;
   }
   entities = entities.filter(e => !e.dead);
@@ -1886,6 +1974,8 @@ function fxColors() {
 
 function updateKart(k, inp, dt) {
   const st = k.st;
+  sayTo = k.isPlayer ? k : null;
+  const hand = st.hand * (k.isPlayer ? TUNE.steer : 1);
   if (k.isPlayer) {
     k.steerSm = k.steerSm || 0;
     const tgt = inp.steer; k.rawSteer = tgt; const rate = tgt === 0 ? 9 : Math.sign(tgt) !== Math.sign(k.steerSm) ? 12 : 6;
@@ -1905,7 +1995,8 @@ function updateKart(k, inp, dt) {
   let max = st.max * k.skill * CLASSES[raceClass].mult * (1 + k.coins * 0.012);
   if (k.out) inp = { accel: false, brake: false, steer: 0, drift: false };
   if (k.respawnT > 0) { k.respawnT -= dt; inp = { accel: false, brake: false, steer: 0, drift: false }; }
-  if (!k.isPlayer && player && !course.battle) { const gap = player.total - k.total; if (gap > 250) max *= 1.06; else if (gap < -500) max *= 0.95; }
+  max *= TUNE.speed; if (!k.isPlayer) max *= TUNE.ai;
+  if (!k.isPlayer && humans.length && !course.battle) { const gap = Math.max(...humans.map(h => h.total)) - k.total; if (gap > 250) max *= 1.06; else if (gap < -500) max *= 0.95; }
   const off = Math.abs(k.lat) > ROADW / 2 + CURB && !k.air;
   if (off && k.starT <= 0 && k.boostT <= 0) max *= 0.5;
   if (k.starT > 0) max *= 1.15;
@@ -1918,6 +2009,7 @@ function updateKart(k, inp, dt) {
   if (k.shieldT > 0) k.shieldT -= dt;
   if (k.inkT > 0) { k.inkT -= dt; if (!k.isPlayer) inp = Object.assign({}, inp, { steer: clamp(inp.steer + Math.sin(clock * 3 + k.x) * 0.6, -1, 1) }); }
   if (k.smallT > 0) max *= 0.8;
+  if (k.bigT > 0) { k.bigT -= dt; max *= 1.07; if (k.smallT > 0) k.bigT = 0; if (k.bigT <= 0 && k.isPlayer) Sound.beep(500, 0.3, 'triangle', 0.1, -250); }
   const fx = Math.cos(k.angle), fy = Math.sin(k.angle);
   if (k.boostT > 0) {
     k.boostT -= dt; max *= 1.38; k.speed = Math.max(k.speed, max * 0.95);
@@ -1959,12 +2051,12 @@ function updateKart(k, inp, dt) {
       const tier = driftTier(k.driftCharge);
       if (tier >= 0) { k.boostT = Math.max(k.boostT, TIERS[tier].b); if (k.isPlayer) Sound.noise(0.3 + tier * 0.15, 0.25, 700 + tier * 150); }
       k.drifting = false; k.driftCharge = 0;
-      turn = inp.steer * st.hand * speedF;
+      turn = inp.steer * hand * speedF;
     } else {
       const inward = inp.steer * k.driftDir;
-      turn = k.driftDir * st.hand * (0.78 + inward * 0.42) * speedF;
+      turn = k.driftDir * hand * (0.78 + inward * 0.42) * speedF;
       const before = driftTier(k.driftCharge);
-      k.driftCharge += dt * (inward > 0 ? 1.25 : 0.8);
+      k.driftCharge += dt * (inward > 0 ? 1.25 : 0.8) * (k.isPlayer ? TUNE.drift : 1);
       const tier = driftTier(k.driftCharge);
       if (k.isPlayer && tier > before) Sound.beep(700 + tier * 250, 0.08, 'square', 0.08);
       const col = tier >= 0 ? TIERS[tier].c : '#ffffff', fc = fxColors();
@@ -1975,7 +2067,7 @@ function updateKart(k, inp, dt) {
         if (Math.random() < 0.6) addSkid(wx, k.h, wy, k.angle - k.slip);
       }
     }
-  } else turn = inp.steer * st.hand * speedF;
+  } else turn = inp.steer * hand * speedF;
   k.steerVis = lerp(k.steerVis, inp.steer, Math.min(1, dt * 10));
   k.angle = wrapAngle(k.angle + turn * dt);
   k.slip = lerp(k.slip, k.drifting ? k.driftDir * 0.4 : 0, Math.min(1, dt * 6));
@@ -2070,7 +2162,7 @@ function updateKart(k, inp, dt) {
       if (!k.item && k.rollT <= 0) { k.rollT = k.isPlayer ? 1.2 : 0.01; k.pending = rollItem(k); if (k.isPlayer) Sound.beep(1000, 0.08, 'square', 0.1); }
     }
   }
-  if (k.rollT > 0) { k.rollT -= dt; if (k.rollT <= 0) { k.item = k.pending; k.itemCount = k.item === 'triple' ? 3 : 1; if (k.isPlayer) Sound.beep(1500, 0.12, 'triangle', 0.12); } }
+  if (k.rollT > 0) { k.rollT -= dt; if (k.rollT <= 0) { k.item = k.pending; k.itemCount = k.item === 'triple' || k.item === 'boomerang' ? 3 : 1; if (k.isPlayer) Sound.beep(1500, 0.12, 'triangle', 0.12); } }
   // coins
   for (const c of course.coins) {
     if (c.t > 0) continue;
@@ -2100,7 +2192,7 @@ function updateKart(k, inp, dt) {
   if (lap > 1 && k.lapTimes.length < lap - 1) k.lapTimes.push(raceTime);
   if (!k.finished && k.total >= LAPS * course.L) {
     k.finished = true; k.finishTime = raceTime; k.finishPos = finishOrder++; k.cheerT = 3;
-    if (k.isPlayer) onPlayerFinish();
+    if (k.isPlayer) onPlayerFinish(k);
   }
   if (k.isPlayer) {
     const wrong = Math.abs(wrapAngle(md - course.ang[k.idx])) > 2.0 && Math.abs(k.speed) > 30;
@@ -2141,13 +2233,16 @@ function nearestFoe(k, cone) {
 function collideKarts() {
   for (let i = 0; i < karts.length; i++) for (let j = i + 1; j < karts.length; j++) {
     const a = karts[i], b = karts[j], dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
-    if (d2 < 15 * 15 && d2 > 0.0001 && Math.abs(a.h - b.h) < 10) {
-      const d = Math.sqrt(d2), push = (15 - d), nx = dx / d, ny = dy / d;
+    const rr = 15 + (a.bigT > 0 ? 9 : 0) + (b.bigT > 0 ? 9 : 0);
+    if (d2 < rr * rr && d2 > 0.0001 && Math.abs(a.h - b.h) < 10 + (a.bigT > 0 || b.bigT > 0 ? 10 : 0)) {
+      const d = Math.sqrt(d2), push = (rr - d), nx = dx / d, ny = dy / d;
       if (a.out || b.out) continue;
       const sa = a.starT > 0 || a.bulletT > 0, sb = b.starT > 0 || b.bulletT > 0;
       if (a.ghostT > 0 || b.ghostT > 0) continue;
       if (sa && !sb) spinOut(b, false, a); else if (sb && !sa) spinOut(a, false, b);
-      const wa = a.st.weight * (a.smallT > 0 ? 0.4 : 1), wb = b.st.weight * (b.smallT > 0 ? 0.4 : 1), sum = wa + wb;
+      else if (a.bigT > 0 && b.bigT <= 0 && !sb) { spinOut(b, false, a); b.squash = 0.18; b.smallT = Math.max(b.smallT, 2); }
+      else if (b.bigT > 0 && a.bigT <= 0 && !sa) { spinOut(a, false, b); a.squash = 0.18; a.smallT = Math.max(a.smallT, 2); }
+      const wa = a.st.weight * (a.smallT > 0 ? 0.4 : 1) * (a.bigT > 0 ? 4 : 1), wb = b.st.weight * (b.smallT > 0 ? 0.4 : 1) * (b.bigT > 0 ? 4 : 1), sum = wa + wb;
       a.x -= nx * push * wb / sum; a.y -= ny * push * wb / sum; b.x += nx * push * wa / sum; b.y += ny * push * wa / sum;
       const avg = (a.speed + b.speed) / 2; a.speed = lerp(a.speed, avg, 0.3); b.speed = lerp(b.speed, avg, 0.3);
       if ((a.isPlayer || b.isPlayer) && Math.random() < 0.3) { Sound.noise(0.08, 0.15, 400); spawn((a.x + b.x) / 2, a.h + 4, (a.y + b.y) / 2, rand(-20, 20), rand(20, 40), rand(-20, 20), 0.3, '#fff3a0', 3, 100); }
@@ -2162,11 +2257,12 @@ function updateRanks() {
     return b.total - a.total;
   }).forEach((k, i) => k.rank = i);
 }
-function onPlayerFinish() {
-  state = 'done'; doneTimer = 4.5;
-  const pos = player.rank + 1;
-  say(pos === 1 ? 'ゴール！ 1位！' : `ゴール！ ${pos}位`, pos <= 3 ? '#ffd23f' : '#ffffff', 4);
-  Music.fanfare(pos <= 3);
+function onPlayerFinish(k) {
+  const pos = k.rank + 1;
+  say(pos === 1 ? 'ゴール！ 1位！' : `ゴール！ ${pos}位`, pos <= 3 ? '#ffd23f' : '#ffffff', 4, k);
+  if (humans.every(h => h.finished)) { state = 'done'; doneTimer = 4.5; Music.fanfare(Math.min(...humans.map(h => h.rank)) <= 2); }
+  else Sound.beep(880, 0.3, 'triangle', 0.15);
+  const player = k;
   for (let i = 0; i < 180; i++) spawn(player.x + rand(-40, 40), player.h + rand(30, 60), player.y + rand(-40, 40), rand(-20, 20), rand(0, 20), rand(-20, 20), rand(1.5, 3), `hsl(${Math.floor(rand(0, 360))},90%,60%)`, rand(2, 3.5), 25);
 }
 
@@ -2194,7 +2290,7 @@ function syncKart(k, dt) {
   const m = k.model, u = m.userData;
   m.position.set(k.x, k.h, k.y);
   m.rotation.y = Math.PI / 2 - (k.angle + k.spinA);
-  const sc = k.smallT > 0 ? 0.6 : 1;
+  const sc = k.smallT > 0 ? 0.6 : k.bigT > 0 ? (k.bigT < 1.5 && Math.sin(clock * 24) > 0 ? 1.3 : 1.9) : 1;
   m.scale.setScalar(lerp(m.scale.x, sc, Math.min(1, dt * 6)));
   const { hgt, n } = course;
   const slope = (hgt[(k.idx + 2) % n] - hgt[(k.idx - 2 + n) % n]) / (4 * SP);
@@ -2236,9 +2332,10 @@ function simKarts(dt, demo) {
   for (const k of karts) {
     let inp;
     if (k.isPlayer && !k.finished && !demo) {
-      inp = playerInput();
-      const down = !!(keys.KeyX || keys.KeyZ || keys.Enter || touchIn.item);
-      if ((down && !k.itemWasDown) || (itemPressed && !down)) onItemDown(k);
+      inp = playerInput(k.pid);
+      const down = twoP && player2 ? anyKey(KEYMAP[k.pid].it) : !!(keys.KeyX || keys.KeyZ || keys.Enter || touchIn.item);
+      k.lastInp = inp;
+      if ((down && !k.itemWasDown) || (itemPressed && !down && !(twoP && player2))) onItemDown(k);
       if (!down && k.itemWasDown) onItemUp(k);
       k.itemWasDown = down;
       if (k.bulletT > 0) inp = Object.assign({}, inp, { steer: autoSteer(k), accel: true, brake: false, drift: false });
@@ -2246,7 +2343,7 @@ function simKarts(dt, demo) {
     else inp = aiInput(k, dt);
     updateKart(k, inp, dt);
   }
-  itemPressed = false;
+  itemPressed = false; sayTo = null;
   collideKarts();
   updateEntities(dt);
   updateRanks();
@@ -2285,8 +2382,10 @@ function simKarts(dt, demo) {
   }
   if (demo || !player) return;
   rankCd -= dt;
-  if (!course.battle && mode !== 'ta' && player.rank < prevRank && rankCd <= 0 && raceTime > 3) { Sound.beep(1200, 0.08, 'triangle', 0.1); Sound.beep(1600, 0.1, 'triangle', 0.08); rankCd = 1.2; }
-  prevRank = player.rank;
+  for (const h of humans) {
+    if (!course.battle && mode !== 'ta' && h.rank < h.prevRank && rankCd <= 0 && raceTime > 3) { Sound.beep(1200, 0.08, 'triangle', 0.1); Sound.beep(1600, 0.1, 'triangle', 0.08); rankCd = 1.2; }
+    h.prevRank = h.rank;
+  }
   if (rec && !player.finished) { recT += dt; if (recT >= 0.05) { recT = 0; rec.push([Math.round(player.x), Math.round(player.y), Math.round(player.h), Math.round(player.angle * 100)]); } }
   if (ghost && ghost.model) {
     const f = raceTime / 0.05, i = Math.floor(f), a = ghost.frames[Math.min(i, ghost.frames.length - 1)], b = ghost.frames[Math.min(i + 1, ghost.frames.length - 1)], t = f - i;
@@ -2295,7 +2394,8 @@ function simKarts(dt, demo) {
   if (course.battle && state === 'race') {
     battleT -= dt;
     const alive = karts.filter(k => !k.out);
-    if (battleT <= 0 || alive.length <= 1 || player.out) { endT += dt; if (endT > (player.out && alive.length > 1 ? 2.5 : 1.5) || battleT <= 0) { state = 'done'; doneTimer = 0.01; Music.fanfare(player.rank === 0); } }
+    const humansOut = humans.every(h => h.out);
+    if (battleT <= 0 || alive.length <= 1 || humansOut) { endT += dt; if (endT > (humansOut && alive.length > 1 ? 2.5 : 1.5) || battleT <= 0) { state = 'done'; doneTimer = 0.01; Music.fanfare(player.rank === 0); } }
   }
 }
 function updateScenery(dt) {
@@ -2334,13 +2434,12 @@ function update(dt) {
     countdown -= dt;
     const now = Math.ceil(countdown);
     if (now !== prev && now >= 1 && now <= 3) Sound.beep(440, 0.15, 'square', 0.15);
-    const inp = playerInput();
-    if (countdown < 1.0 && countdown > 0.35 && inp.accel) player.rocketStart = true;
-    if (countdown >= 1.0 && inp.accel) player.rocketStart = false;
+    const inp = playerInput(0);
+    for (const h of humans) { const hi = playerInput(h.pid); if (countdown < 1.0 && countdown > 0.35 && hi.accel) h.rocketStart = true; if (countdown >= 1.0 && hi.accel) h.rocketStart = false; }
     if (countdown <= 0) {
       state = 'race'; Sound.beep(880, 0.4, 'square', 0.18); say('GO!', '#3ddc97', 1);
       Music.play(course.def.song);
-      if (player.rocketStart) { player.boostT = 1.0; say('ロケットスタート！', '#ffd23f', 1.2); }
+      for (const h of humans) if (h.rocketStart) { h.boostT = 1.0; say('ロケットスタート！', '#ffd23f', 1.2, h); }
     }
     for (const k of karts) syncKart(k, dt);
     updateParticles(dt);
@@ -2368,7 +2467,25 @@ function updateCamera(dt) {
     else { camera.position.set(k.x - fx * 60, k.h + 45, k.y - fy * 60); }
     camera.lookAt(k.x, k.h + 6, k.y);
   } else {
-    const k = player;
+    const vs = splitActive() ? [[player, cam, camera], [player2, cam2, camera2]] : [[player, cam, camera]];
+    for (const [k, cm, cmr] of vs) followCam(dt, k, cm, cmr, vs.length);
+    const mid = vs.length === 2 ? { x: (player.x + player2.x) / 2, h: (player.h + player2.h) / 2, y: (player.y + player2.y) / 2 } : player;
+    const sd = course.sunDir;
+    sun.position.set(mid.x + sd.x * 300, mid.h + sd.y * 300, mid.y + sd.z * 300);
+    sun.target.position.set(mid.x, mid.h, mid.y);
+    return;
+  }
+  cam.fov = lerp(cam.fov, fov, Math.min(1, dt * 4));
+  const aspect1 = W / H;
+  if (Math.abs(camera.fov - cam.fov) > 0.01 || camera.aspect !== aspect1) { camera.fov = cam.fov; camera.aspect = aspect1; camera.updateProjectionMatrix(); }
+  const f = cam.focus || karts[0];
+  const sd = course.sunDir;
+  sun.position.set(f.x + sd.x * 300, f.h + sd.y * 300, f.y + sd.z * 300);
+  sun.target.position.set(f.x, f.h, f.y);
+}
+function followCam(dt, k, cam, camera, nViews) {
+  let fov = 68;
+  {
     let yaw, dist = 52, hh = 21;
     const cd = state === 'countdown' || (state === 'paused' && pausedFrom === 'countdown');
     if (cd) {
@@ -2381,7 +2498,9 @@ function updateCamera(dt) {
       dist -= clamp(k.speed / 300, 0, 1.3) * 3;
       if (k.drifting) yaw -= k.driftDir * 0.12;
     }
-    if (k.isPlayer && keys.KeyC) yaw += Math.PI;
+    cam.big = lerp(cam.big || 0, k.bigT > 0 ? 1 : 0, Math.min(1, dt * 3));
+    dist += cam.big * 34; hh += cam.big * 16;
+    if (k.pid === 0 && !twoP && keys.KeyC) yaw += Math.PI;
     const fx = Math.cos(yaw), fy = Math.sin(yaw);
     const tx = k.x - fx * dist, tz = k.y - fy * dist;
     const groundH = Math.max(trackH(tx, tz, nearestIdx(tx, tz, k.idx)), k.air ? k.h - 10 : k.h);
@@ -2392,13 +2511,11 @@ function updateCamera(dt) {
     camera.position.set(tx + sx, cam.y + sy, tz);
     camera.lookAt(k.x + fx * 30, k.h + 9, k.y + fy * 30);
     fov = 66 + clamp(Math.abs(k.speed) / 300, 0, 1.3) * 8 + (k.boostT > 0 ? 8 : 0);
+    if (nViews === 2) fov -= 12;
   }
   cam.fov = lerp(cam.fov, fov, Math.min(1, dt * 4));
-  if (Math.abs(camera.fov - cam.fov) > 0.01) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
-  const f = state === 'title' ? (cam.focus || karts[0]) : player;
-  const sd = course.sunDir;
-  sun.position.set(f.x + sd.x * 300, f.h + sd.y * 300, f.y + sd.z * 300);
-  sun.target.position.set(f.x, f.h, f.y);
+  const aspect = nViews === 2 ? W / (H / 2) : W / H;
+  if (Math.abs(camera.fov - cam.fov) > 0.01 || camera.aspect !== aspect) { camera.fov = cam.fov; camera.aspect = aspect; camera.updateProjectionMatrix(); }
 }
 
 // ============================================================
@@ -2447,22 +2564,34 @@ function drawHUD() {
   const c = hctx, Wd = hud.width, Hd = hud.height;
   c.clearRect(0, 0, Wd, Hd);
   if (flashT > 0) { c.fillStyle = `rgba(255,255,230,${clamp(flashT / 0.35, 0, 1) * 0.8})`; c.fillRect(0, 0, Wd, Hd); }
-  if (player && player.inkT > 0 && (state === 'race' || state === 'done')) {
-    const a = clamp(player.inkT / 1.2, 0, 1) * 0.92;
+  if (!course || !player || state === 'title' || state === 'select' || state === 'loading' || state === 'result') return;
+  if (splitActive()) {
+    const hh = Math.round(Hd / 2);
+    [[player, 0, hh], [player2, hh, Hd - hh]].forEach(([P, oy, h], vi) => {
+      c.save(); c.beginPath(); c.rect(0, oy, Wd, h); c.clip(); c.translate(0, oy);
+      drawHUDFor(c, P, Wd, h, vi);
+      c.restore();
+    });
+    c.fillStyle = '#1d1436'; c.fillRect(0, hh - 2 * DPR, Wd, 4 * DPR);
+  } else drawHUDFor(c, player, Wd, Hd, -1);
+}
+function drawHUDFor(c, P, Wd, Hd, vi) {
+  if (P && P.inkT > 0 && (state === 'race' || state === 'done')) {
+    const a = clamp(P.inkT / 1.2, 0, 1) * 0.92;
     c.fillStyle = `rgba(20,10,40,${a})`;
     for (const [px, py, r] of INK) { c.beginPath(); c.arc(px * Wd, py * Hd, r * Math.min(Wd, Hd), 0, TAU); c.fill(); for (let k2 = 0; k2 < 6; k2++) { const an = k2 * 1.1 + px * 9; c.beginPath(); c.arc(px * Wd + Math.cos(an) * r * Math.min(Wd, Hd) * 1.25, py * Hd + Math.sin(an) * r * Math.min(Wd, Hd) * 1.25, r * Math.min(Wd, Hd) * 0.32, 0, TAU); c.fill(); } }
   }
-  if (!course || !player || state === 'title' || state === 'select' || state === 'loading' || state === 'result') return;
-  const u = Math.min(Wd, Hd) / 400, pad = 14 * u;
+  const u = Math.min(Wd, Hd) / 400 * (vi >= 0 ? 1.25 : 1), pad = 14 * u;
+  if (vi >= 0) { c.font = `italic 900 ${Math.round(22 * u)}px ${hudFont}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = vi ? '#4cc9ff' : '#ff5d73'; c.fillText(`${vi + 1}P`, Wd / 2, Hd - pad - 10 * u); }
   const txt = (text, x, y, size, color, align = 'left', weight = 900, italic = true) => {
     c.font = `${italic ? 'italic ' : ''}${weight} ${Math.round(size)}px ${hudFont}`; c.textAlign = align; c.textBaseline = 'middle';
     c.lineJoin = 'round'; c.lineWidth = size * 0.2; c.strokeStyle = '#1d1436'; c.strokeText(text, x, y);
     c.fillStyle = color; c.fillText(text, x, y);
   };
-  const fast = clamp((Math.abs(player.speed) / (player.st.max * CLASSES[raceClass].mult) - 0.85) / 0.25, 0, 1);
-  if (player.boostT > 0 || fast > 0) {
-    c.strokeStyle = `rgba(255,255,255,${player.boostT > 0 ? 0.55 : 0.25 * fast})`; c.lineWidth = 2 * u;
-    for (let i = 0; i < (player.boostT > 0 ? 26 : 12); i++) {
+  const fast = clamp((Math.abs(P.speed) / (P.st.max * CLASSES[raceClass].mult) - 0.85) / 0.25, 0, 1);
+  if (P.boostT > 0 || fast > 0) {
+    c.strokeStyle = `rgba(255,255,255,${P.boostT > 0 ? 0.55 : 0.25 * fast})`; c.lineWidth = 2 * u;
+    for (let i = 0; i < (P.boostT > 0 ? 26 : 12); i++) {
       const a = rand(0, TAU), r0 = rand(0.35, 0.5) * Math.max(Wd, Hd), r1 = r0 + rand(40, 120) * u;
       c.beginPath(); c.moveTo(Wd / 2 + Math.cos(a) * r0, Hd * 0.55 + Math.sin(a) * r0); c.lineTo(Wd / 2 + Math.cos(a) * r1, Hd * 0.55 + Math.sin(a) * r1); c.stroke();
     }
@@ -2474,23 +2603,25 @@ function drawHUD() {
   gr.addColorStop(0, 'rgba(90,70,160,.85)'); gr.addColorStop(1, 'rgba(25,15,60,.85)'); c.fillStyle = gr; c.fill();
   c.lineWidth = 4 * u; c.strokeStyle = '#ffd23f'; c.stroke();
   let em = null;
-  if (player.rollT > 0) em = ITEMS[ITEM_KEYS[Math.floor(clock * 14) % ITEM_KEYS.length]].emoji;
-  else if (player.item) em = ITEMS[player.item].emoji;
-  else if (player.held && player.held.length) em = ITEMS[player.held[0].type].emoji;
+  if (P.rollT > 0) em = ITEMS[ITEM_KEYS[Math.floor(clock * 14) % ITEM_KEYS.length]].emoji;
+  else if (P.item) em = ITEMS[P.item].emoji;
+  else if (P.held && P.held.length) em = ITEMS[P.held[0].type].emoji;
   if (em) { c.font = `${Math.round(bs * 0.58)}px ${EMOJI_FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(em, bx, by + 2 * u); }
-  if (player.item === 'triple' && player.rollT <= 0) txt(`×${player.itemCount}`, bx + bs * 0.32, by + bs * 0.36, 14 * u, '#ffffff', 'center');
-  if ((player.item === 'triplebanana' || player.item === 'tripleball') && player.rollT <= 0) txt('×3', bx + bs * 0.32, by + bs * 0.36, 14 * u, '#ffffff', 'center');
-  if (player.held && player.held.length > 1) txt(`×${player.held.length}`, bx + bs * 0.32, by + bs * 0.36, 14 * u, '#ffffff', 'center');
-  if (player.held && player.held.length && player.heldKind === 'single') txt('はなすと投げる', bx, by + bs / 2 + 12 * u, 10 * u, '#ffd23f', 'center', 800, false);
-  if (player.bulletT > 0) txt('ながれぼし！', Wd / 2, Hd * 0.82, 22 * u, '#ffe14d', 'center');
-  if (player.ghostT > 0) txt('おばけ中', Wd / 2, Hd * 0.82, 18 * u, '#b388ff', 'center');
-  if (player.item === 'golden' && player.goldT > 0) { c.beginPath(); c.arc(bx, by, bs / 2 + 4 * u, -Math.PI / 2, -Math.PI / 2 + TAU * player.goldT / 7); c.strokeStyle = '#ffe14d'; c.lineWidth = 4 * u; c.stroke(); }
-  if (player.rollT <= 0 && player.item && !(player.held && player.held.length)) txt(ITEMS[player.item].name, bx, by + bs / 2 + 12 * u, 11 * u, '#ffffff', 'center', 800, false);
+  if (P.item === 'boomerang' && P.rollT <= 0) txt(`×${P.itemCount}`, bx + bs * 0.32, by + bs * 0.36, 14 * u, '#ffffff', 'center');
+  if (P.bigT > 0) txt('ジャンボ！', Wd / 2, Hd * 0.82, 22 * u, '#ff9f1c', 'center');
+  if (P.item === 'triple' && P.rollT <= 0) txt(`×${P.itemCount}`, bx + bs * 0.32, by + bs * 0.36, 14 * u, '#ffffff', 'center');
+  if ((P.item === 'triplebanana' || P.item === 'tripleball') && P.rollT <= 0) txt('×3', bx + bs * 0.32, by + bs * 0.36, 14 * u, '#ffffff', 'center');
+  if (P.held && P.held.length > 1) txt(`×${P.held.length}`, bx + bs * 0.32, by + bs * 0.36, 14 * u, '#ffffff', 'center');
+  if (P.held && P.held.length && P.heldKind === 'single') txt('はなすと投げる', bx, by + bs / 2 + 12 * u, 10 * u, '#ffd23f', 'center', 800, false);
+  if (P.bulletT > 0) txt('ながれぼし！', Wd / 2, Hd * 0.82, 22 * u, '#ffe14d', 'center');
+  if (P.ghostT > 0) txt('おばけ中', Wd / 2, Hd * 0.82, 18 * u, '#b388ff', 'center');
+  if (P.item === 'golden' && P.goldT > 0) { c.beginPath(); c.arc(bx, by, bs / 2 + 4 * u, -Math.PI / 2, -Math.PI / 2 + TAU * P.goldT / 7); c.strokeStyle = '#ffe14d'; c.lineWidth = 4 * u; c.stroke(); }
+  if (P.rollT <= 0 && P.item && !(P.held && P.held.length)) txt(ITEMS[P.item].name, bx, by + bs / 2 + 12 * u, 11 * u, '#ffffff', 'center', 800, false);
   // coins
   const cxp = pad + bs + 18 * u, cyp = by;
   c.beginPath(); c.arc(cxp, cyp, 10 * u, 0, TAU); c.fillStyle = '#ffcc22'; c.fill(); c.lineWidth = 2.5 * u; c.strokeStyle = '#1d1436'; c.stroke();
   c.fillStyle = '#fff3a0'; c.fillRect(cxp - 1.5 * u, cyp - 5 * u, 3 * u, 10 * u);
-  txt(`×${player.coins}`, cxp + 14 * u, cyp + 1 * u, 18 * u, player.coins >= 10 ? '#ffd23f' : '#ffffff');
+  txt(`×${P.coins}`, cxp + 14 * u, cyp + 1 * u, 18 * u, P.coins >= 10 ? '#ffd23f' : '#ffffff');
   // lap & time
   if (course.battle) {
     const left = Math.max(0, battleT);
@@ -2504,36 +2635,36 @@ function drawHUD() {
       c.globalAlpha = 1;
     });
   } else {
-    const lap = clamp(Math.floor(player.total / course.L) + 1, 1, LAPS);
+    const lap = clamp(Math.floor(P.total / course.L) + 1, 1, LAPS);
     txt('LAP', Wd - pad - 64 * u, pad + 16 * u, 14 * u, '#ffffff', 'right');
     txt(`${lap}/${LAPS}`, Wd - pad, pad + 14 * u, 28 * u, '#ffffff', 'right');
-    txt(fmtTime(player.finished ? player.finishTime : raceTime), Wd - pad, pad + 40 * u, 16 * u, '#ffd23f', 'right', 800, false);
+    txt(fmtTime(P.finished ? P.finishTime : raceTime), Wd - pad, pad + 40 * u, 16 * u, '#ffd23f', 'right', 800, false);
     if (mode === 'ta' && ghost) txt(`ゴースト ${fmtTime(ghost.time)}`, Wd - pad, pad + 58 * u, 11 * u, '#b9b3ff', 'right', 800, false);
     if (mode === 'gp' && gp) txt(`レース ${gp.round + 1}/${gp.courses.length}`, Wd / 2, pad + 40 * u, 13 * u, '#ffffff', 'center', 800, false);
   }
   // rank & speed
-  const rk = player.rank + 1;
+  const rk = P.rank + 1;
   const showRank = mode !== 'ta';
-  const rankY = isTouch ? Hd - 140 * DPR : Hd - pad - 30 * u;
+  const rankY = isTouch && !twoP ? Hd - 140 * DPR : Hd - pad - 30 * u;
   const rcol = rk === 1 ? '#ffd23f' : rk === 2 ? '#e3e8f0' : rk === 3 ? '#ffae6b' : '#b9b3ff';
   if (showRank) {
     txt(`${rk}`, pad, rankY, 70 * u, rcol);
     c.font = `italic 900 ${Math.round(70 * u)}px ${hudFont}`;
     txt('位', pad + c.measureText(`${rk}`).width + 6 * u, rankY + 12 * u, 26 * u, '#ffffff');
   }
-  const kmh = `${Math.round(Math.abs(player.speed) * 0.55)}`;
+  const kmh = `${Math.round(Math.abs(P.speed) * 0.55)}`;
   txt(kmh, pad, rankY - 52 * u, 20 * u, '#ffffff');
   c.font = `italic 900 ${Math.round(20 * u)}px ${hudFont}`;
   txt('km/h', pad + c.measureText(kmh).width + 6 * u, rankY - 50 * u, 11 * u, '#ffffff', 'left', 800);
-  if (player.drifting) {
-    const tier = driftTier(player.driftCharge), col = tier >= 0 ? TIERS[tier].c : '#ffffff';
-    const gw = 120 * u, gx = Wd / 2 - gw / 2, gy = Hd - (isTouch ? 40 : 30) * u;
+  if (P.drifting) {
+    const tier = driftTier(P.driftCharge), col = tier >= 0 ? TIERS[tier].c : '#ffffff';
+    const gw = 120 * u, gx = Wd / 2 - gw / 2, gy = Hd - (isTouch && !twoP ? 40 : 30) * u;
     c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(gx, gy, gw, 8 * u);
-    c.fillStyle = col; c.fillRect(gx, gy, gw * clamp(player.driftCharge / 2.3, 0, 1), 8 * u);
+    c.fillStyle = col; c.fillRect(gx, gy, gw * clamp(P.driftCharge / 2.3, 0, 1), 8 * u);
     txt('DRIFT', Wd / 2, gy - 12 * u, 14 * u, col, 'center');
   }
   if (!course.battle) drawMinimap(c, u, pad, Wd);
-  if (player.wrongT > 1 && Math.floor(clock * 3) % 2 === 0) txt('ぎゃくそう！', Wd / 2, Hd * 0.3, 32 * u, '#ff5d73', 'center');
+  if (P.wrongT > 1 && Math.floor(clock * 3) % 2 === 0) txt('ぎゃくそう！', Wd / 2, Hd * 0.3, 32 * u, '#ff5d73', 'center');
   const cdState = state === 'countdown' || (state === 'paused' && pausedFrom === 'countdown');
   if (cdState && countdown < 3.6) {
     drawLights(c, u, Wd, countdown > 3 ? 0 : countdown > 2 ? 1 : countdown > 1 ? 2 : 3, false);
@@ -2544,6 +2675,7 @@ function drawHUD() {
   if (state === 'race' && raceTime < 0.8) drawLights(c, u, Wd, 3, true);
   let my = Hd * 0.27;
   for (const m of messages) {
+    if (m.to && m.to !== P) continue;
     const a = clamp(m.t / 0.3, 0, 1), grow = 1 + Math.max(0, (m.t - m.max + 0.2)) * 2;
     c.globalAlpha = a; txt(m.text, Wd / 2, my, 40 * u * grow, m.color, 'center'); c.globalAlpha = 1;
     my += 52 * u;
@@ -2559,7 +2691,7 @@ function drawMinimap(c, u, pad, Wd) {
   c.strokeStyle = 'rgba(20,10,50,.6)'; c.lineWidth = 8 * u; c.stroke();
   c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 4 * u; c.stroke();
   for (const k of [...karts].sort((a, b) => a.isPlayer - b.isPlayer)) {
-    c.fillStyle = k.ch.kart; c.strokeStyle = k.isPlayer ? '#fff' : '#1d1436'; c.lineWidth = (k.isPlayer ? 2.5 : 1.2) * u;
+    c.fillStyle = k.ch.kart; c.strokeStyle = k.isPlayer ? (twoP && k.pid === 1 ? '#4cc9ff' : '#fff') : '#1d1436'; c.lineWidth = (k.isPlayer ? 2.5 : 1.2) * u;
     c.beginPath(); c.arc(tx(k.x), ty(k.y), (k.isPlayer ? 5 : 3.4) * u, 0, TAU); c.fill(); c.stroke();
   }
 }
@@ -2567,7 +2699,7 @@ function drawMinimap(c, u, pad, Wd) {
 // ============================================================
 //  menus
 // ============================================================
-const screens = ['scrTitle', 'scrMode', 'scrSelect', 'scrPause', 'scrResult'];
+const screens = ['scrTitle', 'scrMode', 'scrTune', 'scrSelect', 'scrPause', 'scrResult'];
 function showScreen(id) { for (const s of screens) document.getElementById(s).classList.toggle('hidden', s !== id); }
 function setShowKart() {
   if (showKart) { turntable.remove(showKart); disposeGroup(showKart); }
@@ -2589,6 +2721,19 @@ function buildSelect() {
     cg.appendChild(d);
   });
   buildEditor();
+  const p2 = document.getElementById('p2Row');
+  p2.classList.toggle('hidden', !(twoP && mode !== 'ta'));
+  if (twoP && mode !== 'ta') {
+    if (charAt(selChar2).id === c.id) selChar2 = (selChar + 1) % (CHARS.length + 1);
+    p2.innerHTML = '<span class="lbl">2Pのキャラ</span>';
+    [...CHARS, myChar].forEach((ch, i) => {
+      if (i === selChar) return;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (i === selChar2 ? ' sel' : ''); b.textContent = i === CHARS.length ? '✏️' : speciesEmoji(ch.sp); b.title = ch.name;
+      b.onclick = () => { selChar2 = i; Sound.beep(900, 0.06, 'triangle', 0.08); buildSelect(); };
+      p2.appendChild(b);
+    });
+    document.getElementById('selName').textContent = `1P ${c.name} ／ 2P ${charAt(selChar2).name}`;
+  }
   const s = statsOf(c);
   const bar = (label, v) => `<div class="stat"><span>${label}</span><div class="bar"><i style="width:${Math.round(clamp(v, 0.08, 1) * 100)}%"></i></div></div>`;
   document.getElementById('charStats').innerHTML = bar('スピード', (s.max - 215) / 36) + bar('かそく', (s.acc - 0.6) / 0.55) + bar('ハンドル', (s.hand - 2.4) / 0.9) + bar('おもさ', s.weight / 1.6);
@@ -2647,15 +2792,18 @@ function showResults() {
   state = 'result'; messages = [];
   Sound.engine(0, false);
   updateRanks();
-  const nameOf = (c, me) => `${speciesEmoji(c.sp)} ${c.name}${me ? '（あなた）' : ''}`;
+  const nameOf = (c, me) => `${speciesEmoji(c.sp)} ${c.name}${me ? (typeof me === 'string' ? me : '（あなた）') : ''}`;
+  const tagOf = k => k.isPlayer ? (player2 ? `（${k.pid + 1}P）` : '（あなた）') : '';
+  const both = player2 ? `1P ${player.rank + 1}位 / 2P ${player2.rank + 1}位` : null;
+  if (player2 && talliedSerial !== raceSerial) { talliedSerial = raceSerial; if (player.rank < player2.rank) VS2.p1++; else if (player2.rank < player.rank) VS2.p2++; }
   const tbl = document.getElementById('resTable'), title = document.getElementById('resRank'), sub = document.getElementById('resBest'), md = document.getElementById('resMode');
   sub.textContent = '';
-  md.textContent = `${{ gp: 'グランプリ', vs: 'VSレース', ta: 'タイムアタック', battle: 'ふうせんバトル' }[mode]}・${CLASSES[raceClass].name}`;
+  md.textContent = `${{ gp: 'グランプリ', vs: 'VSレース', ta: 'タイムアタック', battle: 'ふうせんバトル' }[mode]}・${CLASSES[raceClass].name}` + (player2 ? `　｜　1P vs 2P 通算 ${VS2.p1} − ${VS2.p2}${player.rank < player2.rank ? '（1Pの勝ち！）' : player2.rank < player.rank ? '（2Pの勝ち！）' : ''}` : '');
   if (mode === 'battle') {
     const rows = [...karts].sort((a, b) => a.rank - b.rank);
     setupPodium(rows.slice(0, 3));
-    title.textContent = player.rank === 0 ? '🏆 しょうり！' : `${player.rank + 1}位`;
-    tbl.innerHTML = rows.map((k, i) => `<tr class="${k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(k.ch, k.isPlayer)}</td><td class="tm">🎈×${Math.max(0, k.balloons)}　HIT ${k.hits}</td></tr>`).join('');
+    title.textContent = both || (player.rank === 0 ? '🏆 しょうり！' : `${player.rank + 1}位`);
+    tbl.innerHTML = rows.map((k, i) => `<tr class="${k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(k.ch, tagOf(k))}</td><td class="tm">🎈×${Math.max(0, k.balloons)}　HIT ${k.hits}</td></tr>`).join('');
     setResButtons([['もういちど', startRace], ['メニューへ', toMode, true]]);
   } else if (mode === 'ta') {
     setupPodium([player]);
@@ -2674,9 +2822,9 @@ function showResults() {
       rows.forEach((r, i) => gp.points.set(r.k.ch.id, gp.points.get(r.k.ch.id) + GP_POINTS[i]));
       const last = gp.round === gp.courses.length - 1;
       const stand = gp.roster.map(c => ({ c, p: gp.points.get(c.id) })).sort((a, b) => b.p - a.p);
-      title.textContent = `${pos}位　+${GP_POINTS[pos - 1]}pt`;
+      title.textContent = both ? `1P +${GP_POINTS[player.rank]}pt / 2P +${GP_POINTS[player2.rank]}pt` : `${pos}位　+${GP_POINTS[pos - 1]}pt`;
       sub.textContent = `レース ${gp.round + 1}/${gp.courses.length}：${COURSES[gp.courses[gp.round]].name}`;
-      tbl.innerHTML = rows.map((r, i) => `<tr class="${r.k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(r.k.ch, r.k.isPlayer)}</td><td class="tm">${fmtTime(r.time)}</td><td class="pt">+${GP_POINTS[i]}</td></tr>`).join('');
+      tbl.innerHTML = rows.map((r, i) => `<tr class="${r.k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(r.k.ch, tagOf(r.k))}</td><td class="tm">${fmtTime(r.time)}</td><td class="pt">+${GP_POINTS[i]}</td></tr>`).join('');
       if (last) {
         setupPodium(stand.slice(0, 3).map(s2 => ({ ch: s2.c })));
         const myPos = stand.findIndex(s2 => s2.c.id === charAt(selChar).id) + 1;
@@ -2686,7 +2834,9 @@ function showResults() {
           sub.textContent = trophy ? 'トロフィーをゲット！' : 'つぎはトロフィーをめざそう！';
           const tk = 'trophy_' + raceClass, old = store.get(tk), rankOf = t2 => ({ gold: 3, silver: 2, bronze: 1 }[t2] || 0);
           if (trophy && rankOf(trophy) > rankOf(old)) store.set(tk, trophy);
-          tbl.innerHTML = stand.map((s2, i) => `<tr class="${s2.c.id === charAt(selChar).id ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(s2.c, s2.c.id === charAt(selChar).id)}</td><td class="pt">${s2.p}pt</td></tr>`).join('');
+          const hid = [charAt(selChar).id].concat(player2 ? [player2.ch.id] : []);
+          tbl.innerHTML = stand.map((s2, i) => `<tr class="${hid.includes(s2.c.id) ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(s2.c, hid.includes(s2.c.id) ? (player2 ? `（${hid.indexOf(s2.c.id) + 1}P）` : '（あなた）') : '')}</td><td class="pt">${s2.p}pt</td></tr>`).join('');
+          if (player2) { const p2pos = stand.findIndex(s2 => s2.c.id === player2.ch.id) + 1; title.textContent = `そうごう 1P ${myPos}位 / 2P ${p2pos}位`; }
           if (trophy) Music.fanfare(true);
           gp = null;
           setResButtons([['もういちど', () => { newGP(); startRace(); }], ['メニューへ', toMode, true]]);
@@ -2697,10 +2847,10 @@ function showResults() {
       }
     } else {
       setupPodium(rows.slice(0, 3).map(r => r.k));
-      title.textContent = pos === 1 ? '🏆 1位！' : pos <= 3 ? `🎉 ${pos}位` : `${pos}位`;
+      title.textContent = both || (pos === 1 ? '🏆 1位！' : pos <= 3 ? `🎉 ${pos}位` : `${pos}位`);
       const key = 'best' + selCourse + '_' + raceClass, best = store.get(key);
       if (!best || player.finishTime < best) { store.set(key, player.finishTime); if (best) sub.textContent = '🌟 ベストタイム更新！'; }
-      tbl.innerHTML = rows.map((r, i) => `<tr class="${r.k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(r.k.ch, r.k.isPlayer)}</td><td class="tm">${fmtTime(r.time)}</td></tr>`).join('');
+      tbl.innerHTML = rows.map((r, i) => `<tr class="${r.k.isPlayer ? 'me' : ''}"><td class="rk">${i + 1}</td><td>${nameOf(r.k.ch, tagOf(r.k))}</td><td class="tm">${fmtTime(r.time)}</td></tr>`).join('');
       setResButtons([['もういちど', startRace], ['メニューへ', toMode, true]]);
     }
   }
@@ -2739,11 +2889,37 @@ function toMode() {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (raceClass === c ? ' sel' : ''); b.textContent = CLASSES[c].name + (c === 150 ? ' 🔥' : '');
     b.onclick = () => { raceClass = c; store.set('class', c); toMode(); }; cr.appendChild(b);
   }
+  const pr = document.getElementById('playerRow'); pr.innerHTML = '<b style="align-self:center;margin-right:4px">にんずう</b>';
+  [[false, '🙂 ひとりで'], [true, '👥 ふたりで（画面分割）']].forEach(([v, label]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip' + (twoP === v ? ' sel' : ''); b.textContent = label;
+    b.onclick = () => { twoP = v; store.set('twoP', v); toMode(); }; pr.appendChild(b);
+  });
+  document.getElementById('p2help').innerHTML = twoP
+    ? '<b>1P</b>：<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動　<kbd>Space</kbd> ドリフト　<kbd>Q</kbd> アイテム<br><b>2P</b>：<kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> 移動　<kbd>右Shift</kbd>/<kbd>/</kbd> ドリフト　<kbd>Enter</kbd>/<kbd>.</kbd> アイテム<br>（タイムアタックはひとり用）'
+    : '';
+  document.getElementById('p2help').classList.toggle('hidden', !twoP);
   const tr = [50, 100, 150].map(c => { const t = store.get('trophy_' + c); return t ? `${CLASSES[c].name} ${{ gold: '🥇', silver: '🥈', bronze: '🥉' }[t]}` : null; }).filter(Boolean);
   document.getElementById('trophyRow').textContent = tr.length ? 'トロフィー：' + tr.join('　') : '';
   showScreen('scrMode');
   document.getElementById('touch').classList.add('hidden');
   document.getElementById('topbtns').classList.add('hidden');
+}
+const TUNE_ROWS = [
+  ['steer', 'ハンドルの効き', 0.7, 1.5, 0.05, v => v < 0.95 ? 'おもい' : v > 1.05 ? 'かるい' : 'ふつう'],
+  ['speed', 'スピード', 0.8, 1.3, 0.05, v => `×${v.toFixed(2)}`],
+  ['drift', 'ドリフトのたまりやすさ', 0.6, 1.8, 0.1, v => `×${v.toFixed(1)}`],
+  ['ai', 'CPUの強さ', 0.86, 1.08, 0.02, v => v < 0.92 ? 'よわい' : v < 0.98 ? 'ややよわい' : v <= 1.02 ? 'ふつう' : 'つよい'],
+];
+function toTune() {
+  const box = document.getElementById('tuneRows'); box.innerHTML = '';
+  for (const [key, label, min, max, step, fmt] of TUNE_ROWS) {
+    const row = document.createElement('div'); row.className = 'tunerow';
+    row.innerHTML = `<label for="tune_${key}">${label}</label><input id="tune_${key}" type="range" min="${min}" max="${max}" step="${step}" value="${TUNE[key]}"><output>${fmt(TUNE[key])}</output>`;
+    const inp = row.querySelector('input'), out = row.querySelector('output');
+    inp.oninput = () => { TUNE[key] = +inp.value; out.textContent = fmt(TUNE[key]); store.set('tune', TUNE); };
+    box.appendChild(row);
+  }
+  showScreen('scrTune');
 }
 function toSelect() {
   state = 'select'; Sound.engine(0, false); buildSelect(); setShowKart(); showScreen('scrSelect');
@@ -2753,6 +2929,9 @@ function toSelect() {
 }
 document.getElementById('btnStart').onclick = () => { Sound.init(); toMode(); };
 document.getElementById('btnModeBack').onclick = () => { toTitle(); };
+document.getElementById('btnTune').onclick = () => { toTune(); };
+document.getElementById('btnTuneDone').onclick = () => { showScreen('scrMode'); };
+document.getElementById('btnTuneReset').onclick = () => { TUNE = Object.assign({}, TUNE_DEFAULT); store.set('tune', TUNE); toTune(); };
 document.getElementById('btnBack').onclick = () => { toMode(); };
 document.getElementById('btnGo').onclick = () => { gp = null; startRace(); };
 document.getElementById('btnRetry2').onclick = startRace;
@@ -2787,7 +2966,16 @@ function frame(now) {
   if (state !== 'paused') update(dt);
   if (state === 'select') renderer.render(showroom, showCam);
   else if (state === 'result') renderer.render(podium, podCam);
-  else if (course) { updateCamera(dt); renderer.render(scene, camera); }
+  else if (course) {
+    updateCamera(dt);
+    if (splitActive()) {
+      const hh = Math.floor(H / 2);
+      renderer.setScissorTest(true);
+      renderer.setViewport(0, H - hh, W, hh); renderer.setScissor(0, H - hh, W, hh); renderer.render(scene, camera);
+      renderer.setViewport(0, 0, W, H - hh); renderer.setScissor(0, 0, W, H - hh); renderer.render(scene, camera2);
+      renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H);
+    } else renderer.render(scene, camera);
+  }
   drawHUD();
   requestAnimationFrame(frame);
 }
