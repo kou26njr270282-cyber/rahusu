@@ -1093,15 +1093,177 @@ const P3 = (() => {
       g.rotation.z = 0.15;
       head.add(g);
     }
-    const hat = hatKey && HATS[hatKey];
-    if (hat) {
-      const sp3 = emojiSprite(hat.icon, hat.eyes ? 0.62 : 0.55);
-      sp3.position.set(0, hat.eyes ? 0.0 : HB + 0.12, hat.eyes ? 0.74 : 0);
-      head.add(sp3);
-    }
+    if (hatKey && HATS[hatKey]) head.add(buildHat(hatKey, species));
     root.scale.setScalar(S3);
     return parts;
   }
+  /* ----- 3D accessories, made to fit the head (head-local coordinates) ----- */
+  function buildHat(key, species) {
+    const g = new T.Group();
+    const L = (m, c, w = 0.02) => lined(m, c, w);
+    const earsUp = species === 'cat' || species === 'rabbit';
+    switch (key) {
+      case 'ribbon': {   // a bow tied at the side of the head
+        const m = toon('#FF6F9E'), ln = '#9E2F5A', cone = new T.ConeGeometry(0.11, 0.2, 24);
+        g.add(L(geoMesh(cone, m, [-0.11, 0, 0], [0, 0, Math.PI / 2]), ln)); g.add(L(geoMesh(cone, m, [0.11, 0, 0], [0, 0, -Math.PI / 2]), ln));
+        g.add(L(ell(m, 0.06, [0, 0, 0.02]), ln));
+        g.add(L(ell(m, 0.035, [-0.05, -0.1, 0], [1, 2, 0.6], [0, 0, 0.4]), ln)); g.add(L(ell(m, 0.035, [0.05, -0.1, 0], [1, 2, 0.6], [0, 0, -0.4]), ln));
+        g.position.set(0.34, 0.47, 0.26); g.rotation.set(-0.3, 0.45, -0.45);
+        break;
+      }
+      case 'flower': {   // a flower tucked over the ear
+        const pet = toon('#FFB7D0'), ln = '#B2557A';
+        for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; g.add(L(ell(pet, 0.07, [Math.cos(a) * 0.08, Math.sin(a) * 0.08, 0], [1, 1, 0.45]), ln)); }
+        g.add(L(ell(toon('#FFD45E'), 0.05, [0, 0, 0.03], [1, 1, 0.6]), '#A07A10'));
+        g.add(L(ell(toon('#7CC576'), 0.05, [0.1, -0.1, -0.02], [1.6, 0.7, 0.4], [0, 0, -0.6]), '#3F7A3A'));
+        g.position.set(-0.36, 0.44, 0.28); g.rotation.set(-0.3, -0.5, 0.35);
+        break;
+      }
+      case 'cap': {   // a little cap with the brim forward
+        const m = toon('#4F8EF7'), ln = '#1E4A9A';
+        const dome = new T.Mesh(new T.SphereGeometry(1, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), m);
+        dome.scale.set(0.5, 0.32, 0.48); dome.castShadow = true; L(dome, ln, 0.02); g.add(dome);
+        const brim = L(geoMesh(new T.CylinderGeometry(0.3, 0.3, 0.03, 32, 1, false, -Math.PI / 2, Math.PI), toon('#2F6BD6'), [0, 0.01, 0.3]), ln);
+        brim.scale.set(1.1, 1, 1.25); g.add(brim);
+        g.add(L(ell(toon('#FFFFFF'), 0.05, [0, 0.31, 0]), ln));
+        g.position.set(0, earsUp ? 0.4 : 0.44, 0.04); g.rotation.x = -0.2;
+        break;
+      }
+      case 'shades': {   // sunglasses sitting on the face, over the drawn eyes
+        const lens = new T.MeshToonMaterial({ color: '#2B2230', gradientMap: ramp }), frame = toon('#1A141C');
+        for (const sx of [-1, 1]) {
+          const l = ell(lens, 1, [sx * 0.29, 0.06, 0.62], [0.17, 0.13, 0.04], [0, sx * 0.42, 0]);
+          g.add(l); g.add(ell(new T.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0.55 }), 1, [sx * 0.29 - 0.05, 0.1, 0.665], [0.04, 0.025, 0.01], [0, sx * 0.42, 0]));
+          g.add(geoMesh(new T.BoxGeometry(0.03, 0.03, 0.42), frame, [sx * 0.6, 0.1, 0.36], [0, sx * -0.35, 0]));
+        }
+        g.add(geoMesh(new T.BoxGeometry(0.16, 0.03, 0.03), frame, [0, 0.11, 0.66]));
+        break;
+      }
+      case 'silk': {   // a tall top hat, slightly tilted
+        const blk = toon('#2B2530'), ln = '#000000';
+        g.add(L(geoMesh(new T.CylinderGeometry(0.42, 0.42, 0.04, 32), blk, [0, 0, 0]), ln));
+        g.add(L(geoMesh(new T.CylinderGeometry(0.25, 0.27, 0.42, 32), blk, [0, 0.23, 0]), ln));
+        g.add(geoMesh(new T.CylinderGeometry(0.275, 0.275, 0.08, 32), toon('#E2453C'), [0, 0.07, 0]));
+        g.position.set(0.04, earsUp ? 0.55 : 0.6, -0.02); g.rotation.set(-0.12, 0, -0.18);
+        break;
+      }
+      case 'crown': {
+        const gold = toon('#F5C842'), ln = '#8A6A10';
+        g.add(L(geoMesh(new T.CylinderGeometry(0.24, 0.27, 0.15, 32, 1, true), gold), ln));
+        for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; g.add(L(geoMesh(new T.ConeGeometry(0.055, 0.15, 12), gold, [Math.sin(a) * 0.24, 0.14, Math.cos(a) * 0.24]), ln)); g.add(ell(toon(['#E2453C', '#4F8EF7', '#6BCB77'][i % 3]), 0.03, [Math.sin(a) * 0.26, 0, Math.cos(a) * 0.26])); }
+        g.position.set(0, earsUp ? 0.56 : 0.6, 0); g.rotation.z = 0.12;
+        break;
+      }
+    }
+    return g;
+  }
+
+  /* ----- room props ----- */
+  function bowl(colorRim) {
+    const g = new T.Group();
+    const pts = [[0, 0], [0.26, 0], [0.32, 0.03], [0.34, 0.14], [0.3, 0.15], [0.25, 0.05], [0, 0.05]].map(([a, b]) => new T.Vector2(a, b));
+    const b = new T.Mesh(new T.LatheGeometry(pts, 36), toon(colorRim)); b.castShadow = true; lined(b, mix(colorRim, '#2B2230', 0.5), 0.015);
+    g.add(b);
+    const fill = new T.Group(); fill.position.y = 0.06; g.add(fill);
+    g.userData.fill = fill;
+    return g;
+  }
+  function setBowlContent(b, kind) {
+    const f = b.userData.fill;
+    while (f.children.length) f.remove(f.children[0]);
+    if (!kind) return;
+    if (kind === 'water') { const w = new T.Mesh(new T.CylinderGeometry(0.27, 0.25, 0.05, 32), new T.MeshToonMaterial({ color: '#7EC8F2', gradientMap: ramp, transparent: true, opacity: 0.85 })); f.add(w); return; }
+    if (kind === 'kibble') {
+      const m = toon('#C98A4B');
+      for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, r = Math.random() * 0.22; f.add(ell(m, 0.045, [Math.cos(a) * r, 0.02 + (0.22 - r) * 0.25 + Math.random() * 0.03, Math.sin(a) * r], [1, 0.7, 1])); }
+      return;
+    }
+    const s = emojiSprite(kind, 0.38); s.position.y = 0.17; f.add(s);
+  }
+  function wheel() {   // a real hamster wheel: rim, rungs, spokes and a stand
+    const g = new T.Group(), spin = new T.Group(); g.add(spin);
+    const m = toon('#7EC8F2'), ln = '#2F6E96', R = 0.95, W = 0.55;
+    for (const z of [-W / 2, W / 2]) {
+      spin.add(lined(geoMesh(new T.TorusGeometry(R, 0.035, 10, 64), m, [0, 0, z]), ln, 0.012));
+      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI; spin.add(geoMesh(new T.BoxGeometry(R * 2, 0.025, 0.025), m, [0, 0, z], [0, 0, a])); }
+    }
+    const rung = new T.CylinderGeometry(0.014, 0.014, W, 6), rm = toon('#D7EEF9');
+    for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2; spin.add(geoMesh(rung, rm, [Math.cos(a) * R, Math.sin(a) * R, 0], [Math.PI / 2, 0, 0])); }
+    spin.add(geoMesh(new T.CylinderGeometry(0.06, 0.06, W + 0.1, 16), toon('#FFD45E'), [0, 0, 0], [Math.PI / 2, 0, 0]));
+    const leg = toon('#FFD45E');
+    for (const sx of [-1, 1]) g.add(lined(geoMesh(new T.BoxGeometry(0.06, R + 0.1, 0.06), leg, [sx * 0.42, -(R + 0.1) / 2, -W / 2 - 0.06], [0, 0, sx * -0.42]), '#8A6A10', 0.012));
+    g.add(lined(geoMesh(new T.BoxGeometry(1.5, 0.05, 0.4), leg, [0, -R - 0.06, -W / 2 - 0.06]), '#8A6A10', 0.012));
+    g.userData.spin = spin;
+    return g;
+  }
+  function featherToy() {   // cat teaser: a wand with feathers on a string
+    const g = new T.Group();
+    g.add(geoMesh(new T.CylinderGeometry(0.018, 0.018, 1.2, 8), toon('#C98A4B'), [0, 0.6, 0], [0, 0, 0.9]));
+    const tip = new T.Group(); tip.position.set(-0.47, 0.95, 0); g.add(tip);
+    tip.add(geoMesh(new T.CylinderGeometry(0.005, 0.005, 0.4, 4), basic('#555555'), [0, -0.2, 0]));
+    const fe = new T.Group(); fe.position.y = -0.42; tip.add(fe);
+    for (const [c, r] of [['#FF7BAC', 0.4], ['#3EC1D3', -0.2], ['#FFD45E', 0.9]]) fe.add(lined(ell(toon(c), 0.07, [0, -0.1, 0], [0.5, 1.8, 0.25], [0, 0, r]), mix(c, '#2B2230', 0.5), 0.012));
+    g.userData.swing = tip;
+    return g;
+  }
+  function tub(kind) {   // bath tub (water) or tray (sand)
+    const g = new T.Group();
+    const sand = kind === 'sand';
+    const pts = [[0, 0], [0.7, 0], [0.82, 0.08], [0.86, 0.36], [0.8, 0.38], [0.74, 0.1], [0, 0.1]].map(([a, b]) => new T.Vector2(a, b * (sand ? 0.55 : 1)));
+    const t = new T.Mesh(new T.LatheGeometry(pts, 48), toon(sand ? '#F2C37A' : '#FFFFFF')); t.castShadow = true; lined(t, sand ? '#9A6A2A' : '#7A93A8', 0.015);
+    t.scale.z = 0.75; g.add(t);
+    const top = new T.Mesh(new T.CylinderGeometry(0.76, 0.76, 0.02, 48), toon(sand ? '#EBD3A0' : '#9AD8F5'));
+    top.position.y = sand ? 0.16 : 0.3; top.scale.z = 0.75; g.add(top);
+    g.userData.bubbles = [];
+    if (!sand) for (let i = 0; i < 12; i++) { const a = Math.random() * Math.PI * 2, r = 0.3 + Math.random() * 0.4; const bb = ell(new T.MeshToonMaterial({ color: '#FFFFFF', gradientMap: ramp, transparent: true, opacity: 0.9 }), 0.06 + Math.random() * 0.06, [Math.cos(a) * r, 0.34, Math.sin(a) * r * 0.75]); g.add(bb); g.userData.bubbles.push(bb); }
+    return g;
+  }
+  function brush() {
+    const g = new T.Group();
+    g.add(lined(geoMesh(new T.BoxGeometry(0.34, 0.08, 0.16), toon('#C98A4B')), '#6A4220', 0.012));
+    g.add(geoMesh(new T.BoxGeometry(0.3, 0.07, 0.13), toon('#F3EEE4'), [0, -0.07, 0]));
+    g.add(lined(geoMesh(new T.CylinderGeometry(0.03, 0.03, 0.4, 10), toon('#C98A4B'), [0.32, 0.03, 0], [0, 0, Math.PI / 2]), '#6A4220', 0.012));
+    return g;
+  }
+  function bamboo() {
+    const g = new T.Group(), m = toon('#7CC576');
+    for (let i = 0; i < 3; i++) { g.add(lined(geoMesh(new T.CylinderGeometry(0.045, 0.045, 0.3, 12), m, [0, i * 0.31, 0]), '#3F7A3A', 0.012)); g.add(geoMesh(new T.CylinderGeometry(0.052, 0.052, 0.03, 12), toon('#5EA85A'), [0, i * 0.31 + 0.15, 0])); }
+    g.add(lined(ell(toon('#8CD47E'), 0.1, [0.1, 0.9, 0], [1.6, 0.35, 0.3], [0, 0, 0.5]), '#3F7A3A', 0.012));
+    return g;
+  }
+  function furniture(kind) {
+    const g = new T.Group();
+    switch (kind) {
+      case 'plant': {
+        g.add(lined(geoMesh(new T.CylinderGeometry(0.28, 0.22, 0.45, 24), toon('#E07A4F'), [0, 0.22, 0]), '#8A3F22', 0.015));
+        g.add(geoMesh(new T.CylinderGeometry(0.26, 0.26, 0.04, 24), toon('#6A4A2A'), [0, 0.45, 0]));
+        for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; g.add(lined(ell(toon(i % 2 ? '#5EA85A' : '#7CC576'), 0.12, [Math.cos(a) * 0.2, 0.75 + (i % 3) * 0.12, Math.sin(a) * 0.2], [0.8, 2.6, 0.35], [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5]), '#2F6A2A', 0.012)); }
+        break;
+      }
+      case 'ball': {
+        const b = ell(toon('#FFFFFF'), 0.22, [0, 0.22, 0]); lined(b, '#2B2230', 0.015); g.add(b);
+        for (const [x, y, z] of [[0, 0.44, 0], [0.2, 0.25, 0.08], [-0.15, 0.2, 0.15], [0.05, 0.12, -0.2]]) g.add(ell(toon('#E2453C'), 0.075, [x * 0.95, y * 0.98, z * 0.95], [1, 1, 1]));
+        g.userData.bounce = true;
+        break;
+      }
+      case 'radio': {
+        g.add(lined(geoMesh(new T.BoxGeometry(0.66, 0.42, 0.26), toon('#F2A65A'), [0, 0.21, 0]), '#8A4F1A', 0.015));
+        g.add(geoMesh(new T.CylinderGeometry(0.13, 0.13, 0.02, 24), toon('#5A4636'), [-0.14, 0.21, 0.135], [Math.PI / 2, 0, 0]));
+        for (const x of [0.12, 0.22]) g.add(geoMesh(new T.CylinderGeometry(0.035, 0.035, 0.03, 12), toon('#FFFDF8'), [x, 0.26, 0.135], [Math.PI / 2, 0, 0]));
+        g.add(geoMesh(new T.CylinderGeometry(0.008, 0.008, 0.5, 6), toon('#888888'), [0.2, 0.62, 0], [0, 0, -0.5]));
+        g.userData.bob = true;
+        break;
+      }
+      case 'bed': {   // a round cushion bed
+        g.add(lined(geoMesh(new T.TorusGeometry(0.55, 0.16, 16, 40), toon('#7FA8E8'), [0, 0.16, 0], [Math.PI / 2, 0, 0]), '#2F4F8A', 0.015));
+        const c = ell(toon('#F3EEE4'), 0.55, [0, 0.1, 0], [1, 0.16, 1]); g.add(c);
+        g.scale.z = 0.8;
+        break;
+      }
+    }
+    return g;
+  }
+
   function updateFace(parts, blink, chomp) {
     const F = parts.face, expr = parts.faceOverride || parts.expr || 'normal';
     const key = expr + (blink ? 'b' : '') + (chomp ? 'c' : '');
@@ -1136,8 +1298,11 @@ const P3 = (() => {
 
   /* ----- main scene ----- */
   let renderer, scene, camera, roomEl, canvas;
+  let walkPhase = 0, roomGroup, mode = 'room', walkSpeed = 0, outGroup = null, leash = null, walkObjs = [];
   let pet = null, lookKey = '', x = 0, rotY = 0, orbit = 0, drag = null, jumpT = -1, spinT = -1, lastT = 0;
-  let skyMat, orbMat, frameCtx, frameTex, frameText = '', furnGroup, furnKey = '';
+  let skyMat, orbMat, frameCtx, frameTex, frameText = '', furnGroup, furnKey = '', foodBowl, waterBowl, propGroup, waterKey = '';
+  const BOWL_X = { food: -1.5, water: -0.95 };
+  const props = [];
   const CAM_D = 6.2, CAM_Y = 2.2, LOOK = V(0, 0.95, 0);
 
   function woodTexture() {
@@ -1154,15 +1319,16 @@ const P3 = (() => {
     return t;
   }
   function buildRoom() {
+    roomGroup = new T.Group(); scene.add(roomGroup);
     const floor = new T.Mesh(new T.PlaneGeometry(16, 9), new T.MeshStandardMaterial({ map: woodTexture(), roughness: 0.8 }));
-    floor.rotation.x = -Math.PI / 2; floor.position.z = 2; floor.receiveShadow = true; scene.add(floor);
+    floor.rotation.x = -Math.PI / 2; floor.position.z = 2; floor.receiveShadow = true; roomGroup.add(floor);
     const wall = new T.Mesh(new T.PlaneGeometry(16, 7), mat('#CDEBDA', { r: 0.95, em: '#CDEBDA', ei: 0.12 }));
-    wall.position.set(0, 3.5, -2.5); wall.receiveShadow = true; scene.add(wall);
-    scene.add(geoMesh(new T.BoxGeometry(16, 0.2, 0.08), mat('#FFFDF8'), [0, 0.1, -2.46]));
+    wall.position.set(0, 3.5, -2.5); wall.receiveShadow = true; roomGroup.add(wall);
+    roomGroup.add(geoMesh(new T.BoxGeometry(16, 0.2, 0.08), mat('#FFFDF8'), [0, 0.1, -2.46]));
     const rug = new T.Mesh(new T.CylinderGeometry(1.7, 1.7, 0.03, 64), mat('#F7C6CF', { r: 0.95 }));
-    rug.scale.z = 0.55; rug.position.set(0, 0.015, 0.25); rug.receiveShadow = true; scene.add(rug);
+    rug.scale.z = 0.55; rug.position.set(0, 0.015, 0.25); rug.receiveShadow = true; roomGroup.add(rug);
     // window
-    const win = new T.Group(); win.position.set(-1.75, 2.15, -2.47); scene.add(win);
+    const win = new T.Group(); win.position.set(-1.75, 2.15, -2.47); roomGroup.add(win);
     skyMat = basic('#9ED8F5');
     win.add(new T.Mesh(new T.PlaneGeometry(1.5, 1.15), skyMat));
     orbMat = basic('#FFE066');
@@ -1171,13 +1337,16 @@ const P3 = (() => {
     for (const [w, h, px, py] of [[1.62, 0.07, 0, 0.6], [1.62, 0.07, 0, -0.6], [0.07, 1.27, -0.78, 0], [0.07, 1.27, 0.78, 0], [1.5, 0.04, 0, 0], [0.04, 1.15, 0, 0]])
       win.add(geoMesh(new T.BoxGeometry(w, h, 0.06), fm, [px, py, 0.03]));
     // picture frame with the pet's name
-    const pf = new T.Group(); pf.position.set(1.85, 2.25, -2.47); scene.add(pf);
+    const pf = new T.Group(); pf.position.set(1.85, 2.25, -2.47); roomGroup.add(pf);
     const fc = document.createElement('canvas'); fc.width = 192; fc.height = 240;
     frameCtx = fc.getContext('2d'); frameTex = new T.CanvasTexture(fc);
     pf.add(new T.Mesh(new T.PlaneGeometry(0.72, 0.9), new T.MeshBasicMaterial({ map: frameTex })));
     for (const [w, h, px, py] of [[0.84, 0.07, 0, 0.48], [0.84, 0.07, 0, -0.48], [0.07, 1.03, -0.39, 0], [0.07, 1.03, 0.39, 0]])
       pf.add(geoMesh(new T.BoxGeometry(w, h, 0.05), fm, [px, py, 0.03]));
-    furnGroup = new T.Group(); scene.add(furnGroup);
+    furnGroup = new T.Group(); roomGroup.add(furnGroup);
+    foodBowl = bowl('#FF8F7A'); foodBowl.position.set(BOWL_X.food, 0, 0.95); roomGroup.add(foodBowl);
+    waterBowl = bowl('#7FA8E8'); waterBowl.position.set(BOWL_X.water, 0, 1.15); roomGroup.add(waterBowl);
+    propGroup = new T.Group(); scene.add(propGroup);
   }
   api.init = (room) => {
     try {
@@ -1220,6 +1389,24 @@ const P3 = (() => {
   };
   let act = null;
   api.act = (name, dur) => { act = { name, t0: performance.now() / 1000, dur: dur / 1000 }; };
+  // props: wheel, feather, tub, sand, brush, bamboo; they follow the pet while in use
+  api.prop = (type, dur) => {
+    if (!pet) return null;
+    const ps = pet.S3;
+    let obj, pr = {};
+    if (type === 'wheel') { obj = wheel(); obj.scale.setScalar(ps * 0.92 + 0.08); obj.position.set(x, (0.95 + 0.11) * (ps * 0.92 + 0.08), 0); pr.follow = true; }
+    else if (type === 'feather') { obj = featherToy(); pr.y = 0.95 * ps + 0.2; obj.position.set(x + 0.55, pr.y, 0.5); }
+    else if (type === 'tub' || type === 'sand') { obj = tub(type); obj.scale.setScalar(Math.max(0.75, ps)); obj.position.set(x, 0, 0.05); pr.follow = true; }
+    else if (type === 'brush') { obj = brush(); pr.y = 1.0 * ps; pr.rub = true; obj.position.set(x, pr.y, 0.15); obj.rotation.y = 0.3; }
+    else if (type === 'bamboo') { obj = bamboo(); obj.scale.setScalar(ps); pr.hand = true; }
+    else return null;
+    pr.obj = obj; pr.until = dur ? performance.now() + dur : 0;
+    propGroup.add(obj); props.push(pr);
+    return { remove() { const i = props.indexOf(pr); if (i >= 0) props.splice(i, 1); propGroup.remove(obj); dispose(obj); } };
+  };
+  api.bowlPx = (k) => BOWL_X[k] / pxToWorld();
+  api.setBowl = (k, kind) => setBowlContent(k === 'water' ? waterBowl : foodBowl, kind);
+  api.setWater = (full) => { const key = full ? 'w' : 'e'; if (key !== waterKey && waterBowl) { waterKey = key; setBowlContent(waterBowl, full ? 'water' : null); } };
   api.setSky = (sky, orb) => { if (skyMat) { skyMat.color.set(sky); orbMat.color.set(orb); } };
   api.setFrame = (text) => {
     if (!frameCtx || text === frameText) return;
@@ -1231,7 +1418,7 @@ const P3 = (() => {
     lines.forEach((l, i) => { g.font = `${i ? 30 : 36}px "DotGothic16", monospace`; g.fillText(l, 96, 120 + (i - (lines.length - 1) / 2) * 52, 176); });
     frameTex.needsUpdate = true;
   };
-  const FURN3D = { plant: [-2.6, -1.95, 1.1], ball: [-2.1, -0.4, 0.4], radio: [1.25, -2.15, 0.62], bed: [2.3, -1.75, 1.2] };
+  const FURN3D = { plant: [-2.55, -1.95], ball: [1.35, 0.3], radio: [1.15, -2.2], bed: [2.2, -1.6] };
   api.setFurn = (list) => {
     const k = list.join(',');
     if (k === furnKey || !furnGroup) return;
@@ -1239,10 +1426,9 @@ const P3 = (() => {
     while (furnGroup.children.length) furnGroup.remove(furnGroup.children[0]);
     for (const f of list) {
       const [fx, fz, size] = FURN3D[f] || [0, -2, 0.6];
-      const s = emojiSprite(FURN[f].icon, size);
-      s.position.set(fx, size * 0.46, fz);
-      if (f === 'radio') s.userData.bounce = true;
-      furnGroup.add(s);
+      const m = furniture(f);
+      m.position.set(fx, 0, fz);
+      furnGroup.add(m);
     }
   };
 
@@ -1253,32 +1439,57 @@ const P3 = (() => {
     if (!drag) orbit += (0 - orbit) * Math.min(1, dt * 0.7);
     camera.position.set(Math.sin(orbit) * CAM_D, CAM_Y, Math.cos(orbit) * CAM_D);
     camera.lookAt(LOOK);
-    furnGroup.children.forEach(s => { if (s.userData.bounce) s.position.y = 0.3 + Math.abs(Math.sin(t * 6)) * 0.06; });
+    furnGroup.children.forEach(m => { const c = m.children[0]; if (c && c.parent.userData.bob) m.position.y = Math.abs(Math.sin(t * 6)) * 0.04; });
+    for (let i = props.length - 1; i >= 0; i--) {
+      const pr = props[i];
+      if (pr.until && performance.now() > pr.until) { propGroup.remove(pr.obj); dispose(pr.obj); props.splice(i, 1); continue; }
+      const o = pr.obj, u = o.userData, ps = pet ? pet.S3 : 1;
+      if (pr.follow) o.position.x = x + (pr.dx || 0) * ps;
+      if (u.spin) u.spin.rotation.z -= dt * 5;
+      if (u.swing) { u.swing.rotation.z = Math.sin(t * 5) * 0.6; o.position.y = pr.y + Math.sin(t * 3) * 0.08; }
+      if (u.bubbles) u.bubbles.forEach((b, k) => { b.position.y = 0.34 + Math.abs(Math.sin(t * 2 + k)) * 0.1; });
+      if (pr.rub) { o.position.x = x + Math.sin(t * 7) * 0.25 * ps; o.position.y = pr.y + Math.abs(Math.sin(t * 7)) * 0.05; }
+      if (pr.hand && pet) { o.position.set(x + Math.sin(pet.root.rotation.y) * 0.35 * ps + 0.25 * ps, 0.55 * ps, 0.3 * ps); o.rotation.z = 0.5; }
+    }
     if (pet && S) {
       const pos = $('petpos'), room = roomEl;
       const catching = room.classList.contains('catching');
       const tx = walkX * pxToWorld();
-      if (pos.style.transition === 'none' || catching) x = tx;
-      else x += (tx - x) * Math.min(1, dt * 2.6);
-      const moving = Math.abs(tx - x) > 0.04;
+      // walk at a steady pace with easing, instead of sliding
+      const speed = (act && act.name === 'run') ? 0 : room.querySelector('.game') ? 6 : 1.9;
+      let stepD = 0;
+      if (pos.style.transition === 'none' || catching) { stepD = Math.abs(tx - x); x = tx; }
+      else { const dx = tx - x, ease = Math.min(1, Math.abs(dx) / 0.35) * 0.85 + 0.15; stepD = Math.min(Math.abs(dx), speed * ease * dt); x += Math.sign(dx) * stepD; }
+      walkPhase += stepD * 9 + ((act && act.name === 'run') ? dt * 16 : 0);
+      const moving = Math.abs(tx - x) > 0.04 || (act && act.name === 'run');
       const dirGame = !!room.querySelector('.game .arrows');
       const want = facing * (moving || dirGame || catching ? 1.2 : 0.32);
       rotY += (want - rotY) * Math.min(1, dt * 9);
       const s = pet.S3;
       let y = 0, extra = 0;
-      if (moving && !catching) y = Math.abs(Math.sin(t * 9)) * 0.12 * s;
-      if (pos.classList.contains('jump')) { if (jumpT < 0) jumpT = t; const k = ((t - jumpT) % 0.5) / 0.5; y = Math.sin(k * Math.PI) * 0.65 * s; } else jumpT = -1;
+      let squash = 1;
+      if (moving && !catching) y = Math.abs(Math.sin(walkPhase)) * 0.09 * s;
+      if (pos.classList.contains('jump')) { if (jumpT < 0) jumpT = t; const k = ((t - jumpT) % 0.5) / 0.5; y = Math.sin(k * Math.PI) * 0.65 * s; squash = k < 0.12 || k > 0.88 ? 0.86 : 1.06; } else jumpT = -1;
       if (pos.classList.contains('spin')) { if (spinT < 0) spinT = t; const k = Math.min(1, (t - spinT) / 0.8); extra = k * Math.PI * 2; y = Math.max(y, Math.sin(k * Math.PI) * 0.5 * s); } else spinT = -1;
       pet.root.position.set(x, y, 0);
       pet.root.rotation.set(0, rotY + extra, 0);
       pet.inner.rotation.set(0, 0, 0); pet.inner.position.set(0, 0, 0); pet.head.rotation.y = 0;
-      pet.feet.forEach(f => { f.position.y = 0.08; f.visible = true; });
+      // feet take turns stepping while walking; the body sways a little
+      pet.feet.forEach((f, i) => {
+        f.visible = true;
+        const ph = walkPhase + i * Math.PI;
+        f.position.y = 0.08 + (moving ? Math.max(0, Math.sin(ph)) * 0.09 : 0);
+        f.position.z = 0.22 + (moving ? Math.cos(ph) * 0.07 : 0);
+      });
+      if (moving) pet.inner.rotation.z = Math.sin(walkPhase) * 0.07;
       const asleep = S.asleep, sadish = pet.expr === 'sad' || pet.expr === 'sick';
       const br = asleep ? Math.sin(t * 1.6) * 0.035 : Math.sin(t * 3.4) * 0.018;
-      pet.inner.scale.set(1 - br * 0.5, (asleep ? 0.93 : 1) + br, 1 - br * 0.5);
+      pet.inner.scale.set((1 - br * 0.5) * (2 - squash), ((asleep ? 0.9 : 1) + br) * squash, 1 - br * 0.5);
+      if (asleep) { pet.inner.position.y = -0.1 * s; pet.inner.rotation.z = 0.1; pet.feet.forEach(f => f.visible = false); }
       if (pet.tail) pet.tail.rotation.x = 0;
       pet.head.rotation.z = Math.sin(t * 1.3) * (asleep ? 0.02 : 0.07);
-      pet.head.rotation.x = asleep ? 0.28 : sadish ? 0.16 : Math.sin(t * 0.9) * 0.03;
+      pet.head.rotation.x = asleep ? 0.34 : sadish ? 0.16 : Math.sin(t * 0.9) * 0.03;
+      if (asleep) pet.head.rotation.z = 0.32 + Math.sin(t * 1.6) * 0.02;
       if (pet.tail) pet.tail.rotation.y = Math.sin(t * pet.tailSpeed) * (asleep || sadish ? 0.05 : pet.tailSpeed > 5 ? 0.6 : 0.35);
       if (pet.ears && pet.species === 'rabbit' && !asleep) { const tw = (t % 3.2) < 0.25 ? Math.sin(t * 40) * 0.12 : 0; pet.ears.forEach((e, i) => e.rotation.x = i ? tw : -tw); }
       // ears and tail show the mood, like real body language
@@ -1329,6 +1540,8 @@ const P3 = (() => {
       case 'munch': Hd.rotation.x = 0.12 + Math.sin(t * 7) * 0.08 * env; P.faceOverride = env > 0.3 ? 'eat' : null; break;
       case 'nap': I.scale.y *= 1 - 0.1 * env; Hd.rotation.x = 0.3 * env; break;
       case 'freeze': I.scale.y *= 1 - 0.05 * env; break;
+      case 'eatbowl': R.rotation.y = -0.95; Hd.rotation.x = 0.5 * env + Math.sin(t * 9) * 0.07 * env; I.rotation.x = 0.16 * env; P.faceOverride = env > 0.3 ? 'eat' : null; if (P.tail) P.tail.rotation.y = Math.sin(t * 14) * 0.5; break;
+      case 'run': I.rotation.x = 0.22; Hd.rotation.x = -0.1; P.faceOverride = 'joy'; break;
       case 'sit': I.rotation.x = -0.32 * env; I.position.y = -0.06 * s * env; Hd.rotation.x = 0.12 * env; break;
       case 'down': I.scale.y *= 1 - 0.28 * env; I.position.y = -0.1 * s * env; I.rotation.x = 0.12 * env; break;
       case 'paw': I.rotation.x = -0.2 * env; P.feet[1].position.y = 0.08 + 0.4 * env; P.feet[1].position.z = 0.26 + 0.15 * env; break;
@@ -1473,7 +1686,7 @@ function render() {
       poops.appendChild(d);
     }
   }
-  if (P3.ok) P3.setFurn(M.furn);
+  if (P3.ok) { P3.setFurn(M.furn); P3.setWater(S.water > 20); }
   $('tpoop').textContent = '💩'.repeat(S.tpoop || 0);
   const fk = M.furn.join(',');
   if (fk !== furnKey) {
@@ -1539,8 +1752,25 @@ function trick() {
 }
 
 /* ---------- care ---------- */
-function eat(food, done) {
+// In 3D the pet walks to its bowl and eats from it; kind: 'kibble' | 'water' | an emoji for treats
+function eat(food, done, kind) {
   if (busy) return;
+  if (!kind) kind = food === '💧' ? 'water' : (food === sp().meal.icon && ['dog', 'cat', 'hamster'].includes(S.species)) ? 'kibble' : food;
+  if (P3.ok) {
+    busy = true;
+    const bowlKey = kind === 'water' ? 'water' : 'food';
+    P3.setBowl(bowlKey, kind || food);
+    walkX = P3.bowlPx(bowlKey) + $('room').clientWidth * 0.17; facing = -1; placePet(true);
+    setTimeout(() => {
+      P3.act('eatbowl', 2200);
+      setTimeout(() => {
+        if (bowlKey === 'food') P3.setBowl('food', null);
+        busy = false; done(); render(); save();
+        setTimeout(() => { if (!busy) { facing = 1; goCenter(); placePet(true); } }, 900);
+      }, 2200);
+    }, 1300);
+    return;
+  }
   busy = true; goCenter(); facing = 1; placePet(false);
   const it = document.createElement('div');
   it.className = 'item'; it.textContent = food;
@@ -1633,8 +1863,12 @@ const actions = {
   bath() {
     if (S.asleep) return say('…Zzz');
     const B = sp().bath;
-    busy = true; goCenter();
-    if (B.style === 'brush') {
+    busy = true; goCenter(); facing = 1; placePet(false);
+    if (P3.ok) {
+      const pr = P3.prop(B.style === 'brush' ? 'brush' : B.style === 'sand' ? 'sand' : 'tub', 2200);
+      if (B.style === 'brush') for (let i = 0; i < 6; i++) setTimeout(() => { const c = petCenterPct(); floatAt('✨', c.x - 14 + Math.random() * 24, c.y + 10 + Math.random() * 20); }, i * 300);
+      else if (B.style === 'sand') P3.act('shake', 1600);
+    } else if (B.style === 'brush') {
       const it = document.createElement('div');
       it.className = 'item brush'; it.textContent = B.icon;
       it.style.left = '58%'; it.style.bottom = '30%';
@@ -1660,7 +1894,7 @@ const actions = {
       if (S.species === 'dog' || S.species === 'penguin') setTimeout(() => playBehavior(findBehavior('shake')), 400);
       lcd(B.text);
       busy = false; render(); save();
-    }, 1800);
+    }, 2200);
   },
   clean() {
     if (S.poop === 0 && !S.tpoop) return lcd('へやも トイレも きれいだよ');
@@ -1877,6 +2111,11 @@ function doSpecial() {
         busy = false; setAnim('normal', 1500); say('…プイッ'); return lcd('きょうは きぶんじゃ ないみたい。ねこは きまぐれ');
       }
       goCenter();
+      if (P3.ok) {
+        const toy = P3.prop('feather');
+        hopTimes(4, 650, () => { toy && toy.remove(); end(22, 'ねこじゃらしに むちゅう！', 'ニャッ！'); });
+        break;
+      }
       const it = prop('🪶', 'left:60%;top:30%;transition:transform .35s');
       let k = 0; const t = setInterval(() => { it.style.transform = `translate(${(k % 2 ? -1 : 1) * 30}px, ${k % 2 ? 10 : -10}px) rotate(${k % 2 ? -30 : 30}deg)`; k++; }, 350);
       hopTimes(4, 600, () => { clearInterval(t); it.remove(); end(22, 'ねこじゃらしに むちゅう！', 'ニャッ！'); });
@@ -1889,8 +2128,10 @@ function doSpecial() {
     case 'wheel': {
       goCenter();
       const night = isNight();
-      const it = prop('🎡', 'left:50%;bottom:14%;font-size:5rem;transform:translateX(-50%);z-index:2;animation:wheel 1.2s linear infinite');
-      $('petpos').classList.add('walking');
+      // a real hamster wheel: the hamster runs in place while it turns
+      const w = P3.ok ? P3.prop('wheel') : null;
+      const it = w ? { remove: () => w.remove() } : prop('🎡', 'left:50%;bottom:14%;font-size:5rem;transform:translateX(-50%);z-index:2;animation:wheel 1.2s linear infinite');
+      if (P3.ok) P3.act('run', 3200); else $('petpos').classList.add('walking');
       lcd('くるくる くるくる…');
       setTimeout(() => { it.remove(); addBcs(-3); S.water = clamp(S.water - 8); end(night ? 30 : 18, night ? 'よるの まわしぐるまは さいこう！' : 'いっぱい はしった！'); }, 3200);
       break;
@@ -2286,7 +2527,7 @@ const BEHAVIORS = {
     { id: 'shake', name: 'ブルブル', w: 1, act: 'shake', dur: 1000, line: 'ふるふる', fact: 'みずから あがると からだを ふるわせて みずを きる。' },
   ],
   panda: [
-    { id: 'munch', name: 'たけを もぐもぐ', w: 4, act: 'munch', dur: 3200, snd: 'munch', line: 'もぐもぐ…',
+    { id: 'munch', name: 'たけを もぐもぐ', w: 4, act: 'munch', prop: 'bamboo', dur: 3200, snd: 'munch', line: 'もぐもぐ…',
       fact: 'たべものの 99% が たけ。いちにちに 10〜16じかんも たべつづける。' },
     { id: 'nap', name: 'ちょこっと ひるね', when: () => S.energy < 80, w: 2, act: 'nap', dur: 3000, expr: 'sleep', line: 'Zzz…',
       fact: '2〜4じかんの ひるねを なんども くりかえし、1日に 8〜12じかん ねむる。' },
@@ -2303,6 +2544,7 @@ function playBehavior(b) {
   behaviorUntil = Date.now() + (b.dur || 1500);
   if (b.expr) setAnim(b.expr, b.dur || 1500);
   if (b.act && P3.ok) P3.act(b.act, b.dur || 1500);
+  if (b.prop && P3.ok) P3.prop(b.prop, b.dur || 1500);
   if (b.snd) Array.isArray(b.snd) ? SND.play(b.snd[0], b.snd[1]) : SND.play(b.snd);
   if (b.line) say(typeof b.line === 'function' ? bark('♪') : b.line, Math.min(3000, (b.dur || 1500) + 400));
   if (b.special === 'zoom' || b.special === 'hops') {
