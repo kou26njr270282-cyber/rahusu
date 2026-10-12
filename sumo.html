@@ -1,0 +1,511 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ブッとび相撲</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=DotGothic16&display=swap">
+<style>
+/* Layout: one full-screen canvas. P2 controls on the top edge (upside down), P1 on the bottom edge, ring in the middle. Menus are HTML over the canvas. */
+:root {
+  --bg: #15101f;
+  --p1: #ff5a5a;
+  --p2: #4aa8ff;
+  --gold: #ffd84a;
+  --text: #f6f1e7;
+  --font: "DotGothic16", "Hiragino Kaku Gothic ProN", "Noto Sans JP", monospace;
+  --logo: "Dela Gothic One", "DotGothic16", sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; background: var(--bg); color: var(--text); overflow: hidden; }
+body { font-family: var(--font); -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+.game { position: relative; height: 100%; max-width: 640px; margin: 0 auto; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.menu { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; background: rgba(21,16,31,.86); text-align: center; }
+.menu[hidden] { display: none; }
+.logo { font-family: var(--logo); font-size: clamp(2.4rem, 12vw, 4rem); line-height: 1.05; color: var(--gold); text-shadow: 4px 4px 0 #8a3a1a; letter-spacing: .04em; }
+.logo small { display: block; font-size: .38em; color: var(--text); text-shadow: none; letter-spacing: .2em; margin-top: 6px; }
+.menu p { margin: 0; line-height: 1.5; }
+.btn { font-family: var(--logo); font-size: 1.25rem; color: var(--text); background: #2a2140; border: 3px solid var(--text); border-radius: 12px; padding: 12px 22px; min-width: 250px; cursor: pointer; }
+.btn:hover, .btn:focus-visible { border-color: var(--gold); color: var(--gold); outline: none; }
+.btn.red { background: #5a1f2a; border-color: var(--p1); }
+.btn.blue { background: #1c2f55; border-color: var(--p2); }
+.btn small { display: block; font-family: var(--font); font-size: .7rem; opacity: .8; margin-top: 2px; }
+.ladder { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: 300px; }
+.ladder span { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; font-size: .75rem; background: #2a2140; color: #8a80a8; }
+.ladder span.done { background: var(--gold); color: #2a1a00; }
+.ladder span.next { border: 2px solid var(--gold); color: var(--gold); }
+.how { font-size: .82rem; color: #cfc6e0; max-width: 340px; }
+.how b { color: var(--gold); font-weight: 400; }
+#snd[hidden] { display: none; }
+#snd { position: absolute; right: 10px; top: 10px; font-family: var(--font); font-size: .75rem; color: var(--text); background: rgba(21,16,31,.6); border: 2px solid rgba(246,241,231,.4); border-radius: 6px; padding: 2px 7px; cursor: pointer; z-index: 2; }
+</style>
+
+<div class="game" id="game">
+  <canvas id="cv" aria-label="ブッとび相撲の土俵"></canvas>
+  <button id="snd">おと ON</button>
+  <div class="menu" id="menu"></div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById("cv"), ctx = cv.getContext("2d"), game = document.getElementById("game");
+  const menu = document.getElementById("menu");
+  let W = 360, H = 640, DPR = 1;
+  function resize() {
+    const r = game.getBoundingClientRect();
+    W = r.width; H = r.height; DPR = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  addEventListener("resize", resize); resize();
+  const FONT = '"DotGothic16", monospace', LOGO = '"Dela Gothic One", "DotGothic16", sans-serif';
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const ZONE = () => Math.min(170, H * 0.22);           // height of each control strip
+  const ringC = () => ({ x: W / 2, y: H / 2 });
+  const ringR0 = () => Math.min(W * 0.44, (H - ZONE() * 2) * 0.48);
+
+  // ================= sound =================
+  let actx = null, soundOn = true;
+  function initAudio() { try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume(); } catch (e) { actx = null; } }
+  function tone(f1, f2, dur, type = "square", vol = 0.06, delay = 0) {
+    if (!actx || !soundOn) return;
+    const t0 = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f1, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t0 + dur);
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise(dur, vol = 0.12) {
+    if (!actx || !soundOn) return;
+    const b = actx.createBuffer(1, Math.floor(actx.sampleRate * dur), actx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const s = actx.createBufferSource(), g = actx.createGain(); s.buffer = b; g.gain.value = vol; s.connect(g).connect(actx.destination); s.start();
+  }
+  const SFX = {
+    bump: (p) => { tone(180 + p * 200, 60, 0.12, "square", 0.05 + p * 0.08); noise(0.08 + p * 0.1, 0.06 + p * 0.12); },
+    dash: (c) => { tone(300 + c * 400, 900 + c * 600, 0.12, "sawtooth", 0.04); },
+    counter: () => { tone(1500, 1500, 0.05, "square", 0.08); tone(2200, 2200, 0.12, "square", 0.07, 0.05); noise(0.15, 0.1); },
+    fall: () => { tone(700, 80, 0.7, "triangle", 0.1); },
+    point: () => { [523, 659, 784].forEach((f, i) => tone(f, f, 0.12, "square", 0.05, i * 0.08)); },
+    win: () => { [523, 659, 784, 1047, 784, 1047].forEach((f, i) => tone(f, f, 0.14, "square", 0.06, i * 0.12)); },
+    ready: () => tone(440, 440, 0.12, "square", 0.05),
+    go: () => tone(880, 880, 0.3, "square", 0.07),
+    shrink: () => tone(200, 120, 0.4, "sawtooth", 0.04),
+  };
+
+  // ================= state =================
+  const R = 22;
+  function makeP(id, col, dark) {
+    return { id, col, dark, x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: -1, charge: 0, charging: false, dash: 0, dashPow: 0, cd: 0, press: -9, fall: 0, out: false, squash: 0, input: { x: 0, y: 0, btn: false }, cpu: null };
+  }
+  let M = { mode: "menu", time: 0 };   // match
+  const P = [makeP(0, "#ff5a5a", "#a32a35"), makeP(1, "#4aa8ff", "#1f5aa8")];
+  let parts = [], texts = [], shake = 0, hitstop = 0, slow = 0;
+
+  function loadLv() { try { return +localStorage.getItem("butobi-lv") || 0; } catch (e) { return 0; } }
+  function saveLv(v) { try { localStorage.setItem("butobi-lv", String(v)); } catch (e) {} }
+
+  function startMatch(mode, lv) {
+    initAudio();
+    M = { mode, lv, score: [0, 0], round: 0, time: 0, state: "count", stateT: 0, winner: -1, ringR: ringR0(), roundT: 0 };
+    P[1].cpu = mode === "cpu" ? makeCpu(lv) : null;
+    menu.hidden = true; document.getElementById("snd").hidden = true;
+    resetRound();
+  }
+  function resetRound() {
+    const c = ringC(), r = ringR0();
+    M.ringR = r; M.roundT = 0; M.state = "count"; M.stateT = 0; M.round++;
+    [[0, 1], [1, -1]].forEach(([i, s]) => {
+      const p = P[i];
+      Object.assign(p, { x: c.x, y: c.y + s * r * 0.55, vx: 0, vy: 0, fx: 0, fy: -s, charge: 0, charging: false, dash: 0, cd: 0, press: -9, fall: 0, out: false, squash: 0 });
+    });
+  }
+
+  // ================= CPU =================
+  const CPU_NAMES = ["みならい", "わかもの", "ちから じまん", "すばしっこ", "かけひき", "ベテラン", "おおぜき", "よこづな", "でんせつ", "かみさま"];
+  function makeCpu(lv) {
+    const k = (lv - 1) / 9;
+    return { lv, react: 0.45 - k * 0.38, aimErr: 0.6 - k * 0.55, guard: 0.05 + k * 0.6, edgeSense: 0.3 + k * 0.7, think: 0, plan: "approach", chargeTo: 0.5 };
+  }
+  function cpuThink(i, dt) {
+    const me = P[i], op = P[1 - i], ai = me.cpu, c = ringC();
+    ai.think -= dt;
+    const dx = op.x - me.x, dy = op.y - me.y, d = Math.hypot(dx, dy) || 1;
+    const myEdge = Math.hypot(me.x - c.x, me.y - c.y) / M.ringR;
+    // guard: opponent dashing toward me and close
+    const opToward = (op.vx * -dx + op.vy * -dy) / d;
+    if (op.dash > 0 && opToward > 250 && d < 95 && Math.random() < ai.guard * dt * 18) { me.press = M.time; }
+    if (ai.think > 0) return;
+    ai.think = ai.react * rand(0.6, 1.2);
+    let mx = dx / d, my = dy / d;
+    const cx = c.x - me.x, cy = c.y - me.y, cl = Math.hypot(cx, cy) || 1;
+    if (myEdge > 0.62 && Math.random() < 0.35 + ai.edgeSense * 0.65) {   // back to the middle
+      const w = (myEdge - 0.55) * 3;
+      mx = mx * (1 - Math.min(0.8, w)) + (cx / cl) * w; my = my * (1 - Math.min(0.8, w)) + (cy / cl) * w;
+    } else {
+      // circle a little so the push sends the opponent outward
+      const side = Math.sin(M.time * 0.8 + ai.lv) * 0.5;
+      mx += -my * side; my += mx * side;
+    }
+    const err = rand(-ai.aimErr, ai.aimErr);
+    const ca = Math.cos(err), sa = Math.sin(err);
+    me.input.x = mx * ca - my * sa; me.input.y = mx * sa + my * ca;
+    const l = Math.hypot(me.input.x, me.input.y) || 1; me.input.x /= l; me.input.y /= l;
+    // only dash when the opponent is in front to stop me, or the dash ends inside the ring
+    const ahead = (dx * me.input.x + dy * me.input.y) / d > 0.85;
+    const land = Math.hypot(me.x + me.input.x * 220 - c.x, me.y + me.input.y * 220 - c.y) < M.ringR * 0.85;
+    if (!me.charging && me.cd <= 0 && d < 190 && (ahead || land) && Math.random() < 0.55) { me.input.btn = true; ai.chargeTo = rand(0.3, 0.6 + ai.lv * 0.04); }
+    if (me.charging && (me.charge >= ai.chargeTo || d < 70)) me.input.btn = false;
+  }
+
+  // ================= input =================
+  const keys = new Set();
+  const KEY = {
+    0: { up: ["KeyW"], down: ["KeyS"], left: ["KeyA"], right: ["KeyD"], btn: ["Space", "KeyF"] },
+    1: { up: ["ArrowUp"], down: ["ArrowDown"], left: ["ArrowLeft"], right: ["ArrowRight"], btn: ["Enter", "KeyL", "Slash"] },
+  };
+  addEventListener("keydown", (e) => { if (M.mode === "menu") return; keys.add(e.code); if (e.code.startsWith("Arrow") || e.code === "Space") e.preventDefault(); });
+  addEventListener("keyup", (e) => keys.delete(e.code));
+  addEventListener("blur", () => keys.clear());
+  const touches = new Map();   // pointerId -> {pl, kind:'stick'|'btn', ox, oy, x, y}
+  function zoneOf(x, y) {
+    const z = ZONE();
+    if (y > H - z) return { pl: 0, kind: x < W * 0.58 ? "stick" : "btn" };
+    if (y < z && M.mode === "duo") return { pl: 1, kind: x > W * 0.42 ? "stick" : "btn" };
+    if (M.mode === "cpu" && y > H / 2) return { pl: 0, kind: x < W * 0.58 ? "stick" : "btn" };
+    return null;
+  }
+  function ptr(e) { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+  cv.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); initAudio();
+    if (M.mode === "menu") return;
+    if (M.state === "over") { if (M.stateT > 1.2) showMenu(); return; }
+    const p = ptr(e), z = zoneOf(p.x, p.y);
+    if (!z) return;
+    cv.setPointerCapture?.(e.pointerId);
+    touches.set(e.pointerId, { ...z, ox: p.x, oy: p.y, x: p.x, y: p.y });
+  });
+  cv.addEventListener("pointermove", (e) => { const t = touches.get(e.pointerId); if (!t) return; const p = ptr(e); t.x = p.x; t.y = p.y; });
+  const up = (e) => touches.delete(e.pointerId);
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+  function readInput(i) {
+    const p = P[i];
+    if (p.cpu) return;
+    let x = 0, y = 0, btn = false;
+    const k = KEY[i];
+    const has = (list) => list.some((c) => keys.has(c));
+    if (M.mode === "cpu" && i === 0) { // solo player may also use the arrows / Enter
+      if (has(k.up) || has(KEY[1].up)) y -= 1; if (has(k.down) || has(KEY[1].down)) y += 1;
+      if (has(k.left) || has(KEY[1].left)) x -= 1; if (has(k.right) || has(KEY[1].right)) x += 1;
+      btn = has(k.btn) || has(KEY[1].btn);
+    } else {
+      if (has(k.up)) y -= 1; if (has(k.down)) y += 1; if (has(k.left)) x -= 1; if (has(k.right)) x += 1;
+      btn = has(k.btn);
+    }
+    for (const t of touches.values()) {
+      if (t.pl !== i) continue;
+      if (t.kind === "btn") btn = true;
+      else {
+        let dx = t.x - t.ox, dy = t.y - t.oy;
+        if (i === 1 && M.mode === "duo") { dx = -dx; dy = -dy; } // P2 sits on the other side of the phone
+        const l = Math.hypot(dx, dy);
+        if (l > 6) { const m = Math.min(1, l / 50); x += dx / l * m; y += dy / l * m; }
+      }
+    }
+    const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+    p.input.x = x; p.input.y = y; p.input.btn = btn;
+  }
+
+  // ================= physics =================
+  function stepPlayer(p, dt) {
+    if (p.out) { p.fall += dt; return; }
+    const inp = p.input;
+    p.cd = Math.max(0, p.cd - dt);
+    // button: hold to charge, release to dash; every press arms a short counter window
+    if (inp.btn && !p.prevBtn) { p.press = M.time; if (p.cd <= 0 && p.dash <= 0) { p.charging = true; p.charge = 0; } }
+    if (p.charging) p.charge = Math.min(1, p.charge + dt / 0.75);
+    if (!inp.btn && p.prevBtn && p.charging) {
+      p.charging = false;
+      let dx = inp.x, dy = inp.y;
+      if (Math.hypot(dx, dy) < 0.2) { const o = P[1 - p.id]; dx = o.x - p.x; dy = o.y - p.y; }
+      const l = Math.hypot(dx, dy) || 1;
+      const pow = 260 + p.charge * 520;
+      p.vx = dx / l * pow; p.vy = dy / l * pow; p.fx = dx / l; p.fy = dy / l;
+      p.dash = 0.32; p.dashPow = p.charge; p.cd = 0.45;
+      SFX.dash(p.charge);
+      burst(p.x, p.y, "#fff", 6 + p.charge * 10, 120);
+    }
+    p.prevBtn = inp.btn;
+    const acc = (p.charging ? 380 : 1100) * (p.dash > 0 ? 0.2 : 1);
+    p.vx += inp.x * acc * dt; p.vy += inp.y * acc * dt;
+    if (Math.hypot(inp.x, inp.y) > 0.2 && p.dash <= 0) { p.fx = inp.x; p.fy = inp.y; }
+    const sp = Math.hypot(p.vx, p.vy), max = p.dash > 0 ? 900 : p.charging ? 120 : 240;
+    if (sp > max && p.dash <= 0) { p.vx *= max / sp; p.vy *= max / sp; }
+    const damp = Math.exp(-(p.dash > 0 ? 1.2 : 3.2) * dt);
+    p.vx *= damp; p.vy *= damp;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.dash = Math.max(0, p.dash - dt);
+    p.squash = Math.max(0, p.squash - dt * 4);
+    if (Math.random() < 0.4 && Math.hypot(p.vx, p.vy) > 300) G.trail.push({ x: p.x, y: p.y, col: p.col, t: 0 });
+  }
+  const G = { trail: [] };
+  function collide() {
+    const a = P[0], b = P[1];
+    if (a.out || b.out) return;
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+    if (d >= R * 2 || d === 0) return;
+    const nx = dx / d, ny = dy / d;
+    const rel = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;   // closing speed
+    // separate
+    const ov = R * 2 - d; a.x -= nx * ov / 2; a.y -= ny * ov / 2; b.x += nx * ov / 2; b.y += ny * ov / 2;
+    if (rel <= 0) return;
+    // counter: pressed just before a dashing opponent hit you
+    const now = M.time;
+    for (const [me, op, s] of [[a, b, -1], [b, a, 1]]) {
+      if (op.dash > 0 && now - me.press < 0.2 && me.dash <= 0) {
+        const pow = 520 + op.dashPow * 520;
+        op.vx = s * -nx * pow; op.vy = s * -ny * pow;   // send the attacker back the way they came
+        me.vx *= 0.2; me.vy *= 0.2; op.dash = 0; me.press = -9;
+        hitstop = 0.16; shake = 0.4; SFX.counter();
+        text("カウンター！", (a.x + b.x) / 2, (a.y + b.y) / 2 - 40, "#ffd84a", 30);
+        burst((a.x + b.x) / 2, (a.y + b.y) / 2, "#ffd84a", 26, 260);
+        op.squash = 1;
+        return;
+      }
+    }
+    const ma = a.dash > 0 ? 2.2 : a.charging ? 1.4 : 1, mb = b.dash > 0 ? 2.2 : b.charging ? 1.4 : 1;
+    const e = 1.35;
+    const j = (1 + e) * rel / (1 / ma + 1 / mb);
+    a.vx -= j / ma * nx; a.vy -= j / ma * ny; b.vx += j / mb * nx; b.vy += j / mb * ny;
+    const p = clamp(rel / 800, 0, 1);
+    a.squash = b.squash = p;
+    if (a.dash > 0) a.dash = 0.05; if (b.dash > 0) b.dash = 0.05;
+    hitstop = 0.03 + p * 0.09; shake = Math.max(shake, p * 0.5);
+    SFX.bump(p);
+    burst((a.x + b.x) / 2, (a.y + b.y) / 2, "#fff", 6 + p * 22, 100 + p * 250);
+    if (p > 0.55) text(p > 0.8 ? "ドーン！！" : "ドン！", (a.x + b.x) / 2, (a.y + b.y) / 2 - 36, "#fff", 18 + p * 16);
+  }
+
+  // ================= effects =================
+  function burst(x, y, col, n, sp) { for (let i = 0; i < n; i++) { const a = rand(0, 7), v = rand(sp * 0.3, sp); parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: rand(0.3, 0.7), col, s: rand(2, 5) }); } }
+  function text(s, x, y, col, size) { texts.push({ s, x, y, col, size, t: 0 }); }
+
+  // ================= match flow =================
+  function update(dt) {
+    M.time += dt;
+    parts.forEach((p) => { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; });
+    parts = parts.filter((p) => p.t < p.life);
+    texts.forEach((t) => (t.t += dt)); texts = texts.filter((t) => t.t < 1.2);
+    G.trail.forEach((t) => (t.t += dt)); G.trail = G.trail.filter((t) => t.t < 0.3);
+    if (M.mode === "menu") return;
+    M.stateT += dt;
+    if (M.state === "count") {
+      const n = 3 - Math.floor(M.stateT / 0.6);
+      if (n !== M.lastN) { M.lastN = n; if (n > 0) SFX.ready(); else SFX.go(); }
+      if (M.stateT > 1.8) { M.state = "fight"; M.stateT = 0; }
+      return;
+    }
+    if (M.state === "fight" || M.state === "fall") {
+      readInput(0); readInput(1);
+      if (M.state === "fight") P.forEach((p, i) => p.cpu && cpuThink(i, dt));
+      P.forEach((p) => stepPlayer(p, dt));
+      collide();
+      M.roundT += dt;
+      const r0 = ringR0();
+      if (M.roundT > 18) { const k = clamp((M.roundT - 18) / 20, 0, 1); const nr = r0 * (1 - 0.5 * k); if (nr < M.ringR - 0.5 && Math.floor(M.roundT * 2) !== M.shrinkTick) { M.shrinkTick = Math.floor(M.roundT * 2); if (M.shrinkTick % 6 === 0) SFX.shrink(); } M.ringR = nr; }
+      const c = ringC();
+      for (const p of P) {
+        if (!p.out && Math.hypot(p.x - c.x, p.y - c.y) > M.ringR + R * 0.4) {
+          p.out = true; p.fall = 0; SFX.fall(); slow = 0.7; shake = 0.5;
+          if (M.state === "fight") { M.state = "fall"; M.stateT = 0; M.loser = p.id; }
+        }
+      }
+      if (M.state === "fall" && M.stateT > 1.1) {
+        const w = 1 - M.loser;   // like real sumo: whoever leaves the ring first loses
+        if (w >= 0) { M.score[w]++; SFX.point(); }
+        M.lastWinner = w;
+        if (M.score[0] >= 3 || M.score[1] >= 3) {
+          M.state = "over"; M.stateT = 0; M.winner = M.score[0] >= 3 ? 0 : 1; SFX.win();
+          if (M.mode === "cpu" && M.winner === 0 && M.lv > loadLv()) saveLv(M.lv);
+        } else { M.state = "point"; M.stateT = 0; }
+      }
+    } else if (M.state === "point") {
+      if (M.stateT > 1.3) resetRound();
+    } else if (M.state === "over") {
+      P.forEach((p) => { p.vx *= 0.9; p.vy *= 0.9; });
+    }
+  }
+
+  // ================= drawing =================
+  function drawRing() {
+    const c = ringC(), r = M.mode === "menu" ? ringR0() : M.ringR, r0 = ringR0();
+    // sand floor
+    ctx.fillStyle = "#2a1f38"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#c9a46a"; ctx.beginPath(); ctx.arc(c.x, c.y, r0 + 18, 0, 7); ctx.fill();
+    ctx.fillStyle = "#b08a52"; ctx.beginPath(); ctx.arc(c.x, c.y, r0 + 18, 0, 7); ctx.arc(c.x, c.y, r0 + 6, 0, 7, true); ctx.fill();
+    if (r < r0) { ctx.fillStyle = "rgba(40,20,30,.45)"; ctx.beginPath(); ctx.arc(c.x, c.y, r0 + 6, 0, 7); ctx.arc(c.x, c.y, r, 0, 7, true); ctx.fill(); }
+    // straw rope
+    ctx.strokeStyle = "#f2e2a8"; ctx.lineWidth = 7; ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 7); ctx.stroke();
+    ctx.strokeStyle = "#cdb46a"; ctx.lineWidth = 2; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(c.x, c.y, r, 0, 7); ctx.stroke(); ctx.setLineDash([]);
+    // starting lines
+    ctx.fillStyle = "#f6f1e7"; ctx.fillRect(c.x - 14, c.y - r0 * 0.12, 28, 4); ctx.fillRect(c.x - 14, c.y + r0 * 0.12 - 4, 28, 4);
+  }
+  function drawPlayer(p) {
+    let { x, y } = p, s = 1;
+    if (p.out) { s = Math.max(0, 1 - p.fall * 1.2); }
+    if (s <= 0) return;
+    const sp = Math.hypot(p.vx, p.vy), ang = Math.atan2(p.fy, p.fx);
+    ctx.save(); ctx.translate(x, y);
+    ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(0, R * 0.8 * s, R * s, R * 0.35 * s, 0, 0, 7); ctx.fill();
+    ctx.scale(s, s);
+    const sq = p.squash * 0.25;
+    ctx.rotate(ang); ctx.scale(1 + sq, 1 - sq); ctx.rotate(-ang);
+    if (p.charging) { ctx.strokeStyle = `rgba(255,216,74,${0.4 + p.charge * 0.6})`; ctx.lineWidth = 3 + p.charge * 4; ctx.beginPath(); ctx.arc(0, 0, R + 6 + Math.sin(M.time * 30) * p.charge * 2, 0, 7); ctx.stroke(); }
+    ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(0, 0, R, 0, 7); ctx.fill();
+    ctx.fillStyle = p.dark; ctx.beginPath(); ctx.arc(0, 0, R, 0.2, Math.PI - 0.2); ctx.fill();
+    // mawashi belt
+    ctx.fillStyle = "#2a1f38"; ctx.fillRect(-R, 2, R * 2, 6);
+    // topknot
+    ctx.fillStyle = "#1a1020"; ctx.beginPath(); ctx.ellipse(0, -R + 2, 7, 5, 0, 0, 7); ctx.fill();
+    // face looks where it is going
+    const lx = p.fx * 5, ly = p.fy * 4;
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-7 + lx, -4 + ly, 5, 0, 7); ctx.arc(7 + lx, -4 + ly, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = "#1a1020"; ctx.beginPath(); ctx.arc(-7 + lx * 1.4, -4 + ly * 1.4, 2.4, 0, 7); ctx.arc(7 + lx * 1.4, -4 + ly * 1.4, 2.4, 0, 7); ctx.fill();
+    if (p.charging || p.dash > 0) { ctx.strokeStyle = "#1a1020"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-12 + lx, -11 + ly); ctx.lineTo(-3 + lx, -8 + ly); ctx.moveTo(12 + lx, -11 + ly); ctx.lineTo(3 + lx, -8 + ly); ctx.stroke(); }
+    ctx.restore();
+    // facing arrow
+    if (!p.out && sp < 400) {
+      ctx.fillStyle = p.col; ctx.globalAlpha = 0.7;
+      const ax = x + p.fx * (R + 12), ay = y + p.fy * (R + 12);
+      ctx.beginPath(); ctx.moveTo(ax + p.fx * 8, ay + p.fy * 8); ctx.lineTo(ax - p.fy * 6, ay + p.fx * 6); ctx.lineTo(ax + p.fy * 6, ay - p.fx * 6); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    if (p.cd > 0 && !p.out) { ctx.strokeStyle = "rgba(255,255,255,.4)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, R + 3, -Math.PI / 2, -Math.PI / 2 + (1 - p.cd / 0.45) * Math.PI * 2); ctx.stroke(); }
+  }
+  function drawControls(i) {
+    if (M.mode === "menu") return;
+    if (i === 1 && M.mode !== "duo") return;
+    const z = ZONE(), p = P[i];
+    ctx.save();
+    if (i === 1) { ctx.translate(W, H); ctx.rotate(Math.PI); }
+    const y0 = H - z;
+    ctx.fillStyle = i === 0 ? "rgba(255,90,90,.08)" : "rgba(74,168,255,.08)"; ctx.fillRect(0, y0, W, z);
+    ctx.strokeStyle = p.col; ctx.globalAlpha = 0.5; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(W, y0); ctx.stroke(); ctx.globalAlpha = 1;
+    // stick
+    let st = null; for (const t of touches.values()) if (t.pl === i && t.kind === "stick") st = t;
+    const sx = W * 0.27, sy = y0 + z / 2;
+    ctx.strokeStyle = "rgba(246,241,231,.35)"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(sx, sy, 44, 0, 7); ctx.stroke();
+    let kx = sx, ky = sy;
+    if (st) { let dx = st.x - st.ox, dy = st.y - st.oy; if (i === 1) { dx = -dx; dy = -dy; } const l = Math.hypot(dx, dy); const m = Math.min(44, l); if (l > 0) { kx += dx / l * m; ky += dy / l * m; } }
+    ctx.fillStyle = "rgba(246,241,231,.55)"; ctx.beginPath(); ctx.arc(kx, ky, 20, 0, 7); ctx.fill();
+    ctx.font = `12px ${FONT}`; ctx.fillStyle = "rgba(246,241,231,.6)"; ctx.textAlign = "center"; ctx.fillText("ひだり がわ で いどう", sx, y0 + z - 10);
+    // button
+    const bx = W * 0.78, by = sy, br = Math.min(46, z * 0.32);
+    ctx.fillStyle = p.input.btn ? p.col : "rgba(246,241,231,.12)"; ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.fill();
+    ctx.strokeStyle = p.col; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(bx, by, br, 0, 7); ctx.stroke();
+    if (p.charging) { ctx.strokeStyle = "#ffd84a"; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(bx, by, br + 6, -Math.PI / 2, -Math.PI / 2 + p.charge * Math.PI * 2); ctx.stroke(); }
+    ctx.font = `16px ${LOGO}`; ctx.fillStyle = "#f6f1e7"; ctx.textBaseline = "middle"; ctx.fillText("ドスコイ", bx, by);
+    ctx.font = `11px ${FONT}`; ctx.fillStyle = "rgba(246,241,231,.6)"; ctx.textBaseline = "alphabetic"; ctx.fillText("ながおし→はなす", bx, y0 + z - 10);
+    // score pips for this side
+    for (let k = 0; k < 3; k++) {
+      ctx.fillStyle = k < M.score[i] ? "#ffd84a" : "rgba(246,241,231,.2)";
+      ctx.beginPath(); ctx.arc(W / 2 - 22 + k * 22, y0 + 16, 7, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function bigText(s, y, col, size, rot = 0) {
+    ctx.save(); ctx.translate(W / 2, y); ctx.rotate(rot);
+    ctx.font = `${size}px ${LOGO}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = 8; ctx.strokeStyle = "#15101f"; ctx.strokeText(s, 0, 0); ctx.fillStyle = col; ctx.fillText(s, 0, 0);
+    ctx.restore();
+  }
+  function draw() {
+    ctx.save();
+    if (shake > 0) ctx.translate(rand(-1, 1) * 10 * shake, rand(-1, 1) * 10 * shake);
+    drawRing();
+    for (const t of G.trail) { ctx.globalAlpha = 0.35 * (1 - t.t / 0.3); ctx.fillStyle = t.col; ctx.beginPath(); ctx.arc(t.x, t.y, R * 0.9, 0, 7); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    if (M.mode !== "menu") P.forEach(drawPlayer);
+    for (const p of parts) { ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.col; ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); }
+    ctx.globalAlpha = 1;
+    for (const t of texts) {
+      const a = Math.min(1, (1.2 - t.t) / 0.3), s = t.size * (1 + Math.max(0, 0.12 - t.t) * 4);
+      ctx.globalAlpha = a; ctx.font = `${s}px ${LOGO}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 6; ctx.strokeStyle = "#15101f"; ctx.strokeText(t.s, t.x, t.y - t.t * 30); ctx.fillStyle = t.col; ctx.fillText(t.s, t.x, t.y - t.t * 30);
+    }
+    ctx.globalAlpha = 1;
+    drawControls(0); drawControls(1);
+    if (M.mode !== "menu") {
+      const c = ringC();
+      if (M.mode === "cpu") { ctx.font = `14px ${FONT}`; ctx.textAlign = "center"; ctx.fillStyle = "#4aa8ff"; ctx.fillText(`CPU Lv${M.lv}「${CPU_NAMES[M.lv - 1]}」  ${M.score[1]} - ${M.score[0]}`, W / 2, 26); }
+      const flip = M.mode === "duo";
+      if (M.state === "count") {
+        const n = 3 - Math.floor(M.stateT / 0.6);
+        bigText(n > 0 ? String(n) : "はっけよい！", c.y, "#ffd84a", n > 0 ? 80 : 40);
+      } else if (M.state === "fight" && M.stateT < 0.6) bigText("のこった！", c.y, "#ffd84a", 40);
+      else if (M.state === "fall") bigText("おしだし！", c.y, "#fff", 44);
+      else if (M.state === "point") {
+        const w = M.lastWinner;
+        const msg = w < 0 ? "どうたい！" : M.mode === "cpu" ? (w === 0 ? "1ぽん！" : "とられた…") : (w === 0 ? "あか 1ぽん！" : "あお 1ぽん！");
+        bigText(msg, c.y, w === 1 ? "#4aa8ff" : w === 0 ? "#ff5a5a" : "#fff", 40);
+        if (flip) bigText(msg, c.y - 70, w === 1 ? "#4aa8ff" : w === 0 ? "#ff5a5a" : "#fff", 28, Math.PI);
+      } else if (M.state === "over") {
+        ctx.fillStyle = `rgba(21,16,31,${Math.min(0.75, M.stateT)})`; ctx.fillRect(0, 0, W, H);
+        const w = M.winner;
+        const msg = M.mode === "cpu" ? (w === 0 ? "かち！" : "まけ…") : (w === 0 ? "あかの かち！" : "あおの かち！");
+        bigText(msg, H / 2, w === 0 ? "#ff5a5a" : "#4aa8ff", 50);
+        if (flip) bigText(msg, H / 2 - 90, w === 0 ? "#ff5a5a" : "#4aa8ff", 34, Math.PI);
+        ctx.font = `18px ${FONT}`; ctx.fillStyle = "#f6f1e7"; ctx.textAlign = "center";
+        ctx.fillText(`${M.score[0]} - ${M.score[1]}`, W / 2, H / 2 + 48);
+        if (M.mode === "cpu" && w === 0 && M.lv < 10) ctx.fillText(`つぎは Lv${M.lv + 1}「${CPU_NAMES[M.lv]}」`, W / 2, H / 2 + 76);
+        if (M.mode === "cpu" && w === 0 && M.lv === 10) ctx.fillText("ぜんクリア！ あなたが よこづなだ！", W / 2, H / 2 + 76);
+        if (M.stateT > 1.2) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(M.time * 4); ctx.font = `20px ${LOGO}`; ctx.fillText("タップで メニューへ", W / 2, H / 2 + 120); ctx.globalAlpha = 1; }
+      }
+    }
+    ctx.restore();
+  }
+
+  // ================= menu =================
+  function showMenu() {
+    M = { mode: "menu", time: M.time || 0 };
+    touches.clear();
+    const lv = loadLv(), next = Math.min(10, lv + 1);
+    menu.innerHTML = `
+      <div class="logo">ブッとび相撲<small>どひょうから おしだせ！</small></div>
+      <button class="btn red" id="m-duo">ふたりで たいせん<small>1だいの スマホを むかいあって もつ</small></button>
+      <button class="btn blue" id="m-cpu">CPU と しゅぎょう<small>Lv${next}「${CPU_NAMES[next - 1]}」に ちょうせん</small></button>
+      <div class="ladder">${Array.from({ length: 10 }, (_, i) => `<span class="${i < lv ? "done" : i === lv ? "next" : ""}">${i + 1}</span>`).join("")}</div>
+      <p class="how"><b>いどう</b>して ぶつかれ。<b>ドスコイ</b>を ながおし→はなすと とっしん（ながいほど つよい）。<br>あいての とっしんが あたる しゅんかんに おすと <b>カウンター</b>！ 3ぽん とったら かち。</p>
+      <p class="how">キーボード：あか WASD＋スペース ／ あお やじるし＋エンター</p>
+      ${lv > 0 ? `<button class="btn" id="m-pick" style="min-width:0;font-size:.9rem;padding:6px 14px">レベルを えらぶ</button>` : ""}`;
+    menu.hidden = false; document.getElementById("snd").hidden = false;
+    document.getElementById("m-duo").onclick = () => startMatch("duo");
+    document.getElementById("m-cpu").onclick = () => startMatch("cpu", next);
+    const pk = document.getElementById("m-pick");
+    if (pk) pk.onclick = () => {
+      menu.innerHTML = `<div class="logo" style="font-size:2rem">レベル せんたく</div>
+        <div class="ladder" style="max-width:340px;gap:8px">${Array.from({ length: Math.min(10, lv + 1) }, (_, i) => `<button class="btn" data-lv="${i + 1}" style="min-width:0;width:140px;font-size:.95rem;padding:8px">Lv${i + 1} ${CPU_NAMES[i]}</button>`).join("")}</div>
+        <button class="btn" id="m-back" style="min-width:0;font-size:.9rem">もどる</button>`;
+      menu.querySelectorAll("[data-lv]").forEach((b) => (b.onclick = () => startMatch("cpu", +b.dataset.lv)));
+      document.getElementById("m-back").onclick = showMenu;
+    };
+    document.getElementById("m-duo").focus();
+  }
+
+  // ================= loop =================
+  let last = performance.now();
+  function frame(now) {
+    let dt = Math.min(0.033, (now - last) / 1000); last = now;
+    shake = Math.max(0, shake - dt * 1.5);
+    if (hitstop > 0) { hitstop -= dt; dt = 0; }
+    else if (slow > 0) { slow -= dt; dt *= 0.35; }
+    update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+  showMenu();
+  requestAnimationFrame(frame);
+  const snd = document.getElementById("snd");
+  snd.addEventListener("click", () => { soundOn = !soundOn; snd.textContent = `おと ${soundOn ? "ON" : "OFF"}`; if (soundOn) initAudio(); });
+})();
+</script>
