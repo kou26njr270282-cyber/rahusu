@@ -1461,7 +1461,7 @@ let selChar = store.get('char') ?? 0, selCourse = store.get('course') ?? 0;
 if (selChar > CHARS.length) selChar = 0;
 let messages = [];
 const cam = { a: 0, fov: 68, y: 0, focus: 0, focusT: 0 };
-let shakeT = 0;
+let shakeT = 0, hitStop = 0;
 const charAt = i => i === CHARS.length ? myChar : CHARS[i];
 const statsOf = c => FRAMES[c.frame];
 
@@ -1532,7 +1532,7 @@ function setupRace(ci, playerChar, demo = false, roster = null) {
     }
     rec = []; recT = 0;
   } else {
-    const two = twoP && !demo, p2c = two ? charAt2() : null;
+    const two = twoP && !demo && mode !== 'ta', p2c = two ? charAt2() : null;
     const taken = [playerChar.id].concat(two ? [p2c.id] : []);
     const pool = roster ? roster.filter(c => !taken.includes(c.id)) : CHARS.filter(c => !taken.includes(c.id)).sort(() => Math.random() - 0.5);
     player2 = null;
@@ -1555,14 +1555,13 @@ const VS2 = { p1: 0, p2: 0 }; let raceSerial = 0, talliedSerial = -1;
 function startRace() {
   raceSerial++;
   store.set('char', selChar); store.set('course', selCourse); store.set('mode', mode); store.set('class', raceClass); store.set('char2', selChar2); store.set('twoP', twoP);
-  if (mode === 'ta') twoP = false;
   if (mode === 'gp' && !gp) newGP();
   setupRace(currentCourseIndex(), charAt(selChar), false, gp ? gp.roster : null);
   countdown = 4.2; state = 'countdown';
   Sound.init(); Music.stop();
   showScreen(null);
   document.getElementById('topbtns').classList.remove('hidden');
-  if (isTouch && !twoP) document.getElementById('touch').classList.remove('hidden');
+  if (isTouch && !(twoP && player2)) document.getElementById('touch').classList.remove('hidden');
 }
 function charAt2() { let c = charAt(selChar2); if (c.id === charAt(selChar).id) c = CHARS.find(x => x.id !== c.id); return c; }
 function newGP() {
@@ -1639,6 +1638,7 @@ function aiInput(k, dt) {
   const wantDrift = curve > 0.6 && Math.abs(diff) > 0.1 && k.speed > 150;
   if (k.item && k.rollT <= 0) {
     k.itemT -= dt;
+    if (['ball', 'tripleball', 'boomerang', 'bomb'].includes(k.item) || (k.held && k.held.length && k.held[0].type === 'ball')) for (const h of humans) { const dx = h.x - k.x, dy = h.y - k.y, f = dx * Math.cos(k.angle) + dy * Math.sin(k.angle); if (f > 30 && f < 320 && Math.abs(dx * Math.sin(k.angle) - dy * Math.cos(k.angle)) < 40) k.itemT = Math.min(k.itemT, 0.15); }
     if (k.itemT <= 0) {
       const it = k.item;
       const ok = it === 'rocket' || it === 'bomb' ? k.rank > 0 : it === 'thunder' ? k.rank > 2 : it === 'missile' ? k.rank > 1 : true;
@@ -1839,10 +1839,18 @@ function spinOutInner(k, silent, by) {
   if (k.bigT > 0) { k.bigT = 0; k.speed *= 0.6; k.squash = 0.18; if (k.isPlayer) { Sound.beep(400, 0.3, 'square', 0.1, -300); say('ちぢんじゃった！', '#ff9f1c', 1, k); } for (let i = 0; i < 16; i++) spawn(k.x, k.h + 10, k.y, rand(-50, 50), rand(10, 60), rand(-50, 50), 0.5, '#ffffff', 5, 60); return; }
   if (k.shieldT > 0) { k.shieldT = 0; if (k.isPlayer) { Sound.beep(1200, 0.2, 'square', 0.1, -600); say('バリアでガード！', '#4cc9ff', 1); } for (let i = 0; i < 16; i++) spawn(k.x, k.h + 8, k.y, rand(-50, 50), rand(10, 60), rand(-50, 50), 0.5, '#7fe3ff', 4, 60); return; }
   k.spinT = 1.2; k.drifting = false; k.driftCharge = 0; k.boostT = 0; k.hopT = 0.3;
+  k.flipT = 0.7;
   if (by && by !== k) {
     by.hits++;
-    if (by.isPlayer) { say('HIT!', '#ff5d73', 0.8, by); Sound.beep(1400, 0.08, 'square', 0.1); Sound.beep(1900, 0.12, 'square', 0.08); }
+    if (by.isPlayer) {
+      by.combo = clock - (by.comboAt || -9) < 4 ? (by.combo || 1) + 1 : 1; by.comboAt = clock;
+      say(by.combo > 1 ? `${by.combo}れんぞく HIT!!` : ['ドカーン！', 'HIT!', 'ナイス！', 'あたった！'][Math.floor(Math.random() * 4)], by.combo > 1 ? '#ffd23f' : '#ff5d73', 1, by);
+      Sound.beep(1400, 0.08, 'square', 0.1); Sound.beep(1900, 0.12, 'square', 0.08); if (by.combo > 1) Sound.beep(2400, 0.15, 'triangle', 0.1);
+      hitStop = 0.1; flashT = Math.max(flashT, 0.08);
+      if (by.combo >= 2) { by.coins = Math.min(10, by.coins + 1); }
+    }
   }
+  if (k.isPlayer) hitStop = Math.max(hitStop, 0.07);
   if (course.battle) {
     k.balloons--;
     const u = k.model.userData;
@@ -1940,7 +1948,9 @@ function updateEntities(dt) {
       if (k.air && k.h > e.h + 8) continue;
       if (e.type === 'boom') { if (!e.hit.has(k) && (k.x - e.x) ** 2 + (k.y - e.y) ** 2 < 15 * 15) { e.hit.add(k); spinOut(k, false, e.owner); Sound.beep(900, 0.05, 'square', 0.06); } continue; }
       if (e.type === 'bomb' || e.type === 'missile') { if (e.type === 'bomb' && e.z === 0 && (k.x - e.x) ** 2 + (k.y - e.y) ** 2 < 14 * 14) { e.dead = true; blast(e.x, e.y, e.h, 46, e.owner); } continue; }
-      const r = e.type === 'banana' ? 11 : 13;
+      const r = e.type === 'banana' ? 11 : 13, d2e = (k.x - e.x) ** 2 + (k.y - e.y) ** 2;
+      if (k.isPlayer && e.owner !== k && !e.held && d2e < (r + 9) ** 2 && d2e >= r * r && Math.abs(k.speed) > 120) { e.nm = e.nm || new Set(); if (!e.nm.has(k) && !e.nm.has('d' + k.pid)) { e.nm.add(k); k.nmT = 0.35; } }
+      if (k.isPlayer && k.nmT > 0 && e.nm && e.nm.has(k) && d2e > (r + 20) ** 2 && !k.spinT) { k.nmT = 0; e.nm.delete(k); e.nm.add('d' + k.pid); k.boostT = Math.max(k.boostT, 0.6); say('ギリギリ！ ブースト！', '#7fe3ff', 0.9, k); Sound.beep(1700, 0.1, 'triangle', 0.1); }
       if ((k.x - e.x) ** 2 + (k.y - e.y) ** 2 < r * r) { e.dead = true; if (e.type !== 'banana') explode(e.x, e.y, e.h); spinOut(k, false, e.owner); }
     }
   }
@@ -1996,7 +2006,7 @@ function updateKart(k, inp, dt) {
   if (k.out) inp = { accel: false, brake: false, steer: 0, drift: false };
   if (k.respawnT > 0) { k.respawnT -= dt; inp = { accel: false, brake: false, steer: 0, drift: false }; }
   max *= TUNE.speed; if (!k.isPlayer) max *= TUNE.ai;
-  if (!k.isPlayer && humans.length && !course.battle) { const gap = Math.max(...humans.map(h => h.total)) - k.total; if (gap > 250) max *= 1.06; else if (gap < -500) max *= 0.95; }
+  if (!k.isPlayer && humans.length && !course.battle) { const gap = Math.max(...humans.map(h => h.total)) - k.total; max *= gap > 0 ? 1 + clamp((gap - 80) / 1400, 0, 0.13) : 1 - clamp((-gap - 150) / 2200, 0, 0.09); }
   const off = Math.abs(k.lat) > ROADW / 2 + CURB && !k.air;
   if (off && k.starT <= 0 && k.boostT <= 0) max *= 0.5;
   if (k.starT > 0) max *= 1.15;
@@ -2299,6 +2309,7 @@ function syncKart(k, dt) {
   const pitchAir = k.air ? clamp(-k.vy / 400, -0.35, 0.35) : 0;
   u.body.rotation.x = -Math.atan(slope) + pitchAir;
   const roll = k.trickT > 0 ? (1 - k.trickT / 0.45) * TAU : 0;
+  if (k.flipT > 0) { k.flipT -= dt; const t = 1 - clamp(k.flipT / 0.7, 0, 1); u.body.position.y += Math.sin(t * Math.PI) * 9; u.body.rotation.x += t * TAU; }
   const bankRoll = course.bank && !k.air ? Math.atan(course.bank[k.idx]) * Math.cos(wrapAngle(k.angle - course.ang[k.idx])) : 0;
   u.body.rotation.z = roll + lerp(u.body.rotation.z - (u.lastRoll || 0), bankRoll - k.steerVis * 0.06 * clamp(k.speed / 200, 0, 1) - k.slip * 0.15, Math.min(1, dt * 8));
   u.lastRoll = roll;
@@ -2447,6 +2458,7 @@ function update(dt) {
     return;
   }
   if (state !== 'race' && state !== 'done') return;
+  if (hitStop > 0) { hitStop -= dt; dt *= 0.12; }
   simKarts(dt, false);
   for (const k of karts) syncKart(k, dt);
   updateParticles(dt);
@@ -2500,7 +2512,7 @@ function followCam(dt, k, cam, camera, nViews) {
     }
     cam.big = lerp(cam.big || 0, k.bigT > 0 ? 1 : 0, Math.min(1, dt * 3));
     dist += cam.big * 34; hh += cam.big * 16;
-    if (k.pid === 0 && !twoP && keys.KeyC) yaw += Math.PI;
+    if (k.pid === 0 && !(twoP && player2) && keys.KeyC) yaw += Math.PI;
     const fx = Math.cos(yaw), fy = Math.sin(yaw);
     const tx = k.x - fx * dist, tz = k.y - fy * dist;
     const groundH = Math.max(trackH(tx, tz, nearestIdx(tx, tz, k.idx)), k.air ? k.h - 10 : k.h);
@@ -2510,7 +2522,7 @@ function followCam(dt, k, cam, camera, nViews) {
     if (sh) { sx = rand(-sh, sh); sy = rand(-sh, sh); }
     camera.position.set(tx + sx, cam.y + sy, tz);
     camera.lookAt(k.x + fx * 30, k.h + 9, k.y + fy * 30);
-    fov = 66 + clamp(Math.abs(k.speed) / 300, 0, 1.3) * 8 + (k.boostT > 0 ? 8 : 0);
+    fov = 64 + clamp(Math.abs(k.speed) / 300, 0, 1.3) * 12 + (k.boostT > 0 ? 11 : 0);
     if (nViews === 2) fov -= 12;
   }
   cam.fov = lerp(cam.fov, fov, Math.min(1, dt * 4));
@@ -2645,7 +2657,7 @@ function drawHUDFor(c, P, Wd, Hd, vi) {
   // rank & speed
   const rk = P.rank + 1;
   const showRank = mode !== 'ta';
-  const rankY = isTouch && !twoP ? Hd - 140 * DPR : Hd - pad - 30 * u;
+  const rankY = isTouch && !(twoP && player2) ? Hd - 140 * DPR : Hd - pad - 30 * u;
   const rcol = rk === 1 ? '#ffd23f' : rk === 2 ? '#e3e8f0' : rk === 3 ? '#ffae6b' : '#b9b3ff';
   if (showRank) {
     txt(`${rk}`, pad, rankY, 70 * u, rcol);
@@ -2658,7 +2670,7 @@ function drawHUDFor(c, P, Wd, Hd, vi) {
   txt('km/h', pad + c.measureText(kmh).width + 6 * u, rankY - 50 * u, 11 * u, '#ffffff', 'left', 800);
   if (P.drifting) {
     const tier = driftTier(P.driftCharge), col = tier >= 0 ? TIERS[tier].c : '#ffffff';
-    const gw = 120 * u, gx = Wd / 2 - gw / 2, gy = Hd - (isTouch && !twoP ? 40 : 30) * u;
+    const gw = 120 * u, gx = Wd / 2 - gw / 2, gy = Hd - (isTouch && !(twoP && player2) ? 40 : 30) * u;
     c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(gx, gy, gw, 8 * u);
     c.fillStyle = col; c.fillRect(gx, gy, gw * clamp(P.driftCharge / 2.3, 0, 1), 8 * u);
     txt('DRIFT', Wd / 2, gy - 12 * u, 14 * u, col, 'center');
