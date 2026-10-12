@@ -609,7 +609,7 @@ function newPet(species, color, name) {
     bcs: 50, water: 90, nails: 10, vaccinated: false, toilet: 0, tpoop: 0, lastCare: t, diary: {}, death: null,
     poop: 0, poopClock: 120, sick: false, asleep: false, neglect: 0, stage: 0, variant: null, alive: true,
     snacks: [], fed: 0, played: 0, wins: 0, best: 0, personality: ps[Math.floor(Math.random() * ps.length)],
-    gift: false, giftAt: t + 15 * 60000, giftX: 30, archived: false, walkAt: t, xp: 0, lv: 1, g: {}, want: null, nextWant: t + 3 * 60000 };
+    gift: false, giftAt: t + 15 * 60000, giftX: 30, archived: false, walkAt: t, xp: 0, lv: 1, g: {}, want: null, nextWant: t + 3 * 60000, bowlW: 100, bowlF: 0 };
 }
 function save() {
   try { if (S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); localStorage.setItem(META_KEY, JSON.stringify(M)); } catch (e) {}
@@ -689,6 +689,10 @@ function simulate(dt, offline, events) {
   for (const k of ['hunger', 'water', 'happy', 'clean', 'energy', 'health']) S[k] = clamp(S[k]);
   if (offline) S.health = Math.max(S.health, 10);
   if (S.asleep && S.energy >= 100) { S.asleep = false; events.push('wake'); }
+  if (offline && !S.asleep) {
+    if (S.water < 40 && (S.bowlW || 0) > 10) { const take = Math.min(40, S.bowlW); S.water = clamp(S.water + take); S.bowlW -= take; }
+    if (S.hunger < 40 && (S.bowlF || 0) > 0) { S.hunger = clamp(S.hunger + 30); S.bowlF--; addBcs(2.5); }
+  }
   if (!S.gift && !S.asleep && Date.now() > S.giftAt) { S.gift = true; S.giftX = [8, 22, 34, 62][Math.floor(Math.random() * 4)]; events.push('gift'); }
   if (S.health <= 0) S.alive = false;
 }
@@ -851,7 +855,7 @@ const P3 = (() => {
   const mat = (c, o = {}) => new T.MeshStandardMaterial({ color: c, roughness: o.r ?? 0.5, metalness: 0, transparent: o.op != null, opacity: o.op ?? 1, emissive: o.em || 0x000000, emissiveIntensity: o.ei ?? 0 });
   const basic = (c, o = {}) => new T.MeshBasicMaterial({ color: c, transparent: o.op != null, opacity: o.op ?? 1 });
   // Cel shading: a few flat bands of light, like an anime figure.
-  const ramp = new T.DataTexture(new Uint8Array([170, 215, 245, 255]), 4, 1, T.RedFormat);
+  const ramp = new T.DataTexture(new Uint8Array([190, 225, 248, 255]), 4, 1, T.RedFormat);
   ramp.minFilter = ramp.magFilter = T.NearestFilter; ramp.needsUpdate = true;
   const toon = (c) => new T.MeshToonMaterial({ color: c, gradientMap: ramp });
   const outlineMats = {};
@@ -940,7 +944,7 @@ const P3 = (() => {
       } else if (happy) {
         stroke(10, eyeLine, () => { g.moveTo(x - 25, ey + 8); g.quadraticCurveTo(x, ey - 22, x + 25, ey + 8); });
       } else {
-        const big = expr === 'surprise' ? 1.18 : expr === 'sad' ? 0.88 : 1;
+        const big = (expr === 'surprise' ? 1.18 : expr === 'sad' ? 0.88 : 1) * 1.1;
         const rx = 25 * big, ry = 31 * big;
         if (species === 'cat') {   // almond eye, coloured iris, slit pupil
           const iris = p.pupil ? p.eye : '#B9D46A';
@@ -961,8 +965,14 @@ const P3 = (() => {
           gr.addColorStop(0, '#1E1622'); gr.addColorStop(1, '#6E4F84');
           ellipse(x, ey, rx, ry, gr);
         }
-        ellipse(x + 9 * big, ey - 12 * big, 9.5 * big, 9.5 * big, '#FFFFFF');
-        ellipse(x - 9 * big, ey + 12 * big, 4.5 * big, 4.5 * big, 'rgba(255,255,255,.9)');
+        const shine = g.createRadialGradient(x, ey + 16 * big, 2, x, ey + 16 * big, 18 * big);
+        shine.addColorStop(0, 'rgba(255,200,230,.55)'); shine.addColorStop(1, 'rgba(255,200,230,0)');
+        ellipse(x, ey + 14 * big, 18 * big, 12 * big, shine);
+        ellipse(x + 9 * big, ey - 12 * big, 10 * big, 10 * big, '#FFFFFF');
+        ellipse(x - 9 * big, ey + 11 * big, 4.5 * big, 4.5 * big, 'rgba(255,255,255,.95)');
+        g.fillStyle = '#FFFFFF'; g.beginPath();   // little star glint
+        for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, rr = k % 2 ? 2 * big : 6 * big; g.lineTo(x - 12 * big + Math.cos(a) * rr, ey - 15 * big + Math.sin(a) * rr); }
+        g.fill();
         if (expr === 'sad') stroke(7, lineC, () => { g.moveTo(x - s * 30, ey - 46); g.lineTo(x + s * 4, ey - 36); });
       }
     }
@@ -1017,7 +1027,7 @@ const P3 = (() => {
     const S3 = [0.66, 0.82, 1][stage];
     const root = new T.Group();
     const inner = new T.Group(); root.add(inner);
-    const line = mix(p.base, '#2B2230', 0.62), lineDark = mix(p.dark, '#2B2230', 0.55);
+    const line = mix(p.base, '#5A3A3A', 0.5), lineDark = mix(p.dark, '#5A3A3A', 0.45);
     const cBase = toon(p.base), cDark = toon(p.dark), cLight = toon(p.light), cFeet = toon(p.feet || p.base);
     const cPink = toon('#F9AFC0');
     const parts = { root, inner, species, S3 };
@@ -1037,6 +1047,16 @@ const P3 = (() => {
     if (stage === 0) head.scale.setScalar(1.08);
     inner.add(head); parts.head = head;
     head.add(L(ell(cBase, 1, [0, 0, 0], [HA, HB, HC]), line, 0.03));
+    if (species !== 'penguin') {   // fluffy chest
+      for (const [fx, fy, fr] of [[-0.11, 0.86, 0.13], [0.11, 0.86, 0.13], [0, 0.78, 0.15], [-0.07, 0.7, 0.1], [0.07, 0.7, 0.1]]) inner.add(ell(cLight, fr, [fx, fy, 0.3], [1, 0.9, 0.7]));
+    }
+    if (species === 'cat' || species === 'hamster') for (const sx of [-1, 1]) for (const [dy, r] of [[-0.12, 0.09], [-0.24, 0.07]]) head.add(L(ell(cBase, r, [sx * (HA * 1.0 + 0.02), dy, 0.12], [1.4, 0.7, 0.8], [0, 0, sx * -0.5]), line, 0.015));
+    if (stage < 2 && species !== 'rabbit') {   // a little tuft of fur on the head
+      const tuft = new T.Group(); tuft.position.set(0.02, HB - 0.02, 0.08);
+      tuft.add(L(ell(cBase, 0.07, [0, 0.06, 0], [0.7, 1.4, 0.7], [0, 0, -0.4]), line, 0.012));
+      tuft.add(L(ell(cBase, 0.05, [0.07, 0.1, 0], [0.7, 1.3, 0.7], [0, 0, -1.0]), line, 0.012));
+      head.add(tuft);
+    }
 
     // face texture on a thin shell in front of the head
     const fc = document.createElement('canvas'); fc.width = fc.height = 512;
@@ -1377,10 +1397,19 @@ const P3 = (() => {
     roomGroup = new T.Group(); scene.add(roomGroup);
     const floor = new T.Mesh(new T.PlaneGeometry(16, 9), new T.MeshStandardMaterial({ map: woodTexture(), roughness: 0.8 }));
     floor.rotation.x = -Math.PI / 2; floor.position.z = 2; floor.receiveShadow = true; roomGroup.add(floor);
-    const wall = new T.Mesh(new T.PlaneGeometry(16, 7), mat('#CDEBDA', { r: 0.95, em: '#CDEBDA', ei: 0.12 }));
+    const wc = document.createElement('canvas'); wc.width = wc.height = 128;
+    const wg = wc.getContext('2d'); wg.fillStyle = '#D6EEDF'; wg.fillRect(0, 0, 128, 128);
+    wg.fillStyle = '#E8F6EC'; for (const [dx, dy] of [[32, 32], [96, 96]]) { wg.beginPath(); wg.arc(dx, dy, 13, 0, Math.PI * 2); wg.fill(); }
+    wg.fillStyle = '#FAD4DC'; for (const [dx, dy] of [[96, 32], [32, 96]]) { wg.beginPath(); wg.arc(dx, dy, 7, 0, Math.PI * 2); wg.fill(); }
+    const wt = new T.CanvasTexture(wc); wt.wrapS = wt.wrapT = T.RepeatWrapping; wt.repeat.set(14, 6);
+    const wall = new T.Mesh(new T.PlaneGeometry(16, 7), new T.MeshStandardMaterial({ map: wt, roughness: 0.95, emissive: '#D6EEDF', emissiveIntensity: 0.12 }));
     wall.position.set(0, 3.5, -2.5); wall.receiveShadow = true; roomGroup.add(wall);
     roomGroup.add(geoMesh(new T.BoxGeometry(16, 0.2, 0.08), mat('#FFFDF8'), [0, 0.1, -2.46]));
-    const rug = new T.Mesh(new T.CylinderGeometry(1.7, 1.7, 0.03, 64), mat('#F7C6CF', { r: 0.95 }));
+    const rc = document.createElement('canvas'); rc.width = rc.height = 256;
+    const rg = rc.getContext('2d'); rg.fillStyle = '#F7C6CF'; rg.fillRect(0, 0, 256, 256);
+    for (const [r, c] of [[118, '#FBDDE3'], [96, '#F7C6CF'], [70, '#FBDDE3'], [44, '#F7C6CF']]) { rg.beginPath(); rg.arc(128, 128, r, 0, Math.PI * 2); rg.fillStyle = c; rg.fill(); }
+    rg.fillStyle = '#FFFFFF'; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; rg.beginPath(); rg.arc(128 + Math.cos(a) * 107, 128 + Math.sin(a) * 107, 5, 0, Math.PI * 2); rg.fill(); }
+    const rug = new T.Mesh(new T.CylinderGeometry(1.7, 1.7, 0.03, 64), new T.MeshStandardMaterial({ map: new T.CanvasTexture(rc), roughness: 0.95 }));
     rug.scale.z = 0.55; rug.position.set(0, 0.015, 0.25); rug.receiveShadow = true; roomGroup.add(rug);
     // window
     const win = new T.Group(); win.position.set(-1.75, 2.15, -2.47); roomGroup.add(win);
@@ -1391,6 +1420,30 @@ const P3 = (() => {
     const fm = mat('#3A2E39', { r: 0.6 });
     for (const [w, h, px, py] of [[1.62, 0.07, 0, 0.6], [1.62, 0.07, 0, -0.6], [0.07, 1.27, -0.78, 0], [0.07, 1.27, 0.78, 0], [1.5, 0.04, 0, 0], [0.04, 1.15, 0, 0]])
       win.add(geoMesh(new T.BoxGeometry(w, h, 0.06), fm, [px, py, 0.03]));
+    // curtains, bunting and a little shelf
+    const cur = toon('#F9B7C9');
+    for (const sx of [-1, 1]) {
+      const c = new T.Group(); c.position.set(sx * 0.95, 0, 0.06);
+      for (let k = 0; k < 3; k++) c.add(lined(ell(cur, 1, [sx * k * 0.07, -0.05, 0], [0.09, 0.72, 0.05]), '#B2557A', 0.012));
+      c.add(lined(geoMesh(new T.TorusGeometry(0.1, 0.025, 8, 16), toon('#FFD45E'), [sx * 0.06, -0.25, 0.05]), '#8A6A10', 0.01));
+      win.add(c);
+    }
+    win.add(geoMesh(new T.CylinderGeometry(0.025, 0.025, 2.3, 8), toon('#C98A4B'), [0, 0.72, 0.08], [0, 0, Math.PI / 2]));
+    const flagCols = ['#FF8FB1', '#FFD45E', '#7EC8F2', '#A8E6CF', '#C9B6F2'];
+    for (let i = 0; i < 13; i++) {
+      const fx = -3.1 + i * 0.52, fy = 3.35 - Math.sin(i / 12 * Math.PI) * 0.35;
+      const fl = new T.Mesh(new T.ConeGeometry(0.13, 0.26, 3), toon(flagCols[i % 5]));
+      fl.rotation.set(0, 0, Math.PI); fl.position.set(fx, fy - 0.13, -2.44); roomGroup.add(fl);
+    }
+    const shelf = new T.Group(); shelf.position.set(0.15, 1.75, -2.4); roomGroup.add(shelf);
+    shelf.add(lined(geoMesh(new T.BoxGeometry(1.1, 0.07, 0.3), toon('#E7B98A')), '#8A5A30', 0.012));
+    const bear = new T.Group(); bear.position.set(-0.25, 0.04, 0); shelf.add(bear);
+    const bm = toon('#C98A4B');
+    bear.add(lined(ell(bm, 0.14, [0, 0.13, 0]), '#6A4220', 0.012)); bear.add(lined(ell(bm, 0.12, [0, 0.34, 0]), '#6A4220', 0.012));
+    for (const sx of [-1, 1]) bear.add(lined(ell(bm, 0.05, [sx * 0.09, 0.44, 0]), '#6A4220', 0.01));
+    bear.add(ell(toon('#F3E1C8'), 0.05, [0, 0.31, 0.1], [1, 0.8, 0.6]));
+    shelf.add(lined(geoMesh(new T.CylinderGeometry(0.08, 0.07, 0.16, 16), toon('#7FA8E8'), [0.25, 0.12, 0]), '#2F4F8A', 0.01));
+    for (let k = 0; k < 3; k++) shelf.add(lined(ell(toon('#7CC576'), 0.06, [0.25 + (k - 1) * 0.06, 0.27, 0], [0.7, 1.6, 0.5], [0, 0, (k - 1) * 0.5]), '#2F6A35', 0.01));
     // picture frame with the pet's name
     const pf = new T.Group(); pf.position.set(1.85, 2.25, -2.47); roomGroup.add(pf);
     const fc = document.createElement('canvas'); fc.width = 192; fc.height = 240;
@@ -1420,7 +1473,7 @@ const P3 = (() => {
       if (window.ResizeObserver) new ResizeObserver(resize).observe(room); else window.addEventListener('resize', resize);
       canvas.addEventListener('pointerdown', (e) => { if (room.classList.contains('catching')) return; drag = { x: e.clientX, o: orbit }; });
       window.addEventListener('pointermove', (e) => { if (drag) orbit = Math.max(-0.9, Math.min(0.9, drag.o - (e.clientX - drag.x) * 0.008)); });
-      window.addEventListener('pointerup', () => { drag = null; });
+      window.addEventListener('pointerup', (e) => { if (drag && Math.abs(e.clientX - drag.x) < 6 && e.target === canvas && api.onTap) api.onTap(e); drag = null; });
       room.classList.add('three');
       api.ok = true;
       requestAnimationFrame(loop);
@@ -1460,7 +1513,10 @@ const P3 = (() => {
     return { remove() { const i = props.indexOf(pr); if (i >= 0) props.splice(i, 1); propGroup.remove(obj); dispose(obj); } };
   };
   api.bowlPx = (k) => BOWL_X[k] / pxToWorld();
-  api.setBowl = (k, kind) => setBowlContent(k === 'water' ? waterBowl : foodBowl, kind);
+  api.setBowl = (k, kind) => { if (k !== 'water') foodKey = ''; else waterKey = ''; setBowlContent(k === 'water' ? waterBowl : foodBowl, kind); };
+  let foodKey = '';
+  api.setFood = (has) => { const k = has ? 'f' : 'e'; if (k !== foodKey && foodBowl) { foodKey = k; setBowlContent(foodBowl, has ? 'kibble' : null); } };
+  api.worldPx = (w) => w / pxToWorld();
   api.setWater = (full) => { const key = full ? 'w' : 'e'; if (key !== waterKey && waterBowl) { waterKey = key; setBowlContent(waterBowl, full ? 'water' : null); } };
   api.setSky = (sky, orb) => { if (skyMat) { skyMat.color.set(sky); orbMat.color.set(orb); } };
   api.setFrame = (text) => {
@@ -1848,7 +1904,7 @@ function render() {
       poops.appendChild(d);
     }
   }
-  if (P3.ok) { P3.setFurn(M.furn); P3.setWater(S.water > 20); }
+  if (P3.ok) { P3.setFurn(M.furn); P3.setWater((S.bowlW ?? 100) > 10); if (!busy) P3.setFood((S.bowlF || 0) > 0); }
   $('tpoop').textContent = '💩'.repeat(S.tpoop || 0);
   const fk = M.furn.join(',');
   if (fk !== furnKey) {
@@ -1948,7 +2004,13 @@ function eat(food, done, kind) {
   setTimeout(() => { it.remove(); busy = false; done(); render(); save(); }, 1600);
 }
 function feedBasic() {
-  if (S.hunger >= 95) { setAnim('normal', 1500); return say('もう おなか いっぱい'); }
+  if (S.hunger >= 80) {
+    if ((S.bowlF || 0) >= 2) return lcd('おさらは もう いっぱいだよ');
+    S.bowlF = (S.bowlF || 0) + 1;
+    lcd(`おさらに ${sp().meal.name}を いれた。おなかが すいたら じぶんで たべるよ`);
+    say('あとで たべるね', 1500); render(); save();
+    return;
+  }
   eat(sp().meal.icon, () => {
     S.hunger = clamp(S.hunger + 30); addBcs(2.5); S.fed++; afterEat();
     lcd(`${S.name}は ${sp().meal.name}を たべた`);
@@ -1956,7 +2018,9 @@ function feedBasic() {
 }
 function drinkWater() {
   if (S.asleep) return say('…Zzz');
-  eat('💧', () => { S.water = 100; diary('water'); lcd(`${S.name}は ごくごく おみずを のんだ`); });
+  S.bowlW = 100;
+  if (S.water >= 85) { render(); save(); return lcd('おみずを あたらしく した。のどが かわいたら じぶんで のむよ'); }
+  eat('💧', () => { S.water = 100; S.bowlW = 70; diary('water'); lcd(`${S.name}は ごくごく おみずを のんだ`); });
 }
 function vetAction(k) {
   if (k === 'med') { closeSheet(); return actions.med(); }
@@ -3181,6 +3245,7 @@ function nextHint() {
   if (S.sick) return 'ぐあいが わるそう → びょういんで くすり';
   if (S.want) return `💭 ${S.want.text}`;
   if (S.hunger < 35) return 'おなかが すいてる → ごはん';
+  if ((S.bowlW ?? 100) <= 10) return 'みずの おさらが からっぽ → ごはん → おみずを かえる';
   if (S.water < 35) return 'のどが かわいてる → ごはん → おみず';
   if (S.poop > 0 || (S.tpoop || 0) >= 2) return 'うんちが ある → そうじ';
   if (S.clean < 35) return `よごれてきた → ${sp().bath.label}`;
@@ -3189,7 +3254,55 @@ function nextHint() {
   if (HAS_NAILS[S.species] && S.nails > 70) return 'つめが のびてる → びょういん → つめきり';
   const st = stageOf(ageMin());
   if (st < 2) { const g = GOALS[st].find(x => goalHave(x) < x.n); if (g) return `もくひょう：${g.text}`; }
-  return ['ゆびで なでて あげよう', 'きろくで にっきを 見てみよう', 'ずかんの なでポイントを しらべよう'][Math.floor(Date.now() / 20000) % 3];
+  return ['ゆびで なでて あげよう', 'ゆかを タップすると よべるよ', 'きろくで にっきを 見てみよう', 'ずかんの なでポイントを しらべよう'][Math.floor(Date.now() / 20000) % 3];
+}
+
+/* ---------- living on its own: drinking, eating from the bowl, napping, the toilet ---------- */
+let nextSelf = 0;
+function goTo(worldOrPx, cb, isWorld = true) {
+  busy = true;
+  const px = isWorld ? (P3.ok ? P3.worldPx(worldOrPx) : 0) : worldOrPx;
+  facing = px > walkX ? 1 : -1; walkX = px; placePet(true);
+  setTimeout(cb, 1500);
+}
+function selfCare() {
+  if (busy || S.asleep || Date.now() < nextSelf || !P3.ok) return;
+  nextSelf = Date.now() + 15000;
+  if (S.water < 45 && (S.bowlW ?? 100) > 10) {
+    goTo(P3.bowlPx('water') + $('room').clientWidth * 0.12, () => {
+      P3.act('eatbowl', 2000);
+      setTimeout(() => { const take = Math.min(40, S.bowlW); S.water = clamp(S.water + take); S.bowlW -= take; busy = false; lcd(`${S.name}が じぶんで おみずを のんだ`); render(); save(); }, 2000);
+    }, false);
+  } else if (S.hunger < 55 && (S.bowlF || 0) > 0) {
+    goTo(P3.bowlPx('food') + $('room').clientWidth * 0.12, () => {
+      P3.act('eatbowl', 2400);
+      setTimeout(() => { S.hunger = clamp(S.hunger + 30); S.bowlF--; addBcs(2.5); S.fed++; diary('feed'); goalCount('feed'); busy = false; lcd(`${S.name}が おさらの ごはんを じぶんで たべた`); render(); save(); }, 2400);
+    }, false);
+  } else if (S.energy < 22) {
+    const bed = has('bed');
+    goTo(bed ? 2.2 : 0, () => {
+      busy = false; S.asleep = true; S.nap = true;
+      lcd(bed ? `${S.name}は ベッドで まるくなって ねちゃった` : `つかれて ${S.name}は じぶんで ねちゃった。そっと しておこう`);
+      render(); save();
+    });
+  } else if (has('ball') && S.happy < 75 && Math.random() < 0.25) {
+    goTo(1.1, () => {
+      P3.act('bow', 1200); $('petpos').classList.add('jump'); say('ボール♪', 1200);
+      setTimeout(() => { $('petpos').classList.remove('jump'); S.happy = clamp(S.happy + 5); busy = false; lcd(`${S.name}は ボールで ひとりあそび`); render(); }, 1300);
+    });
+  }
+}
+// "おいで": tap the floor and the pet comes over (cats may not)
+function floorTap(e) {
+  if (!S || busy || S.asleep) return;
+  cared();
+  const r = $('room').getBoundingClientRect(), W = r.width;
+  if (S.species === 'cat' && S.personality !== 'あまえんぼう' && Math.random() < 0.4) { say('…（ちらっ）', 1200); return; }
+  const target = Math.max(-W * 0.4, Math.min(W * 0.4, e.clientX - r.left - W / 2));
+  facing = target > walkX ? 1 : -1; walkX = target; placePet(true);
+  nextWander = Date.now() + 8000;
+  say(S.species === 'dog' ? 'ワンッ！' : bark('？'), 1000);
+  toastOnce('floortap', '👆 おいで', 'ゆかを タップすると その ばしょに きてくれる。ねこは きぶん しだい。');
 }
 
 /* ---------- calling the pet by name ---------- */
@@ -3218,7 +3331,13 @@ function toastOnce(key, title, body) { M.tips = M.tips || {}; if (M.tips[key]) r
 function handleEvents(evts) {
   for (const e of evts) {
     if (e === 'poop') lcd(`${S.name}が ゆかに うんちを しちゃった… トイレを おぼえさせよう`);
-    if (e === 'toiletok') {
+    if (e === 'toiletok' && P3.ok && !busy && !S.asleep) {
+      S.tpoop--; busy = true;
+      walkX = $('room').clientWidth * 0.34; facing = 1; placePet(true);
+      setTimeout(() => { P3.act('down', 1500); setTimeout(() => { S.tpoop++; busy = false; handleEvents(['toiletok2']); render(); }, 1500); }, 1500);
+      continue;
+    }
+    if (e === 'toiletok2' || e === 'toiletok') {
       lcd(`${S.name}が トイレで できた！ すぐ ほめてあげよう`);
       const pr = $('praise'); pr.hidden = false;
       clearTimeout(pr._t); pr._t = setTimeout(() => { pr.hidden = true; }, 40000);
@@ -3282,6 +3401,7 @@ function tick() {
     if (line) say(line);
   }
   maybeWant();
+  selfCare();
   if (Date.now() - lcdAt > 12000) $('lcd').textContent = '💡 ' + nextHint();
   render();
   if (Date.now() - lastSave > 5000) { lastSave = Date.now(); save(); }
@@ -3364,6 +3484,7 @@ function wire() {
     setAnim('joy', 900); say(bark('♪'), 1200); render();
   };
   petTap = pet; wireStroke();
+  P3.onTap = floorTap;
   $('petpos').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pet(); } });
   $('gift').addEventListener('click', openGift);
   $('praise').addEventListener('click', () => {
