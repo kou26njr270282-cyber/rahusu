@@ -181,7 +181,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
   display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: .74rem; font-weight: 800;
   transition: transform .08s, box-shadow .08s;
 }
-.act .ic { font-size: 1.5rem; line-height: 1.1; }
+.act .ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #fff; border: 2px solid var(--ink); }
+.act .ic svg { width: 24px; height: 24px; }
+.c-food { background: var(--m-hunger); } .c-play { background: #6BB8F2; } .c-groom { background: var(--m-clean); } .c-clean { background: #A3C96B; }
+.c-vet { background: #F27C8E; } .c-sleep { background: #8B7FD6; } .c-shop { background: #F2B04A; } .c-book { background: #B08A6E; }
+.ib svg { width: 20px; height: 20px; }
 .act:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
 .act.need::after { content: "!"; position: absolute; top: -8px; right: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--coral); color: #fff; border: 2px solid var(--ink); font-size: .75rem; display: grid; place-items: center; animation: nudge .8s ease-in-out infinite; }
 @keyframes nudge { 50% { transform: scale(1.2); } }
@@ -303,6 +307,19 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 .diary div { border-left: 4px solid var(--m-happy); padding: 2px 10px; font-size: .82rem; line-height: 1.6; }
 .diary b { display: block; font-size: .85rem; }
 
+/* walk outside */
+.walkui { position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 10px; pointer-events: none; transition: opacity .5s; }
+.walkui.fade { opacity: 0; }
+.walkui .top { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; font-family: var(--font-dot); background: rgba(255,253,248,.92); border: 2.5px solid var(--ink); border-radius: 12px; padding: 4px 10px; }
+.walkui .wmsg { align-self: center; max-width: 92%; background: var(--shell); border: 2.5px solid var(--ink); border-radius: 12px; padding: 4px 12px; font-weight: 800; font-size: .9rem; text-align: center; }
+.wbtns { display: flex; gap: 8px; justify-content: center; pointer-events: auto; min-height: 2.6em; }
+.wbtns button { border: 2.5px solid var(--ink); border-radius: 14px; background: var(--honey); box-shadow: 0 3px 0 var(--ink); font-weight: 800; font-size: .95rem; padding: 8px 14px; cursor: pointer; }
+.wbtns button:first-child { background: var(--coral); color: #fff; }
+.room.outside .toilet, .room.outside #poops, .room.outside .gift, .room.outside .praise { display: none; }
+.strokemap { display: flex; flex-wrap: wrap; gap: 6px; }
+.strokemap span { border: 2px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: .8rem; }
+.strokemap span.on { border-color: var(--ink); background: var(--wall); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; }
 }
@@ -322,8 +339,8 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
     </header>
     <div class="topbar">
       <div class="lv" title="なかよしレベル"><span id="lvLbl">Lv.1</span><div class="lvbar"><div id="lvFill"></div></div></div>
-      <button class="ib" id="misBtn" aria-label="きょうの ミッション">🎯<span class="badge" id="misBadge">3</span></button>
-      <button class="ib" id="zkBtn" aria-label="こうどうずかん">📖<small id="zkCount">0</small></button>
+      <button class="ib" id="misBtn" aria-label="きょうの ミッション"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg><span class="badge" id="misBadge">3</span></button>
+      <button class="ib" id="zkBtn" aria-label="こうどうずかん"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="10" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="17" cy="10" r="2"/><path d="M8 17c0-3 2-5 4-5s4 2 4 5c0 2-2 2-4 2s-4 0-4-2z"/></svg><small id="zkCount">0</small></button>
       <button class="ib" id="sndBtn" aria-label="おとを けす">🔊</button>
     </div>
     <div class="toasts" id="toasts" aria-live="polite"></div>
@@ -355,14 +372,14 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
     <div class="lcd" aria-live="polite"><span id="lcd">…</span></div>
 
     <nav class="pad" id="pad">
-      <button class="act" data-act="food"><span class="ic">🍚</span>ごはん</button>
-      <button class="act" data-act="play"><span class="ic">🎾</span>あそぶ</button>
-      <button class="act" data-act="bath"><span class="ic" id="bathIc">🛁</span><span id="bathLbl">おふろ</span></button>
-      <button class="act" data-act="clean"><span class="ic">🧹</span>そうじ</button>
-      <button class="act" data-act="vet"><span class="ic">🏥</span>びょういん</button>
-      <button class="act" data-act="light"><span class="ic" id="lightIc">💡</span><span id="lightLbl">でんき</span></button>
-      <button class="act" data-act="shop"><span class="ic">🏪</span>ショップ</button>
-      <button class="act" data-act="info"><span class="ic">📒</span>きろく</button>
+      <button class="act" data-act="food"><span class="ic c-food"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13h16a8 8 0 0 1-16 0z"/><path d="M7 10c1-2 3-2 4 0M12 9c1-2 3-2 4 0"/></svg></span>ごはん</button>
+      <button class="act" data-act="play"><span class="ic c-play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M5 9c4 1 10 1 14 0M5 15c4-1 10-1 14 0"/></svg></span>あそぶ</button>
+      <button class="act" data-act="bath"><span class="ic c-groom" id="bathIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15l9-9 5 5-9 9z"/><path d="M7 18l-2 2M10 9l5 5"/><path d="M17 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/></svg></span><span id="bathLbl">おふろ</span></button>
+      <button class="act" data-act="clean"><span class="ic c-clean"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3l-4 9"/><path d="M6 12h8l2 9H4z"/><path d="M8 16v5M12 16v5"/></svg></span>そうじ</button>
+      <button class="act" data-act="vet"><span class="ic c-vet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span>びょういん</button>
+      <button class="act" data-act="light"><span class="ic c-sleep" id="lightIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 14A8 8 0 0 1 10 5a8 8 0 1 0 9 9z"/></svg></span><span id="lightLbl">でんき</span></button>
+      <button class="act" data-act="shop"><span class="ic c-shop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6z"/><path d="M9 8a3 3 0 0 1 6 0"/></svg></span>ショップ</button>
+      <button class="act" data-act="info"><span class="ic c-book"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/></svg></span>きろく</button>
     </nav>
 
     <section class="sheet" id="sheet" hidden>
@@ -426,6 +443,24 @@ const SAVE_KEY = 'pocket-wannyan-v1';
 const META_KEY = 'pocket-wannyan-meta';
 const INK = '#2B2230';
 
+/* ---------- drawn icons ---------- */
+const ICON = {
+  food: '<path d="M4 13h16a8 8 0 0 1-16 0z"/><path d="M7 10c1-2 3-2 4 0M12 9c1-2 3-2 4 0"/>',
+  play: '<circle cx="12" cy="12" r="8"/><path d="M5 9c4 1 10 1 14 0M5 15c4-1 10-1 14 0"/>',
+  groom: '<path d="M4 15l9-9 5 5-9 9z"/><path d="M7 18l-2 2M10 9l5 5"/><path d="M17 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/>',
+  clean: '<path d="M14 3l-4 9"/><path d="M6 12h8l2 9H4z"/><path d="M8 16v5M12 16v5"/>',
+  vet: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/>',
+  moon: '<path d="M19 14A8 8 0 0 1 10 5a8 8 0 1 0 9 9z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',
+  shop: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
+  book: '<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/>',
+  target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+  paw: '<circle cx="7" cy="10" r="2"/><circle cx="12" cy="7" r="2"/><circle cx="17" cy="10" r="2"/><path d="M8 17c0-3 2-5 4-5s4 2 4 5c0 2-2 2-4 2s-4 0-4-2z"/>',
+  sound: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/>',
+  mute: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9l5 6M22 9l-5 6"/>'
+};
+const svgIcon = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
+
 /* ---------- species ---------- */
 // Each animal has its own care quirks, based on how the real animal lives.
 const SPECIES = {
@@ -450,8 +485,8 @@ const SPECIES = {
     idles: ['ぺろぺろ（けづくろい）', 'ガリガリ（つめとぎ）', 'のび〜', '…（まどの そとを みてる）', 'ゴロゴロ'],
     life: 'きまぐれ。なでても プイッと されることも。でも ごきげんは へりにくい',
     colors: {
-      tora: { base: '#F2A65A', dark: '#C9752E', light: '#FFF1E0', eye: INK, label: 'ちゃトラ' },
       gray: { base: '#A9B3BF', dark: '#6F7986', light: '#EEF1F4', eye: INK, label: 'グレー' },
+      tora: { base: '#F2A65A', dark: '#C9752E', light: '#FFF1E0', eye: INK, label: 'ちゃトラ' },
       black: { base: '#3B3A40', dark: '#222126', light: '#5C5B63', eye: '#F7D154', pupil: true, faceDark: true, label: 'くろ' },
       white: { base: '#F7F4EF', label: 'しろ' },
       cream: { base: '#EBD3B0', label: 'クリーム' },
@@ -881,7 +916,6 @@ const P3 = (() => {
       g.beginPath(); g.arc(cx - 70, ey - 6, 78, 0, Math.PI * 2); g.arc(cx + 70, ey - 6, 78, 0, Math.PI * 2); g.fill();
       ellipse(cx, ey + 60, 132, 88, '#FFFFFF');
     }
-    if (species === 'dog') ellipse(cx, my - 18, 66, 44, p.light);
     if (species === 'cat' && f.color === 'tora') { for (const dx of [-26, 0, 26]) stroke(12, p.dark, () => { g.moveTo(cx + dx, 40); g.lineTo(cx + dx, 92); }); }
     if (species === 'hamster') stroke(14, p.dark, () => { g.moveTo(cx, 30); g.lineTo(cx, 110); });
     if (species === 'panda') for (const s of [-1, 1]) ellipse(cx + s * ex, ey + 6, 44, 56, p.dark, s * -0.55);
@@ -907,6 +941,17 @@ const P3 = (() => {
       } else {
         const big = expr === 'surprise' ? 1.18 : expr === 'sad' ? 0.88 : 1;
         const rx = 25 * big, ry = 31 * big;
+        if (species === 'cat') {   // almond eye, coloured iris, slit pupil
+          const iris = p.pupil ? p.eye : '#B9D46A';
+          g.save(); g.translate(x, ey); g.rotate(s * -0.18);
+          g.beginPath(); g.moveTo(-30 * big, 4); g.quadraticCurveTo(0, -38 * big, 30 * big, -2); g.quadraticCurveTo(0, 34 * big, -30 * big, 4); g.closePath();
+          g.fillStyle = iris; g.fill(); g.lineWidth = 5; g.strokeStyle = INKC; g.stroke();
+          g.beginPath(); g.ellipse(0, 1, 6 * big, 20 * big, 0, 0, Math.PI * 2); g.fillStyle = INKC; g.fill();
+          g.restore();
+          ellipse(x + 9 * big, ey - 10 * big, 7 * big, 7 * big, '#FFFFFF');
+          if (expr === 'sad') stroke(7, lineC, () => { g.moveTo(x - s * 30, ey - 46); g.lineTo(x + s * 4, ey - 36); });
+          continue;
+        }
         if (p.pupil) {
           ellipse(x, ey, rx + 2, ry + 2, species === 'panda' ? '#FFFFFF' : p.eye);
           ellipse(x, ey + 2, rx * 0.62, ry * 0.8, INKC);
@@ -924,7 +969,7 @@ const P3 = (() => {
       g.fillStyle = '#8FD3F5'; g.beginPath(); g.moveTo(cx + ex + 22, ey + 22); g.quadraticCurveTo(cx + ex + 34, ey + 44, cx + ex + 22, ey + 48); g.quadraticCurveTo(cx + ex + 10, ey + 44, cx + ex + 22, ey + 22); g.fill();
     }
     // nose
-    if (species === 'dog' || species === 'panda') {
+    if (species === 'panda') {
       g.fillStyle = INKC; g.beginPath(); g.moveTo(cx - 17, my - 34); g.quadraticCurveTo(cx, my - 40, cx + 17, my - 34); g.quadraticCurveTo(cx + 12, my - 18, cx, my - 16); g.quadraticCurveTo(cx - 12, my - 18, cx - 17, my - 34); g.fill();
       ellipse(cx + 5, my - 32, 5, 3, 'rgba(255,255,255,.85)');
     } else if (species === 'cat' || species === 'rabbit') {
@@ -939,6 +984,7 @@ const P3 = (() => {
       g.globalAlpha = 1;
     }
     // mouth
+    if (species === 'dog') return;   // the dog's muzzle, nose and tongue are 3D
     if (species === 'penguin' && !['joy', 'pant', 'eat', 'yawn', 'surprise'].includes(expr)) return;
     const mY = species === 'penguin' ? my + 24 : my;
     const red = '#D9505F';
@@ -1014,19 +1060,26 @@ const P3 = (() => {
     switch (species) {
       case 'dog': {
         for (const sx of [-1, 1]) {
-          const ear = new T.Group(); ear.position.set(sx * 0.64, 0.24, 0); ear.rotation.z = sx * 0.3;
-          ear.add(L(ell(cDark, 0.17, [0, -0.17, 0], [0.75, 1.4, 0.45]), lineDark));
+          const ear = new T.Group(); ear.position.set(sx * 0.66, 0.3, 0); ear.rotation.z = sx * 0.3;
+          ear.add(L(ell(cDark, 0.21, [0, -0.22, 0], [0.8, 1.6, 0.45]), lineDark));
           head.add(ear); (parts.ears = parts.ears || []).push(ear);
         }
+        head.add(L(ell(cLight, 1, [0, -0.2, 0.5], [0.3, 0.22, 0.25]), line, 0.02));
+        head.add(L(ell(toon('#2B2230'), 1, [0, -0.1, 0.74], [0.1, 0.075, 0.07]), '#000000', 0.01));
+        head.add(ell(basic('#FFFFFF'), 0.022, [0.03, -0.07, 0.8]));
+        head.add(geoMesh(new T.BoxGeometry(0.012, 0.09, 0.012), basic('#2B2230'), [0, -0.21, 0.745]));
+        parts.tongue = L(ell(toon('#FF8FA3'), 1, [0, -0.36, 0.64], [0.075, 0.11, 0.04]), '#C0506A', 0.01);
+        head.add(parts.tongue);
         tailPivot.add(L(ell(cBase, 0.1, [0, 0.18, -0.04], [1, 2.2, 1], [-0.6, 0, 0])));
         parts.tail = tailPivot; parts.tailSpeed = 14;
         if (adult) { inner.add(L(geoMesh(new T.TorusGeometry(0.3, 0.045, 12, 32), toon('#E2453C'), [0, 0.86, 0.03], [Math.PI / 2 - 0.15, 0, 0]), '#7A1F1A', 0.015)); inner.add(L(ell(toon('#F5C842'), 0.07, [0, 0.79, 0.34]), '#8A6A10', 0.02)); }
         break;
       }
       case 'cat': {
-        const cone = new T.ConeGeometry(0.21, 0.38, 28), coneIn = new T.ConeGeometry(0.12, 0.24, 28);
+        const cone = new T.ConeGeometry(0.25, 0.46, 28), coneIn = new T.ConeGeometry(0.14, 0.3, 28);
+        head.scale.x *= 1.07;
         for (const sx of [-1, 1]) {
-          const ear = new T.Group(); ear.position.set(sx * 0.4, 0.55, -0.02); ear.rotation.z = sx * -0.38;
+          const ear = new T.Group(); ear.position.set(sx * 0.42, 0.58, -0.02); ear.rotation.z = sx * -0.38;
           ear.add(L(geoMesh(cone, cBase, [0, 0, 0]), line, 0.03));
           ear.add(geoMesh(coneIn, cPink, [0, -0.03, 0.09]));
           head.add(ear); (parts.ears = parts.ears || []).push(ear);
@@ -1274,6 +1327,7 @@ const P3 = (() => {
   }
   function setExpr(parts, expr) {
     parts.expr = expr;
+    if (parts.tongue) parts.tongue.visible = expr === 'joy' || expr === 'pant' || expr === 'eat';
     if (parts.pouches) parts.pouches.forEach(p => p.scale.set(expr === 'eat' ? 0.29 : 0.22, expr === 'eat' ? 0.23 : 0.18, 0.17));
     updateFace(parts, false, false);
   }
@@ -1432,13 +1486,117 @@ const P3 = (() => {
     }
   };
 
+  /* ----- outdoor walk: a park path that scrolls past as the dog walks ----- */
+  function buildOutdoor() {
+    const g = new T.Group();
+    const grass = new T.Mesh(new T.PlaneGeometry(260, 30), toon('#A6DB86'));
+    grass.rotation.x = -Math.PI / 2; grass.position.set(100, 0, 0); grass.receiveShadow = true; g.add(grass);
+    const path = new T.Mesh(new T.PlaneGeometry(260, 1.7), toon('#EAD7AE'));
+    path.rotation.x = -Math.PI / 2; path.position.set(100, 0.01, 0.25); path.receiveShadow = true; g.add(path);
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    for (let x = -12; x < 230; x += rnd(2.6, 4.2)) {   // trees behind the fence
+      const tr = new T.Group(); tr.position.set(x, 0, rnd(-5.5, -3.6));
+      tr.add(lined(geoMesh(new T.CylinderGeometry(0.14, 0.2, 1.4, 12), toon('#9B6B43'), [0, 0.7, 0]), '#5A3A20', 0.02));
+      const leaf = toon(['#6CC070', '#5EB466', '#7DCB76'][Math.floor(Math.random() * 3)]);
+      for (const [lx, ly, lr] of [[0, 1.8, 0.75], [-0.45, 1.5, 0.55], [0.45, 1.55, 0.55]]) tr.add(lined(ell(leaf, lr, [lx, ly, 0]), '#2F6A35', 0.03));
+      g.add(tr);
+    }
+    const post = toon('#FFFDF8');
+    for (let x = -12; x < 230; x += 1.2) g.add(lined(geoMesh(new T.BoxGeometry(0.1, 0.6, 0.1), post, [x, 0.3, -2.1]), '#9A8F80', 0.012));
+    for (const y of [0.22, 0.45]) g.add(geoMesh(new T.BoxGeometry(242, 0.06, 0.05), post, [109, y, -2.1]));
+    const fl = ['#FF8FB1', '#FFD45E', '#FFFFFF', '#B39BF2'];
+    for (let i = 0; i < 160; i++) g.add(ell(toon(fl[i % 4]), 0.06, [rnd(-12, 230), 0.05, Math.random() < 0.5 ? rnd(-1.8, -0.8) : rnd(1.3, 2.6)], [1, 0.6, 1]));
+    for (let i = 0; i < 26; i++) { const c = new T.Group(); c.position.set(rnd(-10, 230), rnd(3.6, 4.6), rnd(-9, -7)); for (let k = 0; k < 3; k++) c.add(ell(toon('#FFFFFF'), rnd(0.4, 0.7), [k * 0.55 - 0.55, 0, 0])); g.add(c); }
+    return g;
+  }
+  // one-off things met on the walk
+  function walkThing(type) {
+    const g = new T.Group();
+    if (type === 'pole') {
+      g.add(lined(geoMesh(new T.CylinderGeometry(0.11, 0.13, 2.6, 16), toon('#B8B2A8'), [0, 1.3, 0]), '#6A645C', 0.02));
+      g.add(geoMesh(new T.BoxGeometry(0.5, 0.06, 0.06), toon('#6A645C'), [0, 2.4, 0]));
+      for (let i = 0; i < 5; i++) g.add(ell(toon('#7CC576'), 0.12, [Math.random() * 0.5 - 0.25, 0.08, 0.15 + Math.random() * 0.2], [1.2, 0.8, 1]));
+    } else if (type === 'bush') {
+      for (const [x, r] of [[-0.3, 0.38], [0.2, 0.45], [0.55, 0.32]]) g.add(lined(ell(toon('#6CC070'), r, [x, r * 0.8, 0]), '#2F6A35', 0.025));
+    } else if (type === 'bench') {
+      const wood = toon('#C98A4B');
+      g.add(lined(geoMesh(new T.BoxGeometry(1.5, 0.08, 0.45), wood, [0, 0.45, 0]), '#6A4220', 0.015));
+      g.add(lined(geoMesh(new T.BoxGeometry(1.5, 0.4, 0.06), wood, [0, 0.75, -0.22]), '#6A4220', 0.015));
+      for (const x of [-0.65, 0.65]) g.add(geoMesh(new T.BoxGeometry(0.08, 0.45, 0.4), toon('#5A4636'), [x, 0.22, 0]));
+    } else if (type === 'coin') {
+      const c = lined(geoMesh(new T.CylinderGeometry(0.15, 0.15, 0.04, 24), toon('#F5C842'), [0, 0.35, 0], [Math.PI / 2, 0, 0]), '#8A6A10', 0.015);
+      g.add(c); g.userData.spinY = c;
+    } else if (type === 'birds') {
+      for (let i = 0; i < 3; i++) {
+        const b = new T.Group(); b.position.set(i * 0.45, 0, (i % 2) * 0.3);
+        b.add(lined(ell(toon('#7FA8E8'), 0.13, [0, 0.15, 0], [1.3, 1, 1]), '#2F4F8A', 0.015));
+        b.add(lined(ell(toon('#7FA8E8'), 0.08, [0.13, 0.27, 0]), '#2F4F8A', 0.015));
+        b.add(geoMesh(new T.ConeGeometry(0.03, 0.08, 8), toon('#F5A623'), [0.22, 0.27, 0], [0, 0, -Math.PI / 2]));
+        g.add(b);
+      }
+      g.userData.birds = true;
+    } else if (type === 'poop') {
+      const m = toon('#8A5A3B');
+      for (const [y, r] of [[0.05, 0.1], [0.13, 0.075], [0.2, 0.045]]) g.add(lined(ell(m, r, [0, y, 0], [1, 0.7, 1]), '#4A2A1A', 0.012));
+    } else if (type === 'friend') {
+      const colors = ['white', 'golden', 'gray', 'choco'];
+      const p = buildPet('dog', colors[Math.floor(Math.random() * colors.length)], 2, null, null);
+      setExpr(p, 'smile'); updateFace(p, false, false);
+      p.root.rotation.y = -1.1;
+      g.add(p.root); g.userData.friend = p;
+    }
+    return g;
+  }
+  api.walkStart = () => {
+    if (!outGroup) { outGroup = buildOutdoor(); scene.add(outGroup); }
+    outGroup.visible = true; roomGroup.visible = false;
+    scene.background = new T.Color('#BFE6FF');
+    if (!leash) { leash = new T.Line(new T.BufferGeometry().setFromPoints([V(0, 0, 0), V(0, 0, 0), V(0, 0, 0)]), new T.LineBasicMaterial({ color: '#C0392B' })); scene.add(leash); }
+    leash.visible = true;
+    mode = 'walk'; walkSpeed = 0; x = 0;
+  };
+  api.walkEnd = () => {
+    walkObjs.forEach(o => { scene.remove(o); dispose(o); }); walkObjs = [];
+    if (outGroup) outGroup.visible = false;
+    roomGroup.visible = true; if (leash) leash.visible = false;
+    scene.background = new T.Color('#DDF1E6');
+    mode = 'room'; walkSpeed = 0; x = walkX * pxToWorld();
+  };
+  api.walkSpeed = (v) => { walkSpeed = v; };
+  api.petPx = () => x / pxToWorld();
+  api.walkPos = () => x;
+  api.walkPut = (type, at, z = 0.25) => {
+    const o = walkThing(type);
+    o.position.set(at, 0, z);
+    scene.add(o); walkObjs.push(o);
+    return { obj: o, remove() { scene.remove(o); dispose(o); walkObjs = walkObjs.filter(w => w !== o); }, fly() { o.userData.flying = performance.now(); } };
+  };
+  function walkTick(t, dt) {
+    for (const o of walkObjs) {
+      const u = o.userData;
+      if (u.spinY) u.spinY.rotation.z += dt * 3;
+      if (u.friend && u.friend.tail) u.friend.tail.rotation.y = Math.sin(t * 14) * 0.6;
+      if (u.flying) { const k = (performance.now() - u.flying) / 1000; o.position.y = k * k * 2.5; o.position.x += dt * 2; o.children.forEach((b, i) => b.rotation.z = Math.sin(t * 30 + i) * 0.4); }
+      else if (u.birds) o.children.forEach((b, i) => { b.position.y = Math.abs(Math.sin(t * 6 + i * 2)) * 0.05; b.rotation.z = Math.sin(t * 3 + i) * 0.2; });
+    }
+    if (leash && pet) {   // from the collar up to your hand, off-screen to the left
+      const s = pet.S3, a = V(x + Math.sin(pet.root.rotation.y) * 0.1, pet.root.position.y + 0.95 * s, 0.15 * s), c = V(x - 2.6, 3.4, 2.4);
+      const m = V((a.x + c.x) / 2, Math.min(a.y, c.y) + (walkSpeed > 0 ? 0.35 : -0.1), (a.z + c.z) / 2);
+      const pts = new T.QuadraticBezierCurve3(a, m, c).getPoints(16);
+      leash.geometry.setFromPoints(pts);
+    }
+  }
+
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - lastT) / 1000 || 0); lastT = now;
     const t = now / 1000;
     if (!drag) orbit += (0 - orbit) * Math.min(1, dt * 0.7);
-    camera.position.set(Math.sin(orbit) * CAM_D, CAM_Y, Math.cos(orbit) * CAM_D);
+    const cx = mode === 'walk' ? x + 0.25 : 0;
+    LOOK.x = cx;
+    camera.position.set(cx + Math.sin(orbit) * CAM_D, CAM_Y, Math.cos(orbit) * CAM_D);
     camera.lookAt(LOOK);
+    if (mode === 'walk') walkTick(t, dt);
     furnGroup.children.forEach(m => { const c = m.children[0]; if (c && c.parent.userData.bob) m.position.y = Math.abs(Math.sin(t * 6)) * 0.04; });
     for (let i = props.length - 1; i >= 0; i--) {
       const pr = props[i];
@@ -1454,11 +1612,12 @@ const P3 = (() => {
     if (pet && S) {
       const pos = $('petpos'), room = roomEl;
       const catching = room.classList.contains('catching');
-      const tx = walkX * pxToWorld();
+      let tx = walkX * pxToWorld();
       // walk at a steady pace with easing, instead of sliding
       const speed = (act && act.name === 'run') ? 0 : room.querySelector('.game') ? 6 : 1.9;
       let stepD = 0;
-      if (pos.style.transition === 'none' || catching) { stepD = Math.abs(tx - x); x = tx; }
+      if (mode === 'walk') { stepD = walkSpeed * 1.5 * dt; x += stepD; tx = x + (walkSpeed > 0 ? 0.5 : 0); }
+      else if (pos.style.transition === 'none' || catching) { stepD = Math.abs(tx - x); x = tx; }
       else { const dx = tx - x, ease = Math.min(1, Math.abs(dx) / 0.35) * 0.85 + 0.15; stepD = Math.min(Math.abs(dx), speed * ease * dt); x += Math.sign(dx) * stepD; }
       walkPhase += stepD * 9 + ((act && act.name === 'run') ? dt * 16 : 0);
       const moving = Math.abs(tx - x) > 0.04 || (act && act.name === 'run');
@@ -1504,6 +1663,7 @@ const P3 = (() => {
       // blink every few seconds; chew while eating
       const blink = !asleep && (t % 3.7) < 0.13;
       const chomp = (pet.faceOverride || pet.expr) === 'eat' && Math.sin(t * 20) > 0;
+      if (pet.tongue) { const fe = pet.faceOverride || pet.expr; pet.tongue.visible = fe === 'joy' || fe === 'pant' || (fe === 'eat' && chomp); pet.tongue.position.y = -0.36 - (fe === 'pant' ? Math.abs(Math.sin(t * 9)) * 0.03 : 0); }
       updateFace(pet, blink, chomp);
       placeDiv(pos);
     }
@@ -1540,6 +1700,7 @@ const P3 = (() => {
       case 'munch': Hd.rotation.x = 0.12 + Math.sin(t * 7) * 0.08 * env; P.faceOverride = env > 0.3 ? 'eat' : null; break;
       case 'nap': I.scale.y *= 1 - 0.1 * env; Hd.rotation.x = 0.3 * env; break;
       case 'freeze': I.scale.y *= 1 - 0.05 * env; break;
+      case 'kick': P.feet[1].position.y = 0.08 + Math.abs(Math.sin(t * 28)) * 0.15 * env; I.rotation.z = -0.15 * env; P.faceOverride = 'pant'; break;
       case 'eatbowl': R.rotation.y = -0.95; Hd.rotation.x = 0.5 * env + Math.sin(t * 9) * 0.07 * env; I.rotation.x = 0.16 * env; P.faceOverride = env > 0.3 ? 'eat' : null; if (P.tail) P.tail.rotation.y = Math.sin(t * 14) * 0.5; break;
       case 'run': I.rotation.x = 0.22; Hd.rotation.x = -0.1; P.faceOverride = 'joy'; break;
       case 'sit': I.rotation.x = -0.32 * env; I.position.y = -0.06 * s * env; Hd.rotation.x = 0.12 * env; break;
@@ -1556,8 +1717,8 @@ const P3 = (() => {
     const s = pet.S3, ry = pet.root.position.y;
     const [, top] = toPx(x, ry + ({ rabbit: 2.55, cat: 2.1 }[pet.species] || 1.95) * s, 0);
     const [, bot] = toPx(x, ry, 0.3 * s);
-    const [lx] = toPx(x - 0.72 * s, ry + 0.8 * s, 0);
-    const [rx] = toPx(x + 0.72 * s, ry + 0.8 * s, 0);
+    const [lx] = toPx(x - 0.9 * s, ry + 0.8 * s, 0);
+    const [rx] = toPx(x + 0.9 * s, ry + 0.8 * s, 0);
     pos.style.left = lx + 'px'; pos.style.top = top + 'px';
     pos.style.width = (rx - lx) + 'px'; pos.style.height = Math.max(10, bot - top) + 'px';
   }
@@ -1696,12 +1857,12 @@ function render() {
   const g = $('gift');
   g.hidden = !S.gift || busy;
   g.style.left = S.giftX + '%';
-  $('bathIc').textContent = sp().bath.icon; $('bathLbl').textContent = sp().bath.label;
+  $('bathLbl').textContent = sp().bath.label;
   const need = { food: S.hunger < 30 || S.water < 30, play: (S.happy < 30 || walkOverdue()) && !S.asleep, bath: S.clean < 30, clean: S.poop > 0 || (S.tpoop || 0) >= 2, vet: S.sick || (HAS_NAILS[S.species] && S.nails > 70) || (!S.vaccinated && stageOf(ageMin()) >= 1), light: !S.asleep && S.energy < 20 };
   document.querySelectorAll('.act').forEach(b => b.classList.toggle('need', !!need[b.dataset.act]));
   $('room').classList.toggle('lights-off', S.asleep);
   $('petpos').classList.toggle('asleep', S.asleep);
-  $('lightIc').textContent = S.asleep ? '☀️' : '💡';
+  $('lightIc').innerHTML = svgIcon(S.asleep ? 'sun' : 'moon');
   $('lightLbl').textContent = S.asleep ? 'おこす' : 'ねかせる';
   let z = $('petpos').querySelector('.zzz');
   if (S.asleep && !z) { z = document.createElement('div'); z.className = 'zzz'; z.textContent = 'Zzz'; $('petpos').appendChild(z); }
@@ -2090,6 +2251,7 @@ function doSpecial() {
   const prop = (icon, style) => { const it = document.createElement('div'); it.className = 'item'; it.textContent = icon; it.style.cssText += style; $('room').appendChild(it); return it; };
   switch (X.id) {
     case 'walk':
+      if (P3.ok) { startWalk(); break; }
       lcd(`${S.name}と さんぽに でかけた…`); say('さんぽ！ さんぽ！');
       goOut(2600, () => {
         S.walkAt = Date.now(); S.clean = clamp(S.clean - 12); addBcs(-4); S.water = clamp(S.water - 12); diary('walk');
@@ -2662,7 +2824,7 @@ function renderTop() {
   $('misBadge').textContent = left; $('misBadge').hidden = !left;
   const total = Object.values(BEHAVIORS).reduce((a, l) => a + l.length, 0);
   $('zkCount').textContent = Object.keys(M.seen).length + '/' + total;
-  $('sndBtn').textContent = M.sound === false ? '🔇' : '🔊';
+  $('sndBtn').innerHTML = svgIcon(M.sound === false ? 'mute' : 'sound');
   $('sndBtn').setAttribute('aria-label', M.sound === false ? 'おとを だす' : 'おとを けす');
   $('coins').textContent = '🪙 ' + M.coins;
 }
@@ -2683,6 +2845,8 @@ function openZukan() {
     const seen = M.seen[behaviorKey(zkTab, b.id)];
     return seen ? `<div class="zk on"><b>${b.name}</b><span>${b.fact}</span></div>` : `<div class="zk"><b>？？？</b><span>${zkTab === S.species ? 'いっしょに すごしていると 見られるかも' : SPECIES[zkTab].label + 'を そだてると 見られる'}</span></div>`;
   }).join('');
+  const sm = (M.strokes || {});
+  $('zkList').innerHTML += `<h3 style="margin-top:6px">なでポイント</h3><div class="strokemap">${Object.keys(ZONE_JP).map(z => { const v = sm[zkTab + ':' + z]; return v === undefined ? `<span>${ZONE_JP[z]} ？</span>` : `<span class="on">${ZONE_JP[z]} ${v > 1 ? '💕' : v > 0 ? '💗' : v < 0 ? '✕' : '・'}</span>`; }).join('')}</div><p style="text-align:left">ゆびで いろんな ところを なでて しらべよう。</p>`;
   $('zukan').hidden = false;
 }
 
@@ -2724,6 +2888,202 @@ function practice(id) {
       setTimeout(() => { busy = false; goCenter(); render(); }, 1500);
     }
   }, 1000);
+}
+
+/* ---------- a real walk outside (dogs) ---------- */
+function startWalk() {
+  busy = true;
+  const room = $('room');
+  walkX = 0; facing = 1;
+  P3.walkStart(); room.classList.add('outside');
+  const ui = document.createElement('div');
+  ui.className = 'walkui';
+  ui.innerHTML = `<div class="top"><span>🐾 ${S.name}と さんぽ</span><span id="wDist">0m</span></div><div class="wmsg" id="wMsg">しゅっぱつ！</div><div class="wbtns" id="wBtns"></div>`;
+  room.appendChild(ui);
+  const st = { sniff: 0, friends: 0, manners: 0, coins: 0, skipped: 0 };
+  const plan = [
+    { at: 6, ev: 'sniff', put: ['pole', 7.2, -0.55] },
+    { at: 15, ev: 'coin', put: ['coin', 16.1, 0.25] },
+    { at: 24, ev: 'friend', put: ['friend', 25.6, 0.35] },
+    { at: 33, ev: 'birds', put: ['birds', 35, 0.6] },
+    { at: 43, ev: 'poop' },
+    { at: 53, ev: 'bench', put: ['bench', 54, -1.1] },
+    { at: 62, ev: 'sniff', put: ['bush', 63.2, -0.9] },
+    { at: 72, ev: 'home' },
+  ];
+  const things = {};
+  plan.forEach((p, i) => { if (p.put) things[i] = P3.walkPut(p.put[0], p.put[1], p.put[2]); });
+  let next = 0, paused = false;
+  const msg = (t) => { $('wMsg').textContent = t; };
+  const btns = (list) => {
+    const b = $('wBtns'); b.innerHTML = '';
+    list.forEach(([label, fn]) => { const e = document.createElement('button'); e.textContent = label; e.onclick = () => { cared(); b.innerHTML = ''; fn(); }; b.appendChild(e); });
+  };
+  const go = (t) => { paused = false; if (t) msg(t); P3.walkSpeed(1); };
+  const stop = () => { paused = true; P3.walkSpeed(0); };
+  P3.walkSpeed(1);
+  const timer = setInterval(() => {
+    const pos = P3.walkPos();
+    const d = $('wDist'); if (d) d.textContent = Math.round(pos * 10) + 'm';
+    if (paused || next >= plan.length || pos < plan[next].at) return;
+    const p = plan[next], th = things[next]; next++;
+    switch (p.ev) {
+      case 'sniff':
+        stop(); setAnim('surprise', 800); if (P3.ok) P3.act('sniff', 1200);
+        msg(p.put[0] === 'pole' ? 'でんちゅうの においが きになる みたい' : 'くさむらで なにかを かぎつけた');
+        btns([['まってあげる', () => {
+          P3.act('sniff', 2600); say('くんくん…', 2400); st.sniff++; S.happy = clamp(S.happy + 6);
+          toastOnce('walksniff', '👃 においかぎ', 'いぬに とって においを かぐのは だいじな じょうほうしゅうしゅう。ゆっくり かがせて あげると あたまも つかって まんぞくする。');
+          setTimeout(() => go('まんぞく したみたい！'), 2700);
+        }], ['いこう', () => { st.skipped++; S.happy = clamp(S.happy - 2); say('え〜…', 1000); go('ひっぱって すすんだ'); }]]);
+        break;
+      case 'coin':
+        th && th.remove(); addCoins(5); st.coins += 5; say('なにか あった！', 1200); msg('みちに コインが おちてた！');
+        break;
+      case 'friend':
+        stop(); setAnim('joy', 1200); if (P3.ok) P3.act('wag', 1500);
+        msg('ほかの いぬに であった！');
+        btns([['あいさつ', () => {
+          P3.act('sniff', 2400); say('くんくん♪', 2000); st.friends++; S.happy = clamp(S.happy + 8);
+          toastOnce('walkfriend', '🐕 いぬの あいさつ', 'いぬどうしは においで あいさつする。においで あいての ことや、まえに あったことが あるかが わかる と いわれている。');
+          setTimeout(() => go('なかよく なれた！'), 2500);
+        }], ['とおりすぎる', () => go('「またね」')]]);
+        break;
+      case 'birds':
+        stop(); setAnim('surprise', 1500); if (P3.ok) P3.act('bark', 1300); say('ワンッ！', 1200);
+        msg('とりを みつけて こうふん！'); th && th.fly();
+        setTimeout(() => go('とりは とんで いっちゃった'), 1600);
+        break;
+      case 'poop': {
+        stop(); if (P3.ok) P3.act('down', 1500); msg('…うんちを した');
+        let pp = null;
+        setTimeout(() => {
+          pp = P3.walkPut('poop', P3.walkPos() - 0.35, 0.25);
+          msg('かいぬしの マナーは？');
+          btns([['ひろう 🧻', () => { pp.remove(); st.manners++; addCoins(5); toastOnce('walkpoop', '🧻 さんぽの マナー', 'さんぽ中の うんちは ふくろで ひろって もちかえるのが マナー。'); go('ちゃんと ひろった！ えらい'); }],
+            ['そのまま', () => go('…ひろうのが マナーだよ')]]);
+        }, 1500);
+        break;
+      }
+      case 'bench':
+        stop(); msg('ベンチで ひとやすみ');
+        btns([['おみずを あげる', () => { S.water = clamp(S.water + 35); setAnim('eat', 1500); say('ごくごく', 1300); setTimeout(() => go('さっぱり！'), 1500); }],
+          ['すぐ いく', () => go()]]);
+        break;
+      case 'home':
+        stop(); clearInterval(timer); msg('そろそろ おうちに かえろう');
+        setTimeout(() => finish(), 1400);
+        break;
+    }
+  }, 100);
+  function finish() {
+    const dist = Math.round(P3.walkPos() * 10);
+    ui.classList.add('fade');
+    setTimeout(() => {
+      P3.walkEnd(); ui.remove(); $('room').classList.remove('outside');
+      busy = false; walkX = 0; facing = 1; placePet(false);
+      S.walkAt = Date.now(); S.clean = clamp(S.clean - 12); S.water = clamp(S.water - 10); S.energy = clamp(S.energy - 15);
+      addBcs(-4); S.happy = clamp(S.happy + 18 + st.sniff * 4 + st.friends * 4 - st.skipped * 2);
+      diary('walk'); gainXP(10 + st.sniff * 2 + st.friends * 2 + st.manners * 3);
+      setAnim('pant', 3500); say('ただいま！');
+      const parts = [`${dist}m`];
+      if (st.sniff) parts.push(`くんくん ${st.sniff}かい`);
+      if (st.friends) parts.push(`ともだち ${st.friends}ぴき`);
+      if (st.manners) parts.push('うんち ひろった');
+      toast('🐾 さんぽ おわり', parts.join('・'));
+      lcd('さんぽ たのしかった！ ちょっと よごれたかも');
+      render(); save();
+    }, 500);
+  }
+}
+
+/* ---------- stroking with a finger ---------- */
+// How much each animal likes being touched in each spot (2 loves, 1 likes, 0 so-so, -1 dislikes), from the research notes.
+const STROKE = {
+  dog: { head: 1, cheek: 1, chin: 0, chest: 2, belly: 1, feet: -1 },
+  cat: { head: 2, cheek: 2, chin: 2, chest: 0, belly: -1, feet: -1 },
+  rabbit: { head: 2, cheek: 1, chin: -1, chest: -1, belly: -1, feet: -1 },
+  hamster: { head: 1, cheek: 0, chin: 0, chest: 1, belly: -1, feet: -1 },
+  penguin: { head: 0, cheek: 0, chin: 0, chest: -1, belly: -1, feet: -1 },
+  panda: { head: 1, cheek: 1, chin: 0, chest: 1, belly: 1, feet: -1 },
+};
+const ZONE_JP = { head: 'あたま', cheek: 'ほっぺ', chin: 'あご', chest: 'むね', belly: 'おなか', feet: 'あし' };
+const STROKE_FACT = {
+  dog: ['いぬは むねや かた、くびの つけねを なでられるのが すきな ことが おおい。', 'あしや かおを つかむように さわられるのは にがてな いぬが おおい。'],
+  cat: ['ねこは ほっぺや あご、目と耳の あいだを なでられるのが すき。においを だす ところが あるから と いわれている（2015年の けんきゅう）。', 'おなかや しっぽの つけねは にがてな ねこが おおい。おなかは だいじな ところだから まもりたい。'],
+  rabbit: ['うさぎは おでこや みみの うしろ、せなかを なでられるのが すき。', 'あご・おなか・あしは にがて。にげるための あしは さわられたくない。'],
+  hamster: ['ハムスターは あたまから せなかを やさしく なでて あげよう。', 'おなかを さわられたり つかまれるのは こわがる と いわれている。'],
+  penguin: ['ペンギンは もともと あまり さわられるのが すきではない と いわれている。そっと みまもるのも あいじょう。', 'ペンギンは もともと あまり さわられるのが すきではない と いわれている。そっと みまもるのも あいじょう。'],
+  panda: ['のんびり なでられるのが すき（ゲームの せってい）。', 'あしを さわられるのは いや みたい（ゲームの せってい）。'],
+};
+function zoneAt(e) {
+  const r = $('petpos').getBoundingClientRect();
+  const rx = (e.clientX - r.left) / r.width - 0.5, ry = (e.clientY - r.top) / r.height;
+  const top = S.species === 'rabbit' ? 0.12 : 0;   // rabbit ears take the top of the box
+  const y = (ry - top) / (1 - top);
+  if (y < 0.36) return 'head';
+  if (y < 0.56) return Math.abs(rx) > 0.17 ? 'cheek' : 'head';
+  if (y < 0.63) return 'chin';
+  if (y < 0.8) return 'chest';
+  if (y < 0.9) return 'belly';
+  return 'feet';
+}
+let strokeCool = 0;
+function strokeReact(zone, e) {
+  if (!S || busy) return;
+  if (S.asleep) return say('…Zzz', 800);
+  cared();
+  const now = Date.now();
+  if (now < strokeCool) return;
+  strokeCool = now + 450;
+  M.strokes = M.strokes || {};
+  const key = S.species + ':' + zone, pref = STROKE[S.species][zone];
+  const room = $('room').getBoundingClientRect();
+  const px = ((e.clientX - room.left) / room.width) * 100, py = ((e.clientY - room.top) / room.height) * 100;
+  if ((S.lv || 1) < 2 && ageMin() < 360 && Math.random() < 0.3) { setAnim('surprise', 800); say('ビクッ', 800); return; }
+  const first = !M.strokes[key];
+  M.strokes[key] = pref;
+  if (pref >= 1) {
+    S.happy = clamp(S.happy + pref * 2); floatAt(pref > 1 ? '💕' : '💗', px - 3, py - 6);
+    diary('pet'); if (Math.random() < 0.35) mission('pet');
+    if (S.species === 'cat' && (zone === 'cheek' || zone === 'chin' || zone === 'head')) { setAnim('smile', 1400); say('ゴロゴロ…', 1200); if (P3.ok && Math.random() < 0.3) P3.act('freeze', 1200); }
+    else if (S.species === 'dog' && (zone === 'chest' || zone === 'belly')) {
+      setAnim('pant', 1600); say(zone === 'belly' ? 'もっと〜' : 'きもちいい〜', 1200);
+      if (P3.ok && Math.random() < 0.5) { P3.act('kick', 1200); toastOnce('kick', '🦵 あしが ぴくぴく', 'むねや おなかを かいて あげると、うしろあしを ぴくぴく させる いぬが いる。きもちいい しょうこ と いわれている。'); }
+    } else if (S.species === 'rabbit' && zone === 'head') { setAnim('sleep', 1400); say('…（うっとり）', 1200); }
+    else { setAnim(pref > 1 ? 'joy' : 'smile', 1000); say(pref > 1 ? 'すき♪' : '♪', 900); }
+    if (first) toastOnce('strokeLike:' + S.species, `💗 ${sp().label}の すきな ところ`, STROKE_FACT[S.species][0]);
+  } else if (pref === 0) {
+    S.happy = clamp(S.happy + 1); floatAt('·', px, py - 4); setAnim('normal', 600);
+  } else {
+    S.happy = clamp(S.happy - 3); setAnim('surprise', 1000);
+    const line = { cat: 'シャッ！', rabbit: 'ダンッ！', dog: 'いやっ', hamster: 'ヂッ！', penguin: 'クワッ！', panda: 'むー' }[S.species];
+    say(line, 1000);
+    if (P3.ok) P3.act(S.species === 'rabbit' ? 'thump' : 'shake', 900);
+    walkX += (Math.random() < 0.5 ? -1 : 1) * $('room').clientWidth * 0.12; facing = walkX > 0 ? 1 : -1; placePet(true);
+    if (first) toastOnce('strokeDislike:' + S.species, `💦 ${sp().label}の にがてな ところ`, STROKE_FACT[S.species][1]);
+  }
+  render();
+}
+function wireStroke() {
+  const pos = $('petpos');
+  let st = null;
+  pos.style.touchAction = 'none';
+  pos.addEventListener('pointerdown', (e) => {
+    // stay put while being touched
+    nextWander = Date.now() + 9000;
+    if (P3.ok && !busy) { walkX = P3.petPx(); placePet(false); }
+    st = { x: e.clientX, y: e.clientY, total: 0, acc: 0 }; try { pos.setPointerCapture(e.pointerId); } catch (er) {} });
+  pos.addEventListener('pointermove', (e) => {
+    if (!st) return;
+    const d = Math.hypot(e.clientX - st.x, e.clientY - st.y);
+    st.x = e.clientX; st.y = e.clientY; st.total += d; st.acc += d;
+    nextWander = Date.now() + 9000;
+    if (st.acc > 55) { st.acc = 0; strokeReact(zoneAt(e), e); }
+  });
+  const up = () => { if (st && st.total < 12) petTap(); st = null; };
+  pos.addEventListener('pointerup', up);
+  pos.addEventListener('pointercancel', () => { st = null; });
 }
 
 /* ---------- calling the pet by name ---------- */
@@ -2820,6 +3180,7 @@ function tick() {
 }
 
 let warned8 = false;
+let petTap = () => {};
 function start(data) {
   M = (data && data.M) || loadJSON(META_KEY) || newMeta();
   M = Object.assign(newMeta(), M);
@@ -2834,6 +3195,7 @@ function start(data) {
   const awayH = (Date.now() - S.lastCare) / 3600000;
   if (awayH >= 5) setTimeout(() => toast(`⚠️ ${Math.floor(awayH)}じかん ぶりだね`, `${S.name}は さみしかったみたい。10じかん いじょう ほうっておくと ほねに なってしまうよ。`), 2500);
   ensureMissions(); renderTop();
+  setTimeout(() => toastOnce('stroke', '✋ ゆびで なでてみよう', 'ペットを ゆびで こすると なでられるよ。すきな ところは どうぶつで ちがう！'), 4000);
   setTimeout(() => { if (!S || !S.alive || S.asleep) return; const g = { dog: 'wag', cat: 'tailup', rabbit: 'periscope', penguin: 'ecstatic' }[S.species]; if (g) playBehavior(findBehavior(g)); }, 1800);
   const evts = catchUp();
   const bonus = dailyBonus();
@@ -2893,7 +3255,7 @@ function wire() {
     if (S.species === 'rabbit' && S.happy > 70 && r < 0.25) return playBehavior(findBehavior('binky'));
     setAnim('joy', 900); say(bark('♪'), 1200); render();
   };
-  $('petpos').addEventListener('click', pet);
+  petTap = pet; wireStroke();
   $('petpos').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pet(); } });
   $('gift').addEventListener('click', openGift);
   $('praise').addEventListener('click', () => {
