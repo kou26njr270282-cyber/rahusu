@@ -1,0 +1,447 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>わくせいゲーム</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=DotGothic16&display=swap">
+<style>
+/* Layout: a fixed-aspect game board (420x740 logical units) scaled to fit the screen, letterboxed on a starfield. */
+:root {
+  --space: #0d0b24;
+  --text: #fdf7ff;
+  --gold: #ffd84a;
+  color-scheme: dark;
+}
+html, body { height: 100%; background: var(--space); color: var(--text); overflow: hidden; }
+body { font-family: "DotGothic16", monospace; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#snd { position: absolute; right: 10px; top: 10px; font-family: "DotGothic16", monospace; font-size: .8rem; color: var(--text); background: rgba(13,11,36,.7); border: 2px solid rgba(253,247,255,.45); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+#snd:focus-visible { outline: 3px solid var(--gold); }
+</style>
+
+<canvas id="cv" aria-label="わくせいゲーム：おなじ わくせいを くっつけて おおきく する"></canvas>
+<button id="snd">BGM ON</button>
+
+<script>
+(() => {
+  const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+  const BW = 420, BH = 740;                       // logical board size
+  const L = 24, RGT = 396, FLOOR = 700, TOP = 170, DROP_Y = 120;
+  let scale = 1, ox = 0, oy = 0, SW = 0, SH = 0, DPR = 1;
+  function resize() {
+    SW = innerWidth; SH = innerHeight; DPR = Math.min(devicePixelRatio || 1, 2);
+    cv.width = Math.round(SW * DPR); cv.height = Math.round(SH * DPR);
+    scale = Math.min(SW / BW, SH / BH); ox = (SW - BW * scale) / 2; oy = (SH - BH * scale) / 2;
+  }
+  addEventListener("resize", resize); resize();
+  const FONT = '"DotGothic16", monospace', LOGO = '"Dela Gothic One", "DotGothic16", sans-serif';
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  // ================= planets =================
+  const PL = [
+    { n: "ちり",       r: 14,  c1: "#c9c6d6", c2: "#7d7a8f" },
+    { n: "いんせき",   r: 19,  c1: "#b08a62", c2: "#6a4a30" },
+    { n: "つき",       r: 25,  c1: "#f2f2f6", c2: "#a8a8b8" },
+    { n: "めいおうせい", r: 31, c1: "#f6dfc0", c2: "#b9946a" },
+    { n: "すいせい",   r: 38,  c1: "#d0c4b4", c2: "#8a7a68" },
+    { n: "かせい",     r: 46,  c1: "#ff8a5a", c2: "#b8401f" },
+    { n: "きんせい",   r: 55,  c1: "#ffe08a", c2: "#d49a2a" },
+    { n: "ちきゅう",   r: 65,  c1: "#6ab8ff", c2: "#1f5ab8" },
+    { n: "てんのうせい", r: 76, c1: "#b8fff4", c2: "#3ab0b8" },
+    { n: "どせい",     r: 88,  c1: "#ffe2a0", c2: "#c8963a" },
+    { n: "もくせい",   r: 102, c1: "#f2c896", c2: "#b07040" },
+    { n: "たいよう",   r: 118, c1: "#fff2a0", c2: "#ff9a1a" },
+  ];
+  const PTS = [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78];
+
+  // ================= audio =================
+  let actx = null, master = null, musicGain = null, musicOn = true;
+  function initAudio() {
+    try {
+      if (!actx) {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        master = actx.createGain(); master.gain.value = 0.9; master.connect(actx.destination);
+        musicGain = actx.createGain(); musicGain.gain.value = musicOn ? 0.55 : 0; musicGain.connect(master);
+      }
+      actx.resume();
+    } catch (e) { actx = null; }
+  }
+  function note(freq, t, dur, type, vol, dest, slide) {
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.008);
+    g.gain.setValueAtTime(vol, t + dur * 0.6); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(dest); o.start(t); o.stop(t + dur + 0.03);
+  }
+  function noiseHit(t, dur, vol, dest, freq = 6000, type = "highpass") {
+    const len = Math.floor(actx.sampleRate * dur), b = actx.createBuffer(1, len, actx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+    s.buffer = b; f.type = type; f.frequency.value = freq; g.gain.value = vol;
+    s.connect(f).connect(g).connect(dest); s.start(t);
+  }
+  const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+  // --- BGM: 16 bars, A section + B section. "-" holds the previous note. ---
+  const CH = {
+    Am: { b: 45, t: [69, 72, 76] }, F: { b: 41, t: [65, 69, 72] }, C: { b: 48, t: [64, 67, 72] },
+    G: { b: 43, t: [62, 67, 71] }, E: { b: 40, t: [64, 68, 71] }, Dm: { b: 38, t: [62, 65, 69] },
+  };
+  const SONG = [
+    ["Am", [76, "-", 72, 74, 76, "-", 79, "-"]],
+    ["F",  [77, "-", 76, 74, 72, "-", "-", "-"]],
+    ["C",  [72, "-", 74, 76, 79, "-", 76, "-"]],
+    ["G",  [74, "-", "-", 71, 74, "-", 79, "-"]],
+    ["Am", [81, "-", 79, 76, 77, "-", 76, "-"]],
+    ["F",  [74, "-", 72, 74, 77, "-", 76, 74]],
+    ["G",  [71, "-", 74, "-", 79, "-", 77, 74]],
+    ["E",  [76, "-", "-", "-", 68, "-", 71, "-"]],
+    ["Dm", [77, "-", 76, 77, 81, "-", 77, "-"]],
+    ["G",  [79, "-", 77, 76, 74, "-", "-", "-"]],
+    ["C",  [76, "-", 74, 76, 79, "-", 84, "-"]],
+    ["Am", [81, "-", "-", 79, 76, "-", "-", "-"]],
+    ["Dm", [77, "-", 81, "-", 86, "-", 84, 81]],
+    ["E",  [83, "-", 80, "-", 76, "-", 74, 71]],
+    ["Am", [72, "-", 76, "-", 81, "-", 76, "-"]],
+    ["Am", [69, "-", "-", "-", null, null, 64, 68]],
+  ];
+  const music = { next: 0, step: 0, playing: false };
+  function holdLen(bar, i) { let n = 1; const mel = SONG[bar][1]; while (i + n < 8 && mel[i + n] === "-") n++; return n; }
+  function musicTick() {
+    if (!actx || !music.playing) return;
+    const bpm = G && G.danger > 0.3 ? 150 : 128, e8 = 60 / bpm / 2;
+    if (music.next < actx.currentTime - 0.1) music.next = actx.currentTime + 0.06;
+    while (music.next < actx.currentTime + 0.3) {
+      const t = music.next, bar = Math.floor(music.step / 8) % SONG.length, i = music.step % 8;
+      const [chName, mel] = SONG[bar], ch = CH[chName];
+      // lead
+      const m = mel[i];
+      if (typeof m === "number") {
+        const len = holdLen(bar, i) * e8;
+        note(hz(m), t, len * 0.92, "square", 0.05, musicGain);
+        note(hz(m) * 1.005, t, len * 0.92, "triangle", 0.035, musicGain);   // slight chorus
+      }
+      // bass: root / octave bounce
+      note(hz(ch.b + (i % 2 ? 12 : 0)), t, e8 * 0.9, "triangle", 0.16, musicGain);
+      // arpeggio 16ths, quiet
+      for (let k = 0; k < 2; k++) note(hz(ch.t[(i * 2 + k) % 3] + 12), t + k * e8 / 2, e8 / 2 * 0.8, "square", 0.012, musicGain);
+      // drums
+      if (i === 0 || i === 4) { note(150, t, 0.16, "sine", 0.5, musicGain, 40); }
+      if (i === 2 || i === 6) noiseHit(t, 0.14, 0.18, musicGain, 1800, "bandpass");
+      noiseHit(t, 0.04, i % 2 ? 0.05 : 0.08, musicGain, 7000);
+      if (bar % 4 === 3 && i === 7) noiseHit(t + e8 / 2, 0.08, 0.12, musicGain, 1500, "bandpass");
+      music.next += e8; music.step++;
+    }
+  }
+  const SFX = {
+    drop: () => { if (!actx) return; note(520, actx.currentTime, 0.08, "triangle", 0.12, master, 300); },
+    merge: (tier, chain) => {
+      if (!actx) return; const t = actx.currentTime, base = hz(60 + tier * 2 + Math.min(chain, 6) * 2);
+      note(base, t, 0.1, "square", 0.08, master); note(base * 1.5, t + 0.05, 0.14, "square", 0.07, master);
+      if (tier >= 7) { note(base / 2, t, 0.4, "triangle", 0.2, master, base / 4); noiseHit(t, 0.3, 0.15, master, 800, "lowpass"); }
+    },
+    bang: () => { if (!actx) return; const t = actx.currentTime; noiseHit(t, 1.2, 0.4, master, 600, "lowpass"); note(80, t, 1.2, "sine", 0.5, master, 30); [523, 659, 784, 1047, 1319].forEach((f, k) => note(f, t + 0.3 + k * 0.1, 0.3, "square", 0.06, master)); },
+    over: () => { if (!actx) return; const t = actx.currentTime; [392, 330, 262, 196].forEach((f, k) => note(f, t + k * 0.25, 0.3, "triangle", 0.15, master)); },
+    tick: () => { if (!actx) return; note(880, actx.currentTime, 0.06, "square", 0.05, master); },
+  };
+
+  // ================= game state =================
+  let G;
+  function loadBest() { try { return +localStorage.getItem("wakusei-best") || 0; } catch (e) { return 0; } }
+  function newGame(mode) {
+    G = {
+      mode, bodies: [], parts: [], texts: [], rings: [], score: 0, best: loadBest(), dropX: (L + RGT) / 2,
+      cur: randTier(), next: randTier(), cool: 0, overT: 0, warn: 0, danger: 0, chain: 0, chainT: 0, time: 0,
+      shake: 0, flash: 0, biggest: 0, newBest: false,
+    };
+  }
+  function randTier() { return Math.floor(Math.random() * 5); }
+  let bid = 0;
+  function addBody(tier, x, y, vx = 0, vy = 0) {
+    const b = { id: bid++, tier, r: PL[tier].r, x, y, px: x - vx, py: y - vy, born: G.time, pop: 0.25, spin: rand(0, 6), rot: 0, grow: 1 };
+    G.bodies.push(b); return b;
+  }
+  newGame("title");
+
+  // ================= physics (verlet + position solver) =================
+  const SUB = 8, GRAV = 1500;
+  function physics(dt) {
+    const h = dt / SUB;
+    for (let s = 0; s < SUB; s++) {
+      for (const b of G.bodies) {
+        if (b.dead) continue;
+        let vx = (b.x - b.px) * 0.995, vy = (b.y - b.py) * 0.995;
+        const v = Math.hypot(vx, vy), VMAX = 3.2;            // cap speed so overlaps never launch planets
+        if (v > VMAX) { vx *= VMAX / v; vy *= VMAX / v; }
+        if (b.grow < 1) { b.grow = Math.min(1, b.grow + h / 0.18); b.r = PL[b.tier].r * (0.55 + 0.45 * b.grow); }
+        b.px = b.x; b.py = b.y;
+        b.x += vx; b.y += vy + GRAV * h * h;
+        b.rot += vx / b.r;
+      }
+      const bs = G.bodies;
+      for (let i = 0; i < bs.length; i++) {
+        const a = bs[i]; if (a.dead) continue;
+        for (let j = i + 1; j < bs.length; j++) {
+          const b = bs[j]; if (b.dead) continue;
+          const dx = b.x - a.x, dy = b.y - a.y, rr = a.r + b.r, d2 = dx * dx + dy * dy;
+          if (d2 >= rr * rr) continue;
+          const d = Math.sqrt(d2) || 0.01;
+          if (a.tier === b.tier) { merge(a, b); break; }
+          const ov = (rr - d), nx = dx / d, ny = dy / d;
+          const ma = a.r * a.r, mb = b.r * b.r, ta = mb / (ma + mb), tb = ma / (ma + mb);
+          a.x -= nx * ov * ta; a.y -= ny * ov * ta; b.x += nx * ov * tb; b.y += ny * ov * tb;
+        }
+      }
+      for (const b of G.bodies) {
+        if (b.dead) continue;
+        if (b.x - b.r < L) { b.x = L + b.r; b.px = b.x + (b.x - b.px) * 0.2; }
+        if (b.x + b.r > RGT) { b.x = RGT - b.r; b.px = b.x + (b.x - b.px) * 0.2; }
+        if (b.y + b.r > FLOOR) { b.y = FLOOR - b.r; const vx = b.x - b.px; b.px = b.x - vx * 0.9; b.py = b.y + (b.y - b.py) * 0.15; }
+      }
+    }
+    G.bodies = G.bodies.filter((b) => !b.dead);
+  }
+  function merge(a, b) {
+    a.dead = b.dead = true;
+    const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2, t = a.tier + 1;
+    G.chain = G.chainT > 0 ? G.chain + 1 : 1; G.chainT = 0.6;
+    burst(x, y, PL[a.tier].c1, 10 + a.tier * 3, 120 + a.tier * 25);
+    G.rings.push({ x, y, r: PL[a.tier].r, t: 0, col: PL[a.tier].c1 });
+    if (t >= PL.length) {                            // two suns: big bang
+      G.score += 300; text("ビッグバン！！ +300", x, y - 40, "#fff2a0", 34);
+      G.flash = 1; G.shake = 0.8; SFX.bang();
+      burst(x, y, "#fff2a0", 120, 600);
+      return;
+    }
+    const nb = addBody(t, x, y, (a.x - a.px + b.x - b.px) / 2, (a.y - a.py + b.y - b.py) / 2);
+    nb.pop = 0.35; nb.grow = 0; nb.r = PL[t].r * 0.55;
+    const pts = PTS[t];
+    G.score += pts;
+    G.biggest = Math.max(G.biggest, t);
+    text(`+${pts}`, x, y - PL[t].r * 0.5, "#ffd84a", 16 + Math.min(16, t * 2));
+    if (G.chain >= 2) text(`れんさ ×${G.chain}`, x, y - PL[t].r - 18, "#7ef9ff", 18 + Math.min(14, G.chain * 2));
+    if (t >= 7) { text(`${PL[t].n}！`, BW / 2, 250, "#fff", 30 + (t - 7) * 4); G.shake = 0.25 + (t - 7) * 0.08; G.flash = 0.2; }
+    SFX.merge(t, G.chain);
+  }
+
+  // ================= effects =================
+  function burst(x, y, col, n, sp) { for (let i = 0; i < n; i++) { const a = rand(0, 7), v = rand(sp * 0.2, sp); G.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: rand(0.35, 0.8), col, s: rand(2, 6) }); } }
+  function text(s, x, y, col, size) { G.texts.push({ s, x, y, col, size, t: 0 }); }
+
+  // ================= input =================
+  let down = false;
+  function boardX(e) { return (e.clientX - ox) / scale; }
+  cv.addEventListener("pointerdown", (e) => {
+    e.preventDefault(); initAudio(); startMusic();
+    if (G.mode === "title") { newGame("play"); return; }
+    if (G.mode === "over") { if (G.overT > 1) newGame("play"); return; }
+    down = true; cv.setPointerCapture?.(e.pointerId); aim(boardX(e));
+  });
+  cv.addEventListener("pointermove", (e) => { if (G.mode === "play" && (down || e.pointerType === "mouse")) aim(boardX(e)); });
+  cv.addEventListener("pointerup", (e) => { if (down && G.mode === "play") drop(); down = false; });
+  cv.addEventListener("pointercancel", () => (down = false));
+  const held = new Set();
+  addEventListener("keydown", (e) => {
+    if (["ArrowLeft", "ArrowRight", "Space", "Enter"].includes(e.code)) e.preventDefault();
+    initAudio(); startMusic();
+    if (e.code === "Space" || e.code === "Enter") {
+      if (G.mode === "title") newGame("play");
+      else if (G.mode === "over") { if (G.overT > 1) newGame("play"); }
+      else if (!e.repeat) drop();
+    }
+    held.add(e.code);
+  });
+  addEventListener("keyup", (e) => held.delete(e.code));
+  function aim(x) { const r = PL[G.cur].r; G.dropX = Math.max(L + r, Math.min(RGT - r, x)); }
+  function drop() {
+    if (G.cool > 0) return;
+    addBody(G.cur, G.dropX, DROP_Y);
+    SFX.drop();
+    G.cur = G.next; G.next = randTier(); G.cool = 0.45;
+    aim(G.dropX);
+  }
+  function startMusic() { if (actx && !music.playing) { music.playing = true; music.next = actx.currentTime + 0.1; } }
+
+  // ================= update =================
+  function update(dt) {
+    G.time += dt;
+    for (const p of G.parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy = p.vy * 0.92 + 300 * dt; }
+    G.parts = G.parts.filter((p) => p.t < p.life);
+    for (const t of G.texts) t.t += dt; G.texts = G.texts.filter((t) => t.t < 1.2);
+    for (const r of G.rings) r.t += dt; G.rings = G.rings.filter((r) => r.t < 0.4);
+    G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt * 1.8);
+    if (G.mode === "title") return;
+    if (G.mode === "over") { G.overT += dt; return; }
+    if (held.has("ArrowLeft")) aim(G.dropX - 260 * dt);
+    if (held.has("ArrowRight")) aim(G.dropX + 260 * dt);
+    G.cool = Math.max(0, G.cool - dt);
+    G.chainT = Math.max(0, G.chainT - dt);
+    for (const b of G.bodies) b.pop = Math.max(0, b.pop - dt);
+    physics(Math.min(dt, 1 / 50));
+    // danger: settled planets poking above the line
+    let over = false, near = 0;
+    for (const b of G.bodies) {
+      if (G.time - b.born < 1.4) continue;
+      const top = b.y - b.r;
+      near = Math.max(near, 1 - (top - TOP) / 120);
+      if (top < TOP) over = true;
+    }
+    G.danger = Math.max(0, Math.min(1, near));
+    if (over) {
+      const before = Math.ceil(2.5 - G.warn);
+      G.warn += dt;
+      if (Math.ceil(2.5 - G.warn) !== before) SFX.tick();
+      if (G.warn > 2.5) gameOver();
+    } else G.warn = Math.max(0, G.warn - dt * 2);
+  }
+  function gameOver() {
+    G.mode = "over"; G.overT = 0;
+    if (G.score > G.best) { G.newBest = true; G.best = G.score; try { localStorage.setItem("wakusei-best", String(G.score)); } catch (e) {} }
+    SFX.over();
+  }
+
+  // ================= drawing =================
+  const STARS = Array.from({ length: 90 }, () => ({ x: Math.random(), y: Math.random(), s: Math.random() * 1.8 + 0.4, p: Math.random() * 6 }));
+  function drawSpace() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const g = ctx.createLinearGradient(0, 0, 0, SH);
+    g.addColorStop(0, "#0d0b24"); g.addColorStop(1, "#24123a");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, SW, SH);
+    for (const s of STARS) { ctx.globalAlpha = 0.35 + 0.45 * Math.sin(G.time * 1.5 + s.p); ctx.fillStyle = "#fff"; ctx.fillRect(s.x * SW, s.y * SH, s.s, s.s); }
+    ctx.globalAlpha = 1;
+  }
+  function drawPlanet(t, x, y, r, rot = 0, pop = 0, face = true) {
+    const P = PL[t];
+    const s = 1 + pop * 0.6;
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    if (t === 11) { const gl = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.35); gl.addColorStop(0, "rgba(255,200,60,.5)"); gl.addColorStop(1, "rgba(255,200,60,0)"); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(0, 0, r * 1.35, 0, 7); ctx.fill(); }
+    if (t === 9) { ctx.strokeStyle = "rgba(240,210,150,.9)"; ctx.lineWidth = r * 0.14; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.18, r * 0.34, -0.25, Math.PI * 0.92, Math.PI * 2.08); ctx.stroke(); }
+    const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+    g.addColorStop(0, P.c1); g.addColorStop(1, P.c2);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.clip(); ctx.rotate(rot * 0.3);
+    if (t === 1 || t === 2 || t === 4) { ctx.fillStyle = "rgba(0,0,0,.15)"; [[-0.4, 0.3, 0.22], [0.35, -0.1, 0.16], [0.1, 0.55, 0.12], [-0.2, -0.5, 0.1]].forEach(([a, b, c]) => { ctx.beginPath(); ctx.arc(a * r, b * r, c * r, 0, 7); ctx.fill(); }); }
+    if (t === 3) { ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.beginPath(); ctx.moveTo(0.1 * r, 0.55 * r); ctx.bezierCurveTo(-0.5 * r, 0.15 * r, -0.2 * r, -0.2 * r, 0.1 * r, 0.1 * r); ctx.bezierCurveTo(0.4 * r, -0.2 * r, 0.6 * r, 0.2 * r, 0.1 * r, 0.55 * r); ctx.fill(); }
+    if (t === 5) { ctx.fillStyle = "rgba(120,30,10,.3)"; ctx.beginPath(); ctx.ellipse(r * 0.2, r * 0.35, r * 0.45, r * 0.15, 0.3, 0, 7); ctx.fill(); ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.beginPath(); ctx.ellipse(0, -r * 0.92, r * 0.35, r * 0.12, 0, 0, 7); ctx.fill(); }
+    if (t === 6) { ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = r * 0.12; for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.arc(k * r * 0.5, r * 0.2, r * 0.5, 3.6, 5.6); ctx.stroke(); } }
+    if (t === 7) { ctx.fillStyle = "#4fc35a"; [[-0.35, -0.2, 0.38, 0.25], [0.35, 0.3, 0.3, 0.2], [0.1, -0.6, 0.25, 0.12]].forEach(([a, b, c, d]) => { ctx.beginPath(); ctx.ellipse(a * r, b * r, c * r, d * r, 0.4, 0, 7); ctx.fill(); }); ctx.fillStyle = "rgba(255,255,255,.4)"; ctx.beginPath(); ctx.ellipse(-r * 0.1, r * 0.1, r * 0.5, r * 0.06, 0, 0, 7); ctx.fill(); }
+    if (t === 8) { ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.fillRect(-r, -r * 0.15, r * 2, r * 0.12); }
+    if (t === 9 || t === 10) { ctx.fillStyle = "rgba(120,60,20,.2)"; for (let k = -3; k <= 3; k++) ctx.fillRect(-r, k * r * 0.26, r * 2, r * 0.1); }
+    if (t === 10) { ctx.fillStyle = "#c8502a"; ctx.beginPath(); ctx.ellipse(r * 0.35, r * 0.3, r * 0.2, r * 0.12, 0, 0, 7); ctx.fill(); }
+    if (t === 11) { ctx.fillStyle = "rgba(255,120,0,.25)"; [[-0.4, -0.3], [0.4, 0.4], [0.2, -0.5], [-0.3, 0.5]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a * r, b * r, r * 0.12, 0, 7); ctx.fill(); }); }
+    ctx.restore();
+    ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.beginPath(); ctx.ellipse(-r * 0.38, -r * 0.45, r * 0.22, r * 0.12, -0.6, 0, 7); ctx.fill();
+    if (t === 9) { ctx.strokeStyle = "rgba(240,210,150,.95)"; ctx.lineWidth = r * 0.14; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.18, r * 0.34, -0.25, -0.08 * Math.PI, 0.92 * Math.PI); ctx.stroke(); }
+    if (face) {
+      const es = Math.max(2, r * 0.1), ex = r * 0.32, ey = r * 0.02;
+      const blink = (G.time * 0.7 + t * 1.3 + x * 0.01) % 4 < 0.1;
+      ctx.fillStyle = "#2a1630";
+      for (const sx of [-1, 1]) {
+        if (blink || pop > 0.15) { ctx.fillRect(sx * ex - es, ey, es * 2, Math.max(1.5, es * 0.45)); }
+        else { ctx.beginPath(); ctx.arc(sx * ex, ey, es, 0, 7); ctx.fill(); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(sx * ex - es * 0.3, ey - es * 0.35, es * 0.35, 0, 7); ctx.fill(); ctx.fillStyle = "#2a1630"; }
+      }
+      ctx.strokeStyle = "#2a1630"; ctx.lineWidth = Math.max(1.5, r * 0.06); ctx.beginPath();
+      if (pop > 0.15) { ctx.arc(0, ey + r * 0.2, r * 0.14, 0, Math.PI); } else ctx.arc(0, ey + r * 0.12, r * 0.12, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,120,150,.35)"; ctx.beginPath(); ctx.ellipse(-ex * 1.45, ey + r * 0.16, r * 0.12, r * 0.07, 0, 0, 7); ctx.ellipse(ex * 1.45, ey + r * 0.16, r * 0.12, r * 0.07, 0, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawBoard() {
+    ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * ox, DPR * oy);
+    if (G.shake > 0) ctx.translate(rand(-1, 1) * 10 * G.shake, rand(-1, 1) * 10 * G.shake);
+    // jar
+    ctx.fillStyle = "rgba(120,100,200,.12)"; ctx.fillRect(L, TOP - 40, RGT - L, FLOOR - TOP + 40);
+    ctx.strokeStyle = "rgba(200,190,255,.55)"; ctx.lineWidth = 6; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(L - 3, TOP - 50); ctx.lineTo(L - 3, FLOOR + 3); ctx.lineTo(RGT + 3, FLOOR + 3); ctx.lineTo(RGT + 3, TOP - 50); ctx.stroke();
+    // danger line
+    const a = G.warn > 0 ? 0.6 + 0.4 * Math.sin(G.time * 20) : 0.25 + G.danger * 0.4;
+    ctx.strokeStyle = `rgba(255,${G.warn > 0 ? 60 : 120},100,${a})`; ctx.lineWidth = G.warn > 0 ? 4 : 2; ctx.setLineDash([10, 8]);
+    ctx.beginPath(); ctx.moveTo(L, TOP); ctx.lineTo(RGT, TOP); ctx.stroke(); ctx.setLineDash([]);
+    if (G.warn > 0) { ctx.font = `28px ${LOGO}`; ctx.textAlign = "center"; ctx.fillStyle = "#ff6a7a"; ctx.fillText(`あぶない！ ${Math.ceil(2.5 - G.warn)}`, BW / 2, TOP + 40); }
+    // aim guide + current planet
+    if (G.mode === "play") {
+      const r = PL[G.cur].r;
+      ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 2; ctx.setLineDash([4, 8]);
+      ctx.beginPath(); ctx.moveTo(G.dropX, DROP_Y + r); ctx.lineTo(G.dropX, FLOOR); ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = G.cool > 0 ? 0.4 : 1;
+      drawPlanet(G.cur, G.dropX, DROP_Y, r);
+      ctx.globalAlpha = 1;
+    }
+    for (const b of G.bodies) drawPlanet(b.tier, b.x, b.y, b.r, b.rot, b.pop);
+    for (const r of G.rings) { ctx.strokeStyle = r.col; ctx.globalAlpha = 1 - r.t / 0.4; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(r.x, r.y, r.r * (1 + r.t * 3), 0, 7); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+    for (const p of G.parts) { ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, 7); ctx.fill(); }
+    ctx.globalAlpha = 1;
+    for (const t of G.texts) {
+      const al = Math.min(1, (1.2 - t.t) / 0.3), sz = t.size * (1 + Math.max(0, 0.12 - t.t) * 4);
+      ctx.globalAlpha = al; ctx.font = `${sz}px ${LOGO}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.lineWidth = 5; ctx.strokeStyle = "#0d0b24"; ctx.strokeText(t.s, t.x, t.y - t.t * 30); ctx.fillStyle = t.col; ctx.fillText(t.s, t.x, t.y - t.t * 30);
+    }
+    ctx.globalAlpha = 1; ctx.textBaseline = "alphabetic";
+    // HUD
+    ctx.textAlign = "left"; ctx.font = `13px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText("スコア", L, 30);
+    ctx.font = `34px ${LOGO}`; ctx.fillStyle = "#ffd84a"; ctx.fillText(G.score, L, 66);
+    ctx.font = `12px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText(`ベスト ${Math.max(G.best, G.score)}`, L, 86);
+    ctx.textAlign = "center"; ctx.fillText("つぎ", RGT - 32, 30);
+    drawPlanet(G.next, RGT - 32, 62, Math.min(26, PL[G.next].r), 0, 0);
+    // evolution strip
+    const sy = FLOOR + 22; let x = L + 6;
+    for (let t = 0; t < PL.length; t++) { const rr = 5 + t * 0.9; ctx.globalAlpha = t <= Math.max(G.biggest, 4) ? 1 : 0.3; drawPlanet(t, x + rr, sy, rr, 0, 0, false); x += rr * 2 + 6; if (t < PL.length - 1) { ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.fillRect(x - 5, sy - 1, 3, 2); } }
+    ctx.globalAlpha = 1;
+    if (G.flash > 0) { ctx.fillStyle = `rgba(255,250,220,${Math.min(0.7, G.flash)})`; ctx.fillRect(-50, -50, BW + 100, BH + 100); }
+  }
+  function drawTitle() {
+    ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * ox, DPR * oy);
+    ctx.fillStyle = "rgba(13,11,36,.55)"; ctx.fillRect(0, 0, BW, BH);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `54px ${LOGO}`; ctx.lineWidth = 8; ctx.strokeStyle = "#2a1460";
+    ctx.strokeText("わくせい", BW / 2, 190); ctx.strokeText("ゲーム", BW / 2, 252);
+    ctx.fillStyle = "#ffd84a"; ctx.fillText("わくせい", BW / 2, 190); ctx.fillStyle = "#7ef9ff"; ctx.fillText("ゲーム", BW / 2, 252);
+    ctx.font = `17px ${FONT}`; ctx.fillStyle = "#fdf7ff"; ctx.fillText("おなじ わくせいを くっつけて おおきく しよう", BW / 2, 310);
+    // ring of planets
+    const cx = BW / 2, cy = 470, R = 105;
+    for (let t = 0; t < PL.length; t++) { const a = -Math.PI / 2 + t / PL.length * Math.PI * 2 + G.time * 0.2; drawPlanet(t, cx + Math.cos(a) * R, cy + Math.sin(a) * R, 9 + t * 1.6, 0, 0, true); }
+    ctx.font = `14px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText("ちり → … → たいよう", cx, cy);
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.time * 4); ctx.font = `26px ${LOGO}`; ctx.fillStyle = "#fff"; ctx.fillText("タップで スタート", BW / 2, 650); ctx.globalAlpha = 1;
+    if (G.best) { ctx.font = `14px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText(`ベスト ${G.best}`, BW / 2, 688); }
+  }
+  function drawOver() {
+    ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * ox, DPR * oy);
+    ctx.fillStyle = `rgba(13,11,36,${Math.min(0.78, G.overT * 1.5)})`; ctx.fillRect(0, 0, BW, BH);
+    if (G.overT < 0.3) return;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `44px ${LOGO}`; ctx.fillStyle = "#ff8a9a"; ctx.fillText("あふれた！", BW / 2, 230);
+    ctx.font = `16px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText("スコア", BW / 2, 300);
+    ctx.font = `60px ${LOGO}`; ctx.fillStyle = "#ffd84a"; ctx.fillText(G.score, BW / 2, 350);
+    ctx.font = `16px ${FONT}`; ctx.fillStyle = "#fdf7ff"; ctx.fillText(`いちばん おおきい わくせい：${PL[Math.max(G.biggest, 0)].n}`, BW / 2, 410);
+    drawPlanet(G.biggest, BW / 2, 470, Math.min(44, PL[G.biggest].r));
+    if (G.newBest) { ctx.font = `26px ${LOGO}`; ctx.fillStyle = "#7be07b"; ctx.fillText("ベスト こうしん！", BW / 2, 545); }
+    else { ctx.font = `15px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText(`ベスト ${G.best}`, BW / 2, 545); }
+    if (G.overT > 1) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.time * 4); ctx.font = `24px ${LOGO}`; ctx.fillStyle = "#fff"; ctx.fillText("タップで もういちど", BW / 2, 620); ctx.globalAlpha = 1; }
+  }
+
+  // ================= loop =================
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    update(dt);
+    musicTick();
+    drawSpace();
+    drawBoard();
+    if (G.mode === "title") drawTitle();
+    if (G.mode === "over") drawOver();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  const snd = document.getElementById("snd");
+  snd.addEventListener("click", (e) => {
+    e.stopPropagation(); initAudio();
+    musicOn = !musicOn; snd.textContent = `BGM ${musicOn ? "ON" : "OFF"}`;
+    if (musicGain) musicGain.gain.value = musicOn ? 0.55 : 0;
+    startMusic();
+  });
+})();
+</script>
