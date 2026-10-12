@@ -316,6 +316,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--coral); out
 .wbtns button { border: 2.5px solid var(--ink); border-radius: 14px; background: var(--honey); box-shadow: 0 3px 0 var(--ink); font-weight: 800; font-size: .95rem; padding: 8px 14px; cursor: pointer; }
 .wbtns button:first-child { background: var(--coral); color: #fff; }
 .room.outside .toilet, .room.outside #poops, .room.outside .gift, .room.outside .praise { display: none; }
+.want { position: absolute; bottom: 100%; left: 72%; z-index: 6; white-space: nowrap; border: 2.5px solid var(--ink); border-radius: 14px; background: #FFF6E0; font-family: inherit; font-weight: 800; font-size: .78rem; padding: 2px 8px; cursor: pointer; animation: nudge 1.4s ease-in-out infinite; }
 .strokemap { display: flex; flex-wrap: wrap; gap: 6px; }
 .strokemap span { border: 2px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: .8rem; }
 .strokemap span.on { border-color: var(--ink); background: var(--wall); }
@@ -608,7 +609,7 @@ function newPet(species, color, name) {
     bcs: 50, water: 90, nails: 10, vaccinated: false, toilet: 0, tpoop: 0, lastCare: t, diary: {}, death: null,
     poop: 0, poopClock: 120, sick: false, asleep: false, neglect: 0, stage: 0, variant: null, alive: true,
     snacks: [], fed: 0, played: 0, wins: 0, best: 0, personality: ps[Math.floor(Math.random() * ps.length)],
-    gift: false, giftAt: t + 15 * 60000, giftX: 30, archived: false, walkAt: t, xp: 0, lv: 1 };
+    gift: false, giftAt: t + 15 * 60000, giftX: 30, archived: false, walkAt: t, xp: 0, lv: 1, g: {}, want: null, nextWant: t + 3 * 60000 };
 }
 function save() {
   try { if (S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); localStorage.setItem(META_KEY, JSON.stringify(M)); } catch (e) {}
@@ -1767,7 +1768,7 @@ function say(text, ms = 2400) {
   clearTimeout(bubbleTimer);
   bubbleTimer = setTimeout(() => b.remove(), ms);
 }
-function lcd(text) { $('lcd').textContent = text; }
+function lcd(text) { $('lcd').textContent = text; lcdAt = Date.now(); }
 function setAnim(expr, ms) { anim = { expr, until: Date.now() + ms }; renderPet(); }
 function floatAt(text, xPct, yPct, color) {
   const f = document.createElement('div');
@@ -1862,7 +1863,7 @@ function render() {
   document.querySelectorAll('.act').forEach(b => b.classList.toggle('need', !!need[b.dataset.act]));
   $('room').classList.toggle('lights-off', S.asleep);
   $('petpos').classList.toggle('asleep', S.asleep);
-  $('lightIc').innerHTML = svgIcon(S.asleep ? 'sun' : 'moon');
+  if ($('lightIc').dataset.k !== String(S.asleep)) { $('lightIc').dataset.k = String(S.asleep); $('lightIc').innerHTML = svgIcon(S.asleep ? 'sun' : 'moon'); }
   $('lightLbl').textContent = S.asleep ? 'おこす' : 'ねかせる';
   let z = $('petpos').querySelector('.zzz');
   if (S.asleep && !z) { z = document.createElement('div'); z.className = 'zzz'; z.textContent = 'Zzz'; $('petpos').appendChild(z); }
@@ -1870,6 +1871,11 @@ function render() {
   renderSky();
   renderPet();
   renderTop();
+  let wb = $('petpos').querySelector('.want');
+  if (S.want && !S.asleep) {
+    if (!wb) { wb = document.createElement('button'); wb.className = 'want'; wb.addEventListener('pointerdown', (e) => { e.stopPropagation(); if (S.want) lcd('💭 ' + S.want.text); }); $('petpos').appendChild(wb); }
+    wb.textContent = '💭 ' + S.want.short;
+  } else if (wb) wb.remove();
   const days = Math.floor(m / (60 * 24));
   $('frame').innerHTML = days > 0 ? `${S.name}<br>${days}にちめ` : `${S.name}<br>${Math.floor(m)}ふん`;
   if (P3.ok) P3.setFrame(`${S.name}\n${ageDay(m)}にちめ`);
@@ -1956,7 +1962,7 @@ function vetAction(k) {
   if (k === 'med') { closeSheet(); return actions.med(); }
   if (k === 'vac') {
     if (M.coins < 20) return;
-    M.coins -= 20; S.vaccinated = true; S.happy = clamp(S.happy - 8);
+    M.coins -= 20; S.vaccinated = true; S.happy = clamp(S.happy - 8); checkGoals();
     closeSheet(); setAnim('sad', 1500); say('チクッ…'); lcd('ワクチンを うった。これで びょうきに なりにくい');
     toastOnce('vac', '💉 ワクチン', 'ほんものの ペットも こどもの ころに ワクチンを うって、こわい びょうきを ふせぐよ。');
     render(); return save();
@@ -1981,7 +1987,7 @@ function vetAction(k) {
   }
 }
 function afterEat() {
-  mission('feed'); gainXP(4); diary('feed');
+  mission('feed'); gainXP(4); diary('feed'); goalCount('feed');
   if (S.species === 'hamster') setTimeout(() => playBehavior(findBehavior('pouch')), 1700);
   if (S.species === 'panda') SND.play('munch');
 }
@@ -2006,6 +2012,7 @@ function feedItem(key) {
     let happy = f.happy || 0;
     if (key === 'fav' && S.personality === 'くいしんぼう') happy += 10;
     S.happy = clamp(S.happy + happy);
+    if (key === 'fav') fulfill('fav');
     if (key === 'fav') { setAnim('joy', 1600); say('だいすき！'); lcd(`${S.name}は ${f.name}に むちゅう！`); }
     else if (happy < 0) { setAnim('sad', 1000); say('うーん…'); lcd(`${f.name}は からだに いいけど ちょっと にがて`); }
     else { setAnim('smile', 1200); lcd(`${S.name}は ${f.name}を たべた`); }
@@ -2051,7 +2058,7 @@ const actions = {
     setAnim('joy', 1800);
     say(bark('♪'));
     setTimeout(() => {
-      S.clean = 100; S.happy = clamp(S.happy + B.mood + (loves ? 10 : 0)); mission('bath'); gainXP(5);
+      S.clean = 100; S.happy = clamp(S.happy + B.mood + (loves ? 10 : 0)); mission('bath'); gainXP(5); fulfill('bath');
       if (S.species === 'dog' || S.species === 'penguin') setTimeout(() => playBehavior(findBehavior('shake')), 400);
       lcd(B.text);
       busy = false; render(); save();
@@ -2079,7 +2086,7 @@ const actions = {
       const night = isNight();
       if (sp().nocturnal && night && S.energy > 30) { say('よるは これから！'); return lcd(`${sp().label}は よるに げんきな どうぶつ。ひるまに ねかせてあげよう`); }
       if (S.energy > 80 && !night && !sp().nocturnal && !sp().sleepy) { say('まだ ねむくない！'); return; }
-      S.asleep = true; goCenter(); lcd(`でんきを けした。${S.name}は ねむった`);
+      S.asleep = true; goCenter(); lcd(`でんきを けした。${S.name}は ねむった`); goalCount('sleep');
     }
     render(); save();
   },
@@ -2144,9 +2151,9 @@ function renderSheet() {
       return row(tr.icon, tr.name + (lv >= 3 ? ' ✅' : ''), lv >= 3 ? 'おぼえた！ ときどき じぶんから やってくれる' : `おぼえるまで ${'●'.repeat(lv)}${'○'.repeat(3 - lv)}`, 'れんしゅう', `data-train="${tr.id}"`, S.energy < 15);
     }).join('') + `<div class="empty">ごきげんが いいと せいこうしやすいよ。せいこうすると ごほうびの おやつを あげるよ</div>`;
   } else if (sheetMode === 'missions') {
-    $('sheetTitle').textContent = 'きょうの ミッション';
+    $('sheetTitle').textContent = 'ミッションと もくひょう';
     list.innerHTML = M.missions.map(m => `<div class="mis${m.done ? ' done' : ''}"><b>${m.done ? '✅ ' : ''}${m.text}</b><span>${Math.min(m.have, m.n)}/${m.n}</span><div class="bar"><i style="width:${Math.min(100, m.have / m.n * 100)}%"></i></div></div>`).join('') +
-      `<div class="empty">1つ クリアで 15コイン、ぜんぶ クリアで さらに 30コイン。まいにち かわるよ</div>`;
+      `<div class="empty">1つ クリアで 15コイン、ぜんぶ クリアで さらに 30コイン。まいにち かわるよ</div>` + goalsHTML();
   } else if (sheetMode === 'shop') {
     $('sheetTitle').textContent = 'ショップ';
     tabs.innerHTML = [['food', 'たべもの'], ['hat', 'きせかえ'], ['furn', 'へや']].map(([k, l]) =>
@@ -2186,7 +2193,7 @@ function onSheetClick(e) {
   if (t.dataset.trainMenu) { sheetMode = 'train'; return renderSheet(); }
   if (t.dataset.train) { closeSheet(); return practice(t.dataset.train); }
   if (t.dataset.call) { closeSheet(); return callPet(); }
-  if (t.dataset.special) { closeSheet(); mission('special'); mission('play'); gainXP(10); if (S.species !== 'dog') diary('play'); return doSpecial(); }
+  if (t.dataset.special) { closeSheet(); mission('special'); mission('play'); gainXP(10); fulfill(S.species === 'dog' ? 'walk' : 'special'); if (S.species !== 'dog') diary('play'); return doSpecial(); }
   if (t.dataset.game) { closeSheet(); return t.dataset.game === 'dir' ? startDir() : startCatch(); }
   if (t.dataset.wear) {
     M.hat = M.hat === t.dataset.wear ? null : t.dataset.wear;
@@ -2337,7 +2344,7 @@ function startDir() {
 function endDir(g, wins) {
   g.remove(); busy = false;
   S.happy = clamp(S.happy + 8 + wins * 6); S.energy = clamp(S.energy - 12); S.hunger = clamp(S.hunger - 5);
-  addBcs(-1.5); S.water = clamp(S.water - 5); diary('play'); S.played++; S.wins += wins; mission('play'); gainXP(8 + wins * 2);
+  addBcs(-1.5); S.water = clamp(S.water - 5); diary('play'); S.played++; S.wins += wins; mission('play'); gainXP(8 + wins * 2); fulfill('play');
   const coins = Math.round((2 + wins * 3) * (S.personality === 'やんちゃ' ? 1.5 : 1));
   addCoins(coins);
   if (wins === 5) { setAnim('joy', 2000); say('ぜんぶ あたり！'); lcd(`パーフェクト！ ${coins}コイン ゲット`); }
@@ -2414,7 +2421,7 @@ function startCatch() {
     goCenter();
     const newBest = score > (S.best || 0);
     if (newBest) S.best = score;
-    S.played++; mission('play'); gainXP(8 + Math.min(20, score));
+    S.played++; mission('play'); gainXP(8 + Math.min(20, score)); fulfill('play');
     S.happy = clamp(S.happy + 6 + Math.min(30, score * 2)); S.energy = clamp(S.energy - 15);
     S.hunger = clamp(S.hunger + Math.min(15, score)); addBcs(Math.min(4, score * 0.2) - 2); S.water = clamp(S.water - 8); diary('play');
     const coins = Math.round(score * (S.personality === 'やんちゃ' ? 1.5 : 1));
@@ -2520,7 +2527,7 @@ function openInfo() {
   $('infoRows').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
   const st = stageOf(m);
   $('infoTip').textContent = sp().life + '。' + (PERSONALITIES[S.personality]?.tip || '') + '。' + (st < 2
-    ? `あと やく${Math.ceil((STAGE_AT[st + 1] - m) / 60)}じかんで おおきくなるよ。おせわミスが すくないと とくべつな すがたに…？`
+    ? `あと やく${Math.ceil((STAGE_AT[st + 1] - m) / 60)}じかんで おおきくなるよ。せいちょうの もくひょうは 🎯 から 見られるよ。`
     : (S.variant === 'star' ? 'おせわ ばっちり！ キラキラの おうかんを もらったよ。' : 'りっぱな おとなに なったね。'));
   const cur = { name: S.name, species: S.species, color: S.color, variant: S.variant, stage: st, age: ageDay(m) };
   const seen = new Set([S.species, ...M.album.map(a => a.species)]);
@@ -2718,7 +2725,7 @@ function playBehavior(b) {
   if (b.special === 'slide') { facing = walkX > 0 ? -1 : 1; walkX = -walkX || $('room').clientWidth * 0.25; placePet(false); }
   if (b.special === 'roll') { trick(); }
   if (b.after) setTimeout(() => setAnim(b.after, 2500), b.dur || 1500);
-  discover(b);
+  discover(b); checkGoals();
   diary('saw', b.name);
   mission('behav');
   return true;
@@ -2824,7 +2831,8 @@ function renderTop() {
   $('misBadge').textContent = left; $('misBadge').hidden = !left;
   const total = Object.values(BEHAVIORS).reduce((a, l) => a + l.length, 0);
   $('zkCount').textContent = Object.keys(M.seen).length + '/' + total;
-  $('sndBtn').innerHTML = svgIcon(M.sound === false ? 'mute' : 'sound');
+  const sk = M.sound === false ? 'mute' : 'sound';
+  if ($('sndBtn').dataset.k !== sk) { $('sndBtn').dataset.k = sk; $('sndBtn').innerHTML = svgIcon(sk); }
   $('sndBtn').setAttribute('aria-label', M.sound === false ? 'おとを だす' : 'おとを けす');
   $('coins').textContent = '🪙 ' + M.coins;
 }
@@ -3016,16 +3024,17 @@ const STROKE_FACT = {
   penguin: ['ペンギンは もともと あまり さわられるのが すきではない と いわれている。そっと みまもるのも あいじょう。', 'ペンギンは もともと あまり さわられるのが すきではない と いわれている。そっと みまもるのも あいじょう。'],
   panda: ['のんびり なでられるのが すき（ゲームの せってい）。', 'あしを さわられるのは いや みたい（ゲームの せってい）。'],
 };
+// Map the touch point to a body part using the model's real proportions (in model units: feet at 0, head centre ~1.2).
 function zoneAt(e) {
   const r = $('petpos').getBoundingClientRect();
-  const rx = (e.clientX - r.left) / r.width - 0.5, ry = (e.clientY - r.top) / r.height;
-  const top = S.species === 'rabbit' ? 0.12 : 0;   // rabbit ears take the top of the box
-  const y = (ry - top) / (1 - top);
-  if (y < 0.36) return 'head';
-  if (y < 0.56) return Math.abs(rx) > 0.17 ? 'cheek' : 'head';
-  if (y < 0.63) return 'chin';
-  if (y < 0.8) return 'chest';
-  if (y < 0.9) return 'belly';
+  const H = { rabbit: 2.55, cat: 2.1 }[S.species] || 1.95;   // box height used by placeDiv
+  const yu = (1 - (e.clientY - r.top) / r.height) * H, xu = Math.abs((e.clientX - r.left) / r.width - 0.5) * 1.8;
+  const hc = S.species === 'hamster' ? 1.08 : 1.18;
+  if (yu > hc + 0.22) return 'head';
+  if (yu > hc - 0.18) return xu > 0.3 ? 'cheek' : 'head';
+  if (yu > hc - 0.5) return xu < 0.22 ? 'chin' : 'cheek';
+  if (yu > 0.42) return 'chest';
+  if (yu > 0.17) return 'belly';
   return 'feet';
 }
 let strokeCool = 0;
@@ -3044,6 +3053,7 @@ function strokeReact(zone, e) {
   const first = !M.strokes[key];
   M.strokes[key] = pref;
   if (pref >= 1) {
+    fulfill('stroke:' + zone); goalCount('stroke');
     S.happy = clamp(S.happy + pref * 2); floatAt(pref > 1 ? '💕' : '💗', px - 3, py - 6);
     diary('pet'); if (Math.random() < 0.35) mission('pet');
     if (S.species === 'cat' && (zone === 'cheek' || zone === 'chin' || zone === 'head')) { setAnim('smile', 1400); say('ゴロゴロ…', 1200); if (P3.ok && Math.random() < 0.3) P3.act('freeze', 1200); }
@@ -3073,17 +3083,113 @@ function wireStroke() {
     // stay put while being touched
     nextWander = Date.now() + 9000;
     if (P3.ok && !busy) { walkX = P3.petPx(); placePet(false); }
-    st = { x: e.clientX, y: e.clientY, total: 0, acc: 0 }; try { pos.setPointerCapture(e.pointerId); } catch (er) {} });
+    st = { x: e.clientX, y: e.clientY, total: 0, acc: 0, zones: {} }; try { pos.setPointerCapture(e.pointerId); } catch (er) {} });
   pos.addEventListener('pointermove', (e) => {
     if (!st) return;
     const d = Math.hypot(e.clientX - st.x, e.clientY - st.y);
     st.x = e.clientX; st.y = e.clientY; st.total += d; st.acc += d;
+    const z = zoneAt(e); st.zones[z] = (st.zones[z] || 0) + d;   // where most of the rubbing happened
     nextWander = Date.now() + 9000;
-    if (st.acc > 55) { st.acc = 0; strokeReact(zoneAt(e), e); }
+    if (st.acc > 55) { st.acc = 0; const best = Object.entries(st.zones).sort((a, b) => b[1] - a[1])[0][0]; st.zones = {}; strokeReact(best, e); }
   });
   const up = () => { if (st && st.total < 12) petTap(); st = null; };
   pos.addEventListener('pointerup', up);
   pos.addEventListener('pointercancel', () => { st = null; });
+}
+
+/* ---------- おねだり: the pet asks for something, like a real pet would ---------- */
+const WANTS = {
+  dog: [{ ev: 'walk', short: 'さんぽ！', text: 'さんぽに いきたい みたい（あそぶ → さんぽ）' }, { ev: 'stroke:chest', short: 'むね なでて', text: 'むねを なでて ほしい みたい（ゆびで むねを なでる）' }, { ev: 'play', short: 'あそぼ！', text: 'いっしょに あそびたい みたい（あそぶ → ゲーム）' }, { ev: 'fav', short: 'ほね…', text: 'すきな ほねが ほしい みたい（ショップ → ほね）' }],
+  cat: [{ ev: 'stroke:cheek', short: 'ほっぺ…', text: 'ほっぺを なでて ほしい みたい（ゆびで ほっぺを なでる）' }, { ev: 'special', short: 'じゃらして', text: 'ねこじゃらしで あそびたい みたい（あそぶ → ねこじゃらし）' }, { ev: 'fav', short: 'さかな…', text: 'さかなが たべたい みたい（ショップ → さかな）' }, { ev: 'bath', short: 'ブラシ', text: 'ブラッシング してほしい みたい（ブラシ）' }],
+  rabbit: [{ ev: 'stroke:head', short: 'おでこ', text: 'おでこを なでて ほしい みたい（ゆびで おでこを なでる）' }, { ev: 'special', short: 'へやんぽ', text: 'へやを はしりたい みたい（あそぶ → へやんぽ）' }, { ev: 'fav', short: 'にんじん', text: 'にんじんが ほしい みたい（ショップ → にんじん）' }],
+  hamster: [{ ev: 'special', short: 'くるくる', text: 'まわしぐるまで はしりたい みたい（あそぶ → まわしぐるま）' }, { ev: 'fav', short: 'たね…', text: 'ひまわりのたねが ほしい みたい（ショップ → たね）' }, { ev: 'stroke:head', short: 'なでて', text: 'あたまを なでて ほしい みたい' }],
+  penguin: [{ ev: 'special', short: 'およぎたい', text: 'プールで およぎたい みたい（あそぶ → プール）' }, { ev: 'bath', short: 'みず！', text: 'みずあびが したい みたい（みずあび）' }, { ev: 'fav', short: 'えび…', text: 'えびが たべたい みたい（ショップ → えび）' }],
+  panda: [{ ev: 'fav', short: 'りんご', text: 'りんごが たべたい みたい（ショップ → りんご）' }, { ev: 'special', short: 'ころころ', text: 'ころがって あそびたい みたい（あそぶ → でんぐりがえし）' }, { ev: 'stroke:belly', short: 'おなか', text: 'おなかを なでて ほしい みたい' }],
+};
+function maybeWant() {
+  if (S.want && Date.now() > S.want.until) {
+    S.want = null; S.happy = clamp(S.happy - 5);
+    lcd(`${S.name}の おねがい、きづいて あげられなかった…`);
+    return;
+  }
+  if (S.want || S.asleep || busy || Date.now() < (S.nextWant || 0)) return;
+  const list = (WANTS[S.species] || []).filter(w => !(w.ev === 'walk' && S.energy < 20));
+  const w = list[Math.floor(Math.random() * list.length)];
+  if (!w) return;
+  S.want = { ...w, until: Date.now() + 20 * 60000 };
+  S.nextWant = Date.now() + (25 + Math.random() * 25) * 60000;
+  lcd(`💭 ${S.name}が ${w.text}`);
+  say(w.short, 2500);
+}
+// Called whenever something happens that could answer a request.
+function fulfill(ev) {
+  if (!S) return;
+  if (ev === 'special' || ev === 'walk') { S.g.special = (S.g.special || 0) + 1; }
+  if (!S.want || S.want.ev !== ev) return;
+  S.want = null;
+  S.happy = clamp(S.happy + 10); S.g.req = (S.g.req || 0) + 1;
+  M.coins += 12; gainXP(15); confetti();
+  toast('🌟 おねがいを かなえた！', `${S.name}は とても うれしそう（+12コイン）`);
+  setAnim('joy', 1800);
+  checkGoals();
+}
+
+/* ---------- growth goals: what to do before the pet grows up ---------- */
+const GOALS = [
+  [   // baby → child
+    { k: 'feed', n: 4, text: 'ごはんを 4かい あげる' },
+    { k: 'praise', n: 2, text: 'トイレで できたら 2かい ほめる' },
+    { k: 'stroke', n: 15, text: 'すきな ところを 15かい なでる' },
+    { k: 'sleep', n: 1, text: 'でんきを けして ねかせる' },
+  ],
+  [   // child → adult
+    { k: 'vac', n: 1, text: 'ワクチンを うつ' },
+    { k: 'special', n: 3, text: 'その子らしい あそび（さんぽ など）を 3かい' },
+    { k: 'req', n: 3, text: 'おねだりを 3かい かなえる' },
+    { k: 'seen', n: 6, text: 'ほんものの こうどうを 6しゅるい 見る' },
+  ],
+];
+function goalHave(g) {
+  if (g.k === 'vac') return S.vaccinated ? 1 : 0;
+  if (g.k === 'seen') return (BEHAVIORS[S.species] || []).filter(b => M.seen[behaviorKey(S.species, b.id)]).length;
+  return (S.g && S.g[g.k]) || 0;
+}
+function goalCount(k) { S.g = S.g || {}; S.g[k] = (S.g[k] || 0) + 1; checkGoals(); }
+function goalsDone(stage) { return stage >= 2 || GOALS[stage].every(g => goalHave(g) >= g.n); }
+function checkGoals() {
+  const st = stageOf(ageMin());
+  if (st >= 2 || !S) return;
+  S.goalsShown = S.goalsShown || {};
+  for (const g of GOALS[st]) {
+    const key = st + g.k;
+    if (goalHave(g) >= g.n && !S.goalsShown[key]) { S.goalsShown[key] = 1; toast('✅ せいちょうの もくひょう たっせい', g.text); gainXP(10); }
+  }
+}
+function goalsHTML() {
+  const st = stageOf(ageMin());
+  if (st >= 2) return `<div class="empty">おとなに なったよ。${S.variant === 'star' ? 'もくひょうを ぜんぶ たっせいして おうかんを もらった！' : ''}</div>`;
+  return `<h3 style="margin:4px 0 0">${st === 0 ? 'こどもに' : 'おとなに'} なるまでの もくひょう</h3>` + GOALS[st].map(g => {
+    const h = Math.min(goalHave(g), g.n);
+    return `<div class="mis${h >= g.n ? ' done' : ''}"><b>${h >= g.n ? '✅ ' : ''}${g.text}</b><span>${h}/${g.n}</span><div class="bar"><i style="width:${h / g.n * 100}%"></i></div></div>`;
+  }).join('') + `<div class="empty">${st === 1 ? 'ぜんぶ たっせいして おとなに なると とくべつな すがたに！' : 'こどもに なるまでに やってみよう'}</div>`;
+}
+
+/* ---------- what to do next: shown in the message line when nothing else is happening ---------- */
+let lcdAt = 0;
+function nextHint() {
+  if (S.asleep) return `${S.name}は ねている。げんきが もどるまで そっと しておこう`;
+  if (S.sick) return 'ぐあいが わるそう → びょういんで くすり';
+  if (S.want) return `💭 ${S.want.text}`;
+  if (S.hunger < 35) return 'おなかが すいてる → ごはん';
+  if (S.water < 35) return 'のどが かわいてる → ごはん → おみず';
+  if (S.poop > 0 || (S.tpoop || 0) >= 2) return 'うんちが ある → そうじ';
+  if (S.clean < 35) return `よごれてきた → ${sp().bath.label}`;
+  if (S.energy < 20) return 'ねむそう → ねかせる';
+  if (walkOverdue()) return 'さんぽに いきたがってる → あそぶ → さんぽ';
+  if (HAS_NAILS[S.species] && S.nails > 70) return 'つめが のびてる → びょういん → つめきり';
+  const st = stageOf(ageMin());
+  if (st < 2) { const g = GOALS[st].find(x => goalHave(x) < x.n); if (g) return `もくひょう：${g.text}`; }
+  return ['ゆびで なでて あげよう', 'きろくで にっきを 見てみよう', 'ずかんの なでポイントを しらべよう'][Math.floor(Date.now() / 20000) % 3];
 }
 
 /* ---------- calling the pet by name ---------- */
@@ -3146,7 +3252,7 @@ function tick() {
     S.stage = st;
     let extra = '';
     if (st === 2) {
-      S.variant = S.neglect < 60 ? 'star' : 'normal';
+      S.variant = goalsDone(1) && S.neglect < 120 ? 'star' : 'normal';
       if (!M.unlocked.panda) { M.unlocked.panda = true; extra = '・ひみつの どうぶつが ずかんに あらわれた！'; }
       addCoins(50);
     }
@@ -3175,6 +3281,8 @@ function tick() {
     else if (Math.random() < 0.5) line = bark(['！', '♪', '～'][Math.floor(Math.random() * 3)]);
     if (line) say(line);
   }
+  maybeWant();
+  if (Date.now() - lcdAt > 12000) $('lcd').textContent = '💡 ' + nextHint();
   render();
   if (Date.now() - lastSave > 5000) { lastSave = Date.now(); save(); }
 }
@@ -3261,7 +3369,7 @@ function wire() {
   $('praise').addEventListener('click', () => {
     if (!S) return;
     cared(); $('praise').hidden = true;
-    const before = S.toilet || 0;
+    const before = S.toilet || 0; goalCount('praise');
     S.toilet = Math.min(5, before + 1); S.happy = clamp(S.happy + 6); diary('toilet'); gainXP(5);
     setAnim('joy', 1500); say(bark('♪'));
     SND.play('coin');
