@@ -42,7 +42,16 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .hud { position: absolute; inset: 0; pointer-events: none; transition: opacity .6s; }
 .game:not([data-phase="play"]):not([data-phase="stairs"]):not([data-phase="keypad"]) .hud { opacity: 0; }
 .hud > * { pointer-events: auto; }
-.hud-tl { position: absolute; top: 16px; left: 16px; display: grid; gap: 10px; justify-items: start; }
+.hud-tl { position: absolute; top: 16px; left: 16px; display: grid; gap: 8px; justify-items: start; }
+.objective { display: flex; gap: 6px; font-size: .78rem; letter-spacing: .06em; text-shadow: 0 1px 3px #000; }
+.objective span { background: rgba(8,9,11,.72); border: 1px solid var(--line); padding: 2px 8px; border-radius: 2px; }
+.objective .ob-up { color: #e8958a; border-color: rgba(201,71,58,.5); }
+.objective .ob-down { color: #a6dc9c; border-color: rgba(143,209,138,.45); }
+.rank { font-size: 4.2rem; line-height: 1; text-align: center; margin: 4px 0 10px; letter-spacing: .1em; text-shadow: 0 0 24px currentColor; animation: rankPop 1s cubic-bezier(.2,1.8,.4,1) both; }
+@keyframes rankPop { 0% { transform: scale(0) rotate(-20deg); opacity: 0; } 50% { transform: scale(1.3) rotate(6deg); opacity: 1; } 100% { transform: none; opacity: 1; } }
+.rank small { display: block; font-size: .8rem; letter-spacing: .3em; color: var(--muted); text-shadow: none; }
+.rules .keys-table { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 4px 0 6px; font-size: .95rem; }
+.rules .keys-table b { font-weight: 400; color: var(--sign); white-space: nowrap; }
 .exit-sign { display: inline-flex; align-items: center; gap: 10px; background: var(--sign); color: var(--sign-ink); padding: 2px 12px 3px; border-radius: 2px; font-size: 1.05rem; letter-spacing: .08em; box-shadow: 0 2px 0 rgba(0,0,0,.5); }
 .exit-sign b { font-weight: 400; font-size: 1.4rem; min-width: 1.2ch; text-align: center; font-variant-numeric: tabular-nums; transition: opacity 1.2s; }
 .hud-tr { position: absolute; top: 16px; right: 16px; display: flex; gap: 6px; }
@@ -224,12 +233,13 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
 .coach-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 .coach-row button { background: #16181c; border: 1px solid var(--line); padding: 4px 12px; cursor: pointer; font-size: .82rem; }
 .coach-row button:hover, .coach-row button:focus-visible { border-color: var(--sign); color: var(--sign); outline: none; }
-.hint { position: absolute; top: 64px; left: 16px; width: min(360px, calc(100% - 32px)); background: rgba(9,10,12,.94); border: 1px solid var(--line); border-left: 4px solid var(--sign); padding: 10px 40px 12px 16px; animation: panelIn .4s cubic-bezier(.2,1.2,.4,1); z-index: 6; }
+.hint { position: absolute; top: 104px; left: 16px; width: min(360px, calc(100% - 32px)); background: rgba(9,10,12,.94); border: 1px solid var(--line); border-left: 4px solid var(--sign); padding: 10px 40px 12px 16px; animation: panelIn .4s cubic-bezier(.2,1.2,.4,1); z-index: 6; }
 .hint > b { font-weight: 400; color: var(--sign); font-size: .8rem; letter-spacing: .3em; }
 .hint p { margin: 4px 0 0; font-size: 1rem; line-height: 1.75; }
 .hint button { position: absolute; right: 8px; top: 6px; background: none; border: 0; color: var(--muted); font-size: 1.2rem; cursor: pointer; }
 .hint kbd { display: inline-block; min-width: 1.7em; text-align: center; padding: 0 6px; margin: 0 2px; border: 1px solid var(--sign); border-bottom-width: 3px; border-radius: 3px; color: var(--sign); font-size: .82em; opacity: 1; }
 @media (pointer: coarse), (max-width: 760px) { .hint { top: auto; bottom: 236px; } }
+.game:not([data-phase="play"]) .hint { display: none !important; }
 .coach #coach-goal b { font-weight: 400; color: var(--danger); }
 .coach kbd { display: inline-block; min-width: 1.7em; text-align: center; padding: 0 6px; margin: 0 2px; border: 1px solid var(--sign); border-bottom-width: 3px; border-radius: 3px; color: var(--sign); font-size: .82em; opacity: 1; animation: keyPress 1.3s ease-in-out infinite; }
 @keyframes keyPress { 0%, 60%, 100% { transform: none; border-bottom-width: 3px; } 70% { transform: translateY(2px); border-bottom-width: 1px; } }
@@ -276,9 +286,11 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
   <div class="hud" id="hud">
     <div class="hud-tl">
       <span class="exit-sign" id="exit-sign" aria-label="現在の番号"><span>出口</span><b id="hud-num">?</b><span>→</span></span>
+      <div class="objective" id="objective"><span class="ob-up">異変あり → 上り階段で戻る</span><span class="ob-down">なし → 下り階段で進む</span></div>
     </div>
     <div class="hud-tr">
       <button class="hbtn" id="btn-memo" type="button" aria-expanded="false" aria-controls="notebook">メモ <kbd>Tab</kbd></button>
+      <button class="hbtn" id="btn-help" type="button">？ ルール</button>
       <button class="hbtn" id="btn-pause" type="button">一時停止 <kbd>Esc</kbd></button>
     </div>
     <div class="hud-bl">
@@ -329,6 +341,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
           <button type="button" id="btn-continue" hidden>つづきから <span id="continue-info"></span></button>
           <button type="button" id="btn-start">はじめから</button>
           <button type="button" id="btn-tutorial">遊び方（チュートリアル）</button>
+          <button type="button" id="btn-howto">ルールと操作</button>
           <button type="button" id="btn-diff" data-cycle="diff">難易度 <span id="diff-label">◀ ふつう ▶</span></button>
           <button type="button" id="btn-catalog">異変図鑑 <span id="cat-mini">0 / 50</span></button>
           <button type="button" data-cycle="quality">画質 <span class="quality-label">◀ レトロ ▶</span></button>
@@ -370,6 +383,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
       <p>進み具合は階段を使うたびに保存されています。</p>
       <nav class="menu" aria-label="一時停止メニュー">
         <button type="button" id="btn-resume">再開する</button>
+        <button type="button" id="btn-rules">ルールと操作を見る</button>
         <button type="button" data-cycle="quality">画質 <span class="quality-label">◀ レトロ ▶</span></button>
         <button type="button" data-toggle="sound">音 <span class="sound-label">切</span></button>
         <button type="button" id="btn-clear-memo">メモを全部消す</button>
@@ -395,6 +409,7 @@ kbd { font: inherit; font-size: .78em; border: 1px solid currentColor; border-ra
   <div class="screen dark" id="ov-end" hidden>
     <div class="panel">
       <h2><span id="end-title">8番出口</span> <small id="end-diff"></small></h2>
+      <div class="rank" id="end-rank"></div>
       <p id="end-text">外の空気だ。あなたは最後まで、忘れなかった。</p>
       <dl class="stats">
         <dt>かかった時間</dt><dd id="end-time">—</dd>
@@ -607,8 +622,9 @@ function nearWallSpot(f, x, y) {
 }
 
 const sizeFor = (diffKey, count) => Math.min(11, DIFFS[diffKey].N + Math.floor((count || 0) / 3));
+let GEN_HARD = false;
 function genBase(diffKey, size) {
-  N = size || DIFFS[diffKey].N;
+  N = size || DIFFS[diffKey].N; GEN_HARD = diffKey === 'hard';
   for (let attempt = 0; attempt < 60; attempt++) {
     const f = buildMaze();
     if (f) { f.diff = diffKey; return f; }
@@ -665,6 +681,8 @@ function buildMaze() {
     if (c.dead) { const open = [0, 1, 2, 3].find(s => !hasWall(f, c.x, c.y, s)); f.codeSpots.push({ x: c.x, y: c.y, side: (open + 2) % 4 }); }
     else [0, 1, 2, 3].filter(s => hasWall(f, c.x, c.y, s)).slice(0, 1).forEach(s => f.codeSpots.push({ x: c.x, y: c.y, side: s }));
   });
+  // かんたん・ふつうは、順路の途中の壁に掛かる（脇道を探し回らなくていい）
+  if (!GEN_HARD) f.codeSpots = freeFaces(f, 1, di).map(c => ({ x: c.x, y: c.y, side: c.side }));
   if (f.codeSpots.length < 2) freeFaces(f, 1, di).forEach(c => f.codeSpots.push({ x: c.x, y: c.y, side: c.side }));
   if (!f.codeSpots.length) return null;
 
@@ -694,6 +712,8 @@ function buildMaze() {
   // 前の探索者が残した紙切れ（スタートのすぐ先）
   const np = path.slice(1, 4).find(p => !objsAt(f, p.x, p.y).length && !(p.x === f.exit.x && p.y === f.exit.y));
   if (np) { const s = nearWallSpot(f, np.x, np.y); f.objs.push({ kind: 'note', x: np.x, y: np.y, ox: s.ox * 0.7, oy: s.oy * 0.7, rot: Math.random() * 6 }); }
+  // 黄色い案内看板：スタートのすぐ先（裏は帰り道用）と、下り階段の手前
+  f.signs = true;
   // 壺
   (N >= 7 ? [0.25, 0.5, 0.8] : [0.33, 0.7]).forEach(r => {
     const i = Math.floor(L * r); if (i <= 0 || i >= L - 1) return;
@@ -701,6 +721,11 @@ function buildMaze() {
     const s = nearWallSpot(f, p.x, p.y);
     f.objs.push({ kind: 'vase', x: p.x, y: p.y, ox: s.ox, oy: s.oy });
   });
+  {
+    const p1 = path[1], p2 = path[2], q = path[L - 2];
+    f.objs.push({ kind: 'hsign', x: p1.x, y: p1.y, dir: dirBetween(p1, p2), lines: ['ちがうところを', 'さがしながら 奥へ'], arrow: '↑', back: ['異変が あったら', '戻って ここで Space'], backArrow: '↓' });
+    if (L > 4) f.objs.push({ kind: 'hsign', x: q.x, y: q.y, dir: dirBetween(q, path[L - 1]), lines: ['異変が なかったら', 'この先で Space'], arrow: '↑' });
+  }
   return f;
 }
 
@@ -760,7 +785,7 @@ const ANOMS = [
   { id: 'puddle', name: '水たまり', desc: '床に黒い水たまりができている。', fn: f => {
     const cells = pathCells(f, 1, -1); if (!cells.length) return false; const c = pick(cells); f.objs.push({ kind: 'puddle', x: c.x, y: c.y }); return true; } },
   { id: 'low_ceiling', name: '低い天井', desc: 'ひと区画だけ、天井が低い。', fn: f => {
-    const cells = f.path.slice(1, -1); if (!cells.length) return false; const c = pick(cells); f.lowCeil = { x: c.x, y: c.y }; return true; } },
+    const cells = f.path.slice(1, -1).filter(p => !objsAt(f, p.x, p.y).some(o => o.kind === 'hsign')); if (!cells.length) return false; const c = pick(cells); f.lowCeil = { x: c.x, y: c.y }; return true; } },
   { id: 'wall_open', name: '増えた通路', desc: 'なかったはずの通路が開いている。', fn: f => {
     const c = [];
     f.path.forEach((p, i) => {
@@ -1820,10 +1845,19 @@ function buildFloor() {
 }
 function showFloorCard() {
   const c = $('floor-card');
+  // 前の階の答え合わせ
+  let delay = 0;
+  const J = S.lastJudge; S.lastJudge = null;
+  if (J && !S.tut) {
+    const name = J.anomaly ? '「' + (ANOMS.find(a => a.id === J.anomaly) || {}).name + '」' : '';
+    if (J.correct) tutResult(true, '正解', (J.anomaly ? '異変' + name + 'を見抜いた' : '何もない階だった') + '　' + J.from + ' → ' + S.count);
+    else tutResult(false, 'ざんねん', (J.anomaly ? '見逃した異変：' + name : 'この階には、何もなかった') + '　0番に戻る');
+    delay = 2300; S.lastFound = null;
+  }
+  if (delay) { setTimeout(() => { c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); showNum(); }, delay); }
   $('fc-num').textContent = S.count + ' 番';
   $('fc-sub').textContent = S.expanded ? '迷宮が 広がった' : S.rebuilt ? '迷宮が 組み変わった' : S.count === 0 ? '異変は ありません' : '異変を 見逃さないこと';
-  c.classList.remove('show'); void c.offsetWidth; c.classList.add('show');
-  showNum();
+  if (!delay) { c.classList.remove('show'); void c.offsetWidth; c.classList.add('show'); showNum(); }
   say(S.stats.floors === 0 && S.count === 0 ? '……ここは、どこだろう。地図は、すぐに消えてしまうらしい。' : S.rebuilt ? '……道が、変わっている。メモは、もう役に立たないかもしれない。' : pick(START_LINES));
   if (S.rebuilt) hint('wrong', 'まちがえると、0番に戻る。<br>そして迷宮の形も変わる。新しい道をメモしよう。');
   if (S.expanded) { say('……迷宮が、広くなっている。この階は、まだ何も起きていない。'); glitchFx(0.8, 1200); }
@@ -1898,6 +1932,7 @@ function setPhase(p) {
   S.phase = p;
   ['title', 'pause', 'end', 'catalog', 'keypad', 'loading', 'note', 'intro', 'ending', 'gallery', 'rules'].forEach(k => { $('ov-' + k).hidden = p !== k; });
   $('game').dataset.phase = p;
+  $('objective').hidden = !!S.tut;
   if (!S.tut) $('coach').hidden = true; else $('coach').hidden = p !== 'play';
   if (p !== 'play' && p !== 'keypad') setMemo(false);
   if (p === 'pause') $('pause-info').textContent = D().label + '・歩いた階 ' + S.stats.floors;
@@ -1991,8 +2026,9 @@ function showRules(i) {
   $('rules-next').textContent = i === rulesList.length - 1 ? (rulesList.doneLabel || '次へ') + '（Space）' : '次へ（Space）';
   sound.turn();
 }
-function openRules(list, label, done) {
-  rulesList = list; rulesList.doneLabel = label; rulesDone = done;
+let rulesEsc = null;
+function openRules(list, label, done, esc) {
+  rulesList = list; rulesList.doneLabel = label; rulesDone = done; rulesEsc = esc || null;
   setPhase('rules'); showRules(0);
   setTimeout(() => $('rules-next').focus({ preventScroll: true }), 30);
 }
@@ -2163,6 +2199,29 @@ function hint(id, html) {
   clearTimeout(hintTimer); hintTimer = setTimeout(() => { h.hidden = true; }, 8000);
 }
 $('hint-close').addEventListener('click', () => { $('hint').hidden = true; });
+const CONTROLS_CARD = { h: '操作', lead: '', svg: `<div class="keys-table">
+  <b>↑ ↓ / W S</b><span>前へ・後ろへ</span>
+  <b>← → / A D</b><span>向きを変える</span>
+  <b>Q E</b><span>横歩き</span>
+  <b>Shift ＋ 移動</b><span>走る</span>
+  <b>R</b><span>その場で振り返る</span>
+  <b>Space / Enter</b><span>調べる・階段を使う・扉に番号を入れる</span>
+  <b>Tab</b><span>メモ帳を開く・閉じる（地図ノート・スケッチもある）</span>
+  <b>Esc</b><span>一時停止</span>
+  <b>スマートフォン</b><span>画面右下のボタン。視界をスワイプしても動ける</span></div>` };
+function helpCards() {
+  return [RULES[0], RULES[1], RULES[2], RULES[3],
+    { h: '鉄扉と、危ない異変', lead: '迷宮の途中には鉄扉がある。開けるには4桁の番号が要る。<br>番号は順路の壁にある<b style="font-weight:400;color:var(--sign)">金色の板</b>に刻まれていて、階ごとに変わる。<br>人影が走ってくる・闇や水が迫る……そんな危ない異変からは、<b style="font-weight:400;color:var(--sign)">R</b> で振り返って <b style="font-weight:400;color:var(--sign)">Shift</b> で走り、上り階段まで逃げ切れば正解。', svg: '' },
+    CONTROLS_CARD];
+}
+function openHelp() {
+  if (S.phase === 'play') { pause(); openRules(helpCards(), '閉じる', () => resume(), () => resume()); }
+  else if (S.phase === 'pause') openRules(helpCards(), '閉じる', () => { setPhase('pause'); $('btn-resume').focus({ preventScroll: true }); }, () => setPhase('pause'));
+  else openRules(helpCards(), '閉じる', () => toTitle(), () => toTitle());
+}
+$('btn-help').addEventListener('click', openHelp);
+$('btn-howto').addEventListener('click', openHelp);
+$('btn-rules').addEventListener('click', openHelp);
 function glitchFx(amp, dur) { S.gl = { amp, t: performance.now(), dur }; }
 function beginPlay() {
   setPhase('play'); showFloorCard(); canvas.focus({ preventScroll: true });
@@ -2176,6 +2235,7 @@ function clearMemos() { memoText.value = ''; store.del('bd2.memo'); store.del('o
 function judge(claimAnomaly) {
   S.confirm = null; S.danger = null; $('danger-vig').style.opacity = 0;
   const correct = claimAnomaly === (S.anomaly !== null);
+  S.lastJudge = { correct, anomaly: S.anomaly, from: S.count };
   // 何もない0番で引き返し続けると……
   if (claimAnomaly && S.count === 0 && !S.anomaly) S.upStreak++; else S.upStreak = 0;
   if (S.upStreak >= 5) S.pendingEnding = 'return';
@@ -2225,6 +2285,10 @@ function finish(id) {
   $('end-title').textContent = e.name;
   $('end-text').textContent = e.sum;
   $('end-ecount').textContent = endingsSeen().size + ' / ' + ENDINGS.length;
+  const miss = S.stats.resets + (S.stats.caught || 0), rk = !e.good ? '—' : miss === 0 ? 'S' : miss <= 2 ? 'A' : miss <= 5 ? 'B' : 'C';
+  const rc = { S: '#e6c03f', A: '#a6dc9c', B: '#8fb8e0', C: '#c9b3a0', '—': '#c9473a' }[rk];
+  const re = $('end-rank'); re.innerHTML = rk + '<small>ランク（まちがい・捕まった ' + miss + ' 回）</small>'; re.style.color = rc;
+  re.style.animation = 'none'; void re.offsetWidth; re.style.animation = '';
   const sec = Math.round(elapsed() / 1000);
   const fmt = s => Math.floor(s / 60) + '分' + String(s % 60).padStart(2, '0') + '秒';
   const recs = store.json('bd2.records', {}), prev = recs[S.diff], better = e.good && (!prev || sec < prev);
@@ -2475,7 +2539,7 @@ document.addEventListener('keydown', e => {
   if (S.phase === 'rules') {
     if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); rulesNext(); }
     else if (e.key === 'ArrowLeft' && S.rulesI > 0) { e.preventDefault(); showRules(S.rulesI - 1); }
-    else if (e.key === 'Escape') { e.preventDefault(); toTitle(); }
+    else if (e.key === 'Escape') { e.preventDefault(); if (rulesEsc) rulesEsc(); else if (rulesDone) rulesDone(); else toTitle(); }
     return;
   }
   if (S.phase === 'gallery') {
