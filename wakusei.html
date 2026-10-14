@@ -7,15 +7,15 @@
 <style>
 /* Layout: a fixed-aspect game board (420x740 logical units) scaled to fit the screen, letterboxed on a starfield. */
 :root {
-  --space: #0d0b24;
-  --text: #fdf7ff;
+  --space: #ffe3c4;
+  --text: #5a3418;
   --gold: #ffd84a;
-  color-scheme: dark;
+  color-scheme: light;
 }
 html, body { height: 100%; background: var(--space); color: var(--text); overflow: hidden; }
 body { font-family: "DotGothic16", monospace; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-#snd { position: absolute; right: 10px; top: 10px; font-family: "DotGothic16", monospace; font-size: .8rem; color: var(--text); background: rgba(13,11,36,.7); border: 2px solid rgba(253,247,255,.45); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+#snd { position: absolute; right: 10px; top: 10px; font-family: "DotGothic16", monospace; font-size: .8rem; color: var(--text); background: rgba(255,255,255,.75); border: 2px solid #c98a4a; border-radius: 6px; padding: 3px 9px; cursor: pointer; }
 #snd:focus-visible { outline: 3px solid var(--gold); }
 </style>
 
@@ -206,7 +206,8 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     a.dead = b.dead = true;
     const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2, t = a.tier + 1;
     G.chain = G.chainT > 0 ? G.chain + 1 : 1; G.chainT = 0.6;
-    burst(x, y, PL[a.tier].c1, 10 + a.tier * 3, 120 + a.tier * 25);
+    burst(x, y, PL[a.tier].c1, 14 + a.tier * 4, 140 + a.tier * 30);
+    burst(x, y, PL[a.tier].c2, 6 + a.tier * 2, 90 + a.tier * 20);
     G.rings.push({ x, y, r: PL[a.tier].r, t: 0, col: PL[a.tier].c1 });
     if (t >= PL.length) {                            // two suns: big bang
       G.score += 300; text("ビッグバン！！ +300", x, y - 40, "#fff2a0", 34);
@@ -215,7 +216,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       return;
     }
     const nb = addBody(t, x, y, (a.x - a.px + b.x - b.px) / 2, (a.y - a.py + b.y - b.py) / 2);
-    nb.pop = 0.35; nb.grow = 0; nb.r = PL[t].r * 0.55;
+    nb.pop = 0.12; nb.grow = 0; nb.r = PL[t].r * 0.55;
     const pts = PTS[t];
     G.score += pts;
     G.biggest = Math.max(G.biggest, t);
@@ -306,21 +307,46 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   function drawSpace() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     const g = ctx.createLinearGradient(0, 0, 0, SH);
-    g.addColorStop(0, "#0d0b24"); g.addColorStop(1, "#24123a");
+    g.addColorStop(0, "#ffe9c9"); g.addColorStop(1, "#ffc8d2");
     ctx.fillStyle = g; ctx.fillRect(0, 0, SW, SH);
-    for (const s of STARS) { ctx.globalAlpha = 0.35 + 0.45 * Math.sin(G.time * 1.5 + s.p); ctx.fillStyle = "#fff"; ctx.fillRect(s.x * SW, s.y * SH, s.s, s.s); }
+    // soft polka dots + twinkles drifting slowly
+    ctx.fillStyle = "rgba(255,255,255,.35)";
+    for (let y = 0; y < SH + 40; y += 40) for (let x = (y / 40) % 2 ? 20 : 0; x < SW + 40; x += 40) { ctx.beginPath(); ctx.arc(x, (y + G.time * 6) % (SH + 40) - 20, 5, 0, 7); ctx.fill(); }
+    for (const s of STARS) {
+      ctx.globalAlpha = 0.25 + 0.35 * Math.sin(G.time * 1.5 + s.p);
+      ctx.fillStyle = "#fff"; const x = s.x * SW, y = s.y * SH, k = s.s * 2.5;
+      ctx.beginPath(); ctx.moveTo(x, y - k); ctx.lineTo(x + k * 0.3, y); ctx.lineTo(x, y + k); ctx.lineTo(x - k * 0.3, y); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - k, y); ctx.lineTo(x, y + k * 0.3); ctx.lineTo(x + k, y); ctx.lineTo(x, y - k * 0.3); ctx.fill();
+    }
     ctx.globalAlpha = 1;
+  }
+  function rrect(x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+  function drawUfo(x, y) {
+    const bob = Math.sin(G.time * 3) * 3;
+    y += bob;
+    // tractor beam
+    const bg = ctx.createLinearGradient(0, y, 0, DROP_Y + 30);
+    bg.addColorStop(0, "rgba(140,255,240,.55)"); bg.addColorStop(1, "rgba(140,255,240,0)");
+    ctx.fillStyle = bg; ctx.beginPath(); ctx.moveTo(x - 10, y + 8); ctx.lineTo(x + 10, y + 8); ctx.lineTo(x + 34, DROP_Y + 30); ctx.lineTo(x - 34, DROP_Y + 30); ctx.fill();
+    // dome
+    ctx.fillStyle = "rgba(170,240,255,.9)"; ctx.beginPath(); ctx.ellipse(x, y - 8, 16, 14, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#7be07b"; ctx.beginPath(); ctx.arc(x, y - 9, 7, 0, 7); ctx.fill();
+    ctx.fillStyle = "#2a1630"; ctx.beginPath(); ctx.arc(x - 2.5, y - 10, 1.6, 0, 7); ctx.arc(x + 2.5, y - 10, 1.6, 0, 7); ctx.fill();
+    // saucer
+    ctx.fillStyle = "#a99bd8"; ctx.beginPath(); ctx.ellipse(x, y, 34, 10, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#7d6cc0"; ctx.beginPath(); ctx.ellipse(x, y + 3, 34, 7, 0, 0, Math.PI); ctx.fill();
+    for (let i = -2; i <= 2; i++) { ctx.fillStyle = (Math.floor(G.time * 6) + i) % 2 ? "#ffd84a" : "#ff8ab0"; ctx.beginPath(); ctx.arc(x + i * 12, y + 2, 2.6, 0, 7); ctx.fill(); }
   }
   function drawPlanet(t, x, y, r, rot = 0, pop = 0, face = true) {
     const P = PL[t];
     const s = 1 + pop * 0.6;
-    ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(rot);
     if (t === 11) { const gl = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.35); gl.addColorStop(0, "rgba(255,200,60,.5)"); gl.addColorStop(1, "rgba(255,200,60,0)"); ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(0, 0, r * 1.35, 0, 7); ctx.fill(); }
     if (t === 9) { ctx.strokeStyle = "rgba(240,210,150,.9)"; ctx.lineWidth = r * 0.14; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.18, r * 0.34, -0.25, Math.PI * 0.92, Math.PI * 2.08); ctx.stroke(); }
     const g = ctx.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
     g.addColorStop(0, P.c1); g.addColorStop(1, P.c2);
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill();
-    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.clip(); ctx.rotate(rot * 0.3);
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.clip();
     if (t === 1 || t === 2 || t === 4) { ctx.fillStyle = "rgba(0,0,0,.15)"; [[-0.4, 0.3, 0.22], [0.35, -0.1, 0.16], [0.1, 0.55, 0.12], [-0.2, -0.5, 0.1]].forEach(([a, b, c]) => { ctx.beginPath(); ctx.arc(a * r, b * r, c * r, 0, 7); ctx.fill(); }); }
     if (t === 3) { ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.beginPath(); ctx.moveTo(0.1 * r, 0.55 * r); ctx.bezierCurveTo(-0.5 * r, 0.15 * r, -0.2 * r, -0.2 * r, 0.1 * r, 0.1 * r); ctx.bezierCurveTo(0.4 * r, -0.2 * r, 0.6 * r, 0.2 * r, 0.1 * r, 0.55 * r); ctx.fill(); }
     if (t === 5) { ctx.fillStyle = "rgba(120,30,10,.3)"; ctx.beginPath(); ctx.ellipse(r * 0.2, r * 0.35, r * 0.45, r * 0.15, 0.3, 0, 7); ctx.fill(); ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.beginPath(); ctx.ellipse(0, -r * 0.92, r * 0.35, r * 0.12, 0, 0, 7); ctx.fill(); }
@@ -331,7 +357,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     if (t === 10) { ctx.fillStyle = "#c8502a"; ctx.beginPath(); ctx.ellipse(r * 0.35, r * 0.3, r * 0.2, r * 0.12, 0, 0, 7); ctx.fill(); }
     if (t === 11) { ctx.fillStyle = "rgba(255,120,0,.25)"; [[-0.4, -0.3], [0.4, 0.4], [0.2, -0.5], [-0.3, 0.5]].forEach(([a, b]) => { ctx.beginPath(); ctx.arc(a * r, b * r, r * 0.12, 0, 7); ctx.fill(); }); }
     ctx.restore();
-    ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.beginPath(); ctx.ellipse(-r * 0.38, -r * 0.45, r * 0.22, r * 0.12, -0.6, 0, 7); ctx.fill();
+    ctx.rotate(-rot); ctx.fillStyle = "rgba(255,255,255,.4)"; ctx.beginPath(); ctx.ellipse(-r * 0.38, -r * 0.45, r * 0.22, r * 0.12, -0.6, 0, 7); ctx.fill(); ctx.rotate(rot);
     if (t === 9) { ctx.strokeStyle = "rgba(240,210,150,.95)"; ctx.lineWidth = r * 0.14; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.18, r * 0.34, -0.25, -0.08 * Math.PI, 0.92 * Math.PI); ctx.stroke(); }
     if (face) {
       const es = Math.max(2, r * 0.1), ex = r * 0.32, ey = r * 0.02;
@@ -351,20 +377,25 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   function drawBoard() {
     ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * ox, DPR * oy);
     if (G.shake > 0) ctx.translate(rand(-1, 1) * 10 * G.shake, rand(-1, 1) * 10 * G.shake);
-    // jar
-    ctx.fillStyle = "rgba(120,100,200,.12)"; ctx.fillRect(L, TOP - 40, RGT - L, FLOOR - TOP + 40);
-    ctx.strokeStyle = "rgba(200,190,255,.55)"; ctx.lineWidth = 6; ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(L - 3, TOP - 50); ctx.lineTo(L - 3, FLOOR + 3); ctx.lineTo(RGT + 3, FLOOR + 3); ctx.lineTo(RGT + 3, TOP - 50); ctx.stroke();
+    // wooden box with a glassy inside
+    ctx.fillStyle = "#b5753a"; rrect(L - 14, TOP - 46, RGT - L + 28, FLOOR - TOP + 62, 16); ctx.fill();
+    ctx.fillStyle = "#d9984f"; rrect(L - 10, TOP - 42, RGT - L + 20, FLOOR - TOP + 54, 13); ctx.fill();
+    const ig = ctx.createLinearGradient(0, TOP - 40, 0, FLOOR);
+    ig.addColorStop(0, "rgba(255,252,244,.92)"); ig.addColorStop(1, "rgba(255,236,214,.95)");
+    ctx.fillStyle = ig; ctx.fillRect(L, TOP - 40, RGT - L, FLOOR - TOP + 40);
+    ctx.fillStyle = "rgba(255,255,255,.5)"; ctx.fillRect(L + 6, TOP - 34, 8, FLOOR - TOP + 26);
+    ctx.fillStyle = "#e9b073"; ctx.fillRect(L - 10, TOP - 46, 6, 4); ctx.fillRect(RGT + 4, TOP - 46, 6, 4);
     // danger line
     const a = G.warn > 0 ? 0.6 + 0.4 * Math.sin(G.time * 20) : 0.25 + G.danger * 0.4;
-    ctx.strokeStyle = `rgba(255,${G.warn > 0 ? 60 : 120},100,${a})`; ctx.lineWidth = G.warn > 0 ? 4 : 2; ctx.setLineDash([10, 8]);
+    ctx.strokeStyle = `rgba(230,${G.warn > 0 ? 40 : 90},80,${a})`; ctx.lineWidth = G.warn > 0 ? 4 : 2; ctx.setLineDash([10, 8]);
     ctx.beginPath(); ctx.moveTo(L, TOP); ctx.lineTo(RGT, TOP); ctx.stroke(); ctx.setLineDash([]);
-    if (G.warn > 0) { ctx.font = `28px ${LOGO}`; ctx.textAlign = "center"; ctx.fillStyle = "#ff6a7a"; ctx.fillText(`あぶない！ ${Math.ceil(2.5 - G.warn)}`, BW / 2, TOP + 40); }
+    if (G.warn > 0) { ctx.font = `28px ${LOGO}`; ctx.textAlign = "center"; ctx.fillStyle = "#e8344a"; ctx.fillText(`あぶない！ ${Math.ceil(2.5 - G.warn)}`, BW / 2, TOP + 40); }
     // aim guide + current planet
     if (G.mode === "play") {
       const r = PL[G.cur].r;
-      ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 2; ctx.setLineDash([4, 8]);
+      ctx.strokeStyle = "rgba(150,90,40,.28)"; ctx.lineWidth = 2; ctx.setLineDash([4, 8]);
       ctx.beginPath(); ctx.moveTo(G.dropX, DROP_Y + r); ctx.lineTo(G.dropX, FLOOR); ctx.stroke(); ctx.setLineDash([]);
+      drawUfo(G.dropX, DROP_Y - r - 26);
       ctx.globalAlpha = G.cool > 0 ? 0.4 : 1;
       drawPlanet(G.cur, G.dropX, DROP_Y, r);
       ctx.globalAlpha = 1;
@@ -377,49 +408,54 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
     for (const t of G.texts) {
       const al = Math.min(1, (1.2 - t.t) / 0.3), sz = t.size * (1 + Math.max(0, 0.12 - t.t) * 4);
       ctx.globalAlpha = al; ctx.font = `${sz}px ${LOGO}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.lineWidth = 5; ctx.strokeStyle = "#0d0b24"; ctx.strokeText(t.s, t.x, t.y - t.t * 30); ctx.fillStyle = t.col; ctx.fillText(t.s, t.x, t.y - t.t * 30);
+      ctx.lineWidth = 6; ctx.strokeStyle = "#6a3a14"; ctx.strokeText(t.s, t.x, t.y - t.t * 30); ctx.fillStyle = t.col; ctx.fillText(t.s, t.x, t.y - t.t * 30);
     }
     ctx.globalAlpha = 1; ctx.textBaseline = "alphabetic";
-    // HUD
-    ctx.textAlign = "left"; ctx.font = `13px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText("スコア", L, 30);
-    ctx.font = `34px ${LOGO}`; ctx.fillStyle = "#ffd84a"; ctx.fillText(G.score, L, 66);
-    ctx.font = `12px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText(`ベスト ${Math.max(G.best, G.score)}`, L, 86);
-    ctx.textAlign = "center"; ctx.fillText("つぎ", RGT - 32, 30);
-    drawPlanet(G.next, RGT - 32, 62, Math.min(26, PL[G.next].r), 0, 0);
-    // evolution strip
-    const sy = FLOOR + 22; let x = L + 6;
-    for (let t = 0; t < PL.length; t++) { const rr = 5 + t * 0.9; ctx.globalAlpha = t <= Math.max(G.biggest, 4) ? 1 : 0.3; drawPlanet(t, x + rr, sy, rr, 0, 0, false); x += rr * 2 + 6; if (t < PL.length - 1) { ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.fillRect(x - 5, sy - 1, 3, 2); } }
+    // HUD: score bubble (left) and next bubble (right)
+    ctx.fillStyle = "rgba(255,255,255,.85)"; rrect(L - 10, 14, 150, 76, 18); ctx.fill();
+    ctx.strokeStyle = "#e0a464"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.textAlign = "left"; ctx.font = `13px ${FONT}`; ctx.fillStyle = "#a0683a"; ctx.fillText("スコア", L + 4, 34);
+    ctx.font = `32px ${LOGO}`; ctx.fillStyle = "#e8742a"; ctx.fillText(G.score, L + 4, 68);
+    ctx.font = `11px ${FONT}`; ctx.fillStyle = "#a0683a"; ctx.fillText(`ベスト ${Math.max(G.best, G.score)}`, L + 4, 84);
+    ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.beginPath(); ctx.arc(RGT - 30, 54, 38, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#e0a464"; ctx.lineWidth = 3; ctx.stroke();
+    ctx.textAlign = "center"; ctx.font = `12px ${FONT}`; ctx.fillStyle = "#a0683a"; ctx.fillText("つぎ", RGT - 30, 26);
+    drawPlanet(G.next, RGT - 30, 60, Math.min(24, PL[G.next].r), 0, 0);
+    // evolution strip ("しんかの わ")
+    ctx.fillStyle = "rgba(255,255,255,.7)"; rrect(L - 10, FLOOR + 10, RGT - L + 20, 26, 13); ctx.fill();
+    const sy = FLOOR + 23; let x = L + 2;
+    for (let t = 0; t < PL.length; t++) { const rr = 5 + t * 0.9; ctx.globalAlpha = t <= Math.max(G.biggest, 4) ? 1 : 0.3; drawPlanet(t, x + rr, sy, rr, 0, 0, false); x += rr * 2 + 6; if (t < PL.length - 1) { ctx.fillStyle = "#d9a26a"; ctx.fillRect(x - 5, sy - 1, 3, 2); } }
     ctx.globalAlpha = 1;
     if (G.flash > 0) { ctx.fillStyle = `rgba(255,250,220,${Math.min(0.7, G.flash)})`; ctx.fillRect(-50, -50, BW + 100, BH + 100); }
   }
   function drawTitle() {
     ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * ox, DPR * oy);
-    ctx.fillStyle = "rgba(13,11,36,.55)"; ctx.fillRect(0, 0, BW, BH);
+    ctx.fillStyle = "rgba(255,240,224,.78)"; ctx.fillRect(0, 0, BW, BH);
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = `54px ${LOGO}`; ctx.lineWidth = 8; ctx.strokeStyle = "#2a1460";
+    ctx.font = `54px ${LOGO}`; ctx.lineWidth = 10; ctx.strokeStyle = "#7a3a14";
     ctx.strokeText("わくせい", BW / 2, 190); ctx.strokeText("ゲーム", BW / 2, 252);
-    ctx.fillStyle = "#ffd84a"; ctx.fillText("わくせい", BW / 2, 190); ctx.fillStyle = "#7ef9ff"; ctx.fillText("ゲーム", BW / 2, 252);
-    ctx.font = `17px ${FONT}`; ctx.fillStyle = "#fdf7ff"; ctx.fillText("おなじ わくせいを くっつけて おおきく しよう", BW / 2, 310);
+    ctx.fillStyle = "#ffb43a"; ctx.fillText("わくせい", BW / 2, 190); ctx.fillStyle = "#5ad0e8"; ctx.fillText("ゲーム", BW / 2, 252);
+    ctx.font = `17px ${FONT}`; ctx.fillStyle = "#6a3a14"; ctx.fillText("おなじ わくせいを くっつけて おおきく しよう", BW / 2, 310);
     // ring of planets
     const cx = BW / 2, cy = 470, R = 105;
     for (let t = 0; t < PL.length; t++) { const a = -Math.PI / 2 + t / PL.length * Math.PI * 2 + G.time * 0.2; drawPlanet(t, cx + Math.cos(a) * R, cy + Math.sin(a) * R, 9 + t * 1.6, 0, 0, true); }
-    ctx.font = `14px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText("ちり → … → たいよう", cx, cy);
-    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.time * 4); ctx.font = `26px ${LOGO}`; ctx.fillStyle = "#fff"; ctx.fillText("タップで スタート", BW / 2, 650); ctx.globalAlpha = 1;
-    if (G.best) { ctx.font = `14px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText(`ベスト ${G.best}`, BW / 2, 688); }
+    ctx.font = `14px ${FONT}`; ctx.fillStyle = "#a0683a"; ctx.fillText("しんかの わ", cx, cy);
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.time * 4); ctx.font = `26px ${LOGO}`; ctx.fillStyle = "#e8742a"; ctx.fillText("タップで スタート", BW / 2, 650); ctx.globalAlpha = 1;
+    if (G.best) { ctx.font = `14px ${FONT}`; ctx.fillStyle = "#a0683a"; ctx.fillText(`ベスト ${G.best}`, BW / 2, 688); }
   }
   function drawOver() {
     ctx.setTransform(DPR * scale, 0, 0, DPR * scale, DPR * ox, DPR * oy);
-    ctx.fillStyle = `rgba(13,11,36,${Math.min(0.78, G.overT * 1.5)})`; ctx.fillRect(0, 0, BW, BH);
+    ctx.fillStyle = `rgba(255,240,224,${Math.min(0.85, G.overT * 1.5)})`; ctx.fillRect(0, 0, BW, BH);
     if (G.overT < 0.3) return;
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.font = `44px ${LOGO}`; ctx.fillStyle = "#ff8a9a"; ctx.fillText("あふれた！", BW / 2, 230);
-    ctx.font = `16px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText("スコア", BW / 2, 300);
-    ctx.font = `60px ${LOGO}`; ctx.fillStyle = "#ffd84a"; ctx.fillText(G.score, BW / 2, 350);
-    ctx.font = `16px ${FONT}`; ctx.fillStyle = "#fdf7ff"; ctx.fillText(`いちばん おおきい わくせい：${PL[Math.max(G.biggest, 0)].n}`, BW / 2, 410);
+    ctx.font = `44px ${LOGO}`; ctx.fillStyle = "#e8344a"; ctx.fillText("あふれた！", BW / 2, 230);
+    ctx.font = `16px ${FONT}`; ctx.fillStyle = "#a0683a"; ctx.fillText("スコア", BW / 2, 300);
+    ctx.font = `60px ${LOGO}`; ctx.fillStyle = "#e8742a"; ctx.fillText(G.score, BW / 2, 350);
+    ctx.font = `16px ${FONT}`; ctx.fillStyle = "#6a3a14"; ctx.fillText(`いちばん おおきい わくせい：${PL[Math.max(G.biggest, 0)].n}`, BW / 2, 410);
     drawPlanet(G.biggest, BW / 2, 470, Math.min(44, PL[G.biggest].r));
-    if (G.newBest) { ctx.font = `26px ${LOGO}`; ctx.fillStyle = "#7be07b"; ctx.fillText("ベスト こうしん！", BW / 2, 545); }
-    else { ctx.font = `15px ${FONT}`; ctx.fillStyle = "#c8c0e8"; ctx.fillText(`ベスト ${G.best}`, BW / 2, 545); }
-    if (G.overT > 1) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.time * 4); ctx.font = `24px ${LOGO}`; ctx.fillStyle = "#fff"; ctx.fillText("タップで もういちど", BW / 2, 620); ctx.globalAlpha = 1; }
+    if (G.newBest) { ctx.font = `26px ${LOGO}`; ctx.fillStyle = "#3aa04a"; ctx.fillText("ベスト こうしん！", BW / 2, 545); }
+    else { ctx.font = `15px ${FONT}`; ctx.fillStyle = "#a0683a"; ctx.fillText(`ベスト ${G.best}`, BW / 2, 545); }
+    if (G.overT > 1) { ctx.globalAlpha = 0.6 + 0.4 * Math.sin(G.time * 4); ctx.font = `24px ${LOGO}`; ctx.fillStyle = "#e8742a"; ctx.fillText("タップで もういちど", BW / 2, 620); ctx.globalAlpha = 1; }
   }
 
   // ================= loop =================
